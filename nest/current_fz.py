@@ -33,16 +33,18 @@ class CurrentFZ:
         self.c = np.asarray(c)
 
     @classmethod
-    def fit(cls, eq, L=None, M=None, N=None, oversample=2):
+    def fit(cls, eq, L=None, M=None, N=None, oversample=2, factors=(3, 3, 2.5)):
         """Least-squares fit of the DESC current density of ``eq``.
 
-        Defaults to twice the equilibrium resolution: J contains second
-        derivatives and products of the R, Z, lambda series, so its spectrum is
-        wider than theirs.
+        L, M, N default to ``factors`` times the equilibrium resolution: J
+        contains second derivatives and products of the R, Z, lambda series,
+        so its spectrum is wider than theirs, most of all near the edge. With
+        (3, 3, 2.5) the max error is below 3e-4 of max|J| for rho <= 0.995 for
+        the free-boundary precise_QA and W7-X; at (2, 2, 2) it is ~1e-2.
         """
-        L = 2 * eq.L if L is None else L
-        M = 2 * eq.M if M is None else M
-        N = 2 * eq.N if N is None else N
+        L = int(round(factors[0] * eq.L)) if L is None else L
+        M = int(round(factors[1] * eq.M)) if M is None else M
+        N = int(round(factors[2] * eq.N)) if N is None else N
         basis = FourierZernikeBasis(
             L, M, N, NFP=eq.NFP, sym=False, spectral_indexing=eq.spectral_indexing
         )

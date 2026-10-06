@@ -1,4 +1,4 @@
-"""Step 1 of NEMO: evaluate the current density on the flux-aligned grid G1.
+"""Step 1 of NEST: evaluate the current density on the flux-aligned grid G1.
 
 J is stored as a Fourier-Zernike series (see ``current_fz.CurrentFZ``) and
 evaluated from it; the geometry X(rho, theta, zeta) comes from the DESC
@@ -11,9 +11,11 @@ import numpy as np
 from desc.grid import ConcentricGrid
 
 
-def flux_grid(eq, L, M, N, node_pattern="jacobi", axis=False):
+def flux_grid(eq, L, M, N, node_pattern="cheb1", axis=False):
     """Concentric grid G1 in (rho, theta, zeta) over one field period.
 
+    "cheb1" puts surfaces at rho = 1 and, with axis=False, just off the axis
+    (DESC's J is undefined at rho = 0), clustered toward both ends.
     """
     return ConcentricGrid(
         L, M, N, NFP=eq.NFP, sym=False, axis=axis, node_pattern=node_pattern

@@ -1,10 +1,12 @@
-"""Step 2 of NEST: the current density on a uniform Cartesian grid G2.
+"""Steps 2-3 of NEST: the current density on the periodic Cartesian box G3.
 
-For each Cartesian point x the flux coordinates (rho, theta, zeta) with
-X(rho, theta, zeta) = x are found by Newton iteration, and J is evaluated 
-there from its Fourier-Zernike series. Points where no solution with 
-rho <= 1 exists are outside the plasma, Omega_p = {rho(x) <= 1},
-and get J = 0.
+G3 is a uniform periodic grid, x_p = x_0 + p h with p = 0..N-1 and period
+L = N h, about ``factor`` times larger than the plasma in each direction.
+For each point x of the block of G3 that covers the plasma, the flux
+coordinates (rho, theta, zeta) with X(rho, theta, zeta) = x are found by
+Newton iteration and J is evaluated there from its Fourier-Zernike series.
+Points with no solution rho <= 1 are outside the plasma, Omega_p =
+{rho(x) <= 1}, and, like the rest of the box, get J = 0 (zero padding).
 """
 
 import functools
@@ -13,6 +15,7 @@ import time
 import jax
 import jax.numpy as jnp
 import numpy as np
+from scipy.fft import next_fast_len
 from scipy.spatial import cKDTree
 
 from desc.basis import fourier, zernike_radial
@@ -31,28 +34,20 @@ def plasma_extent(eq, M=None, N=None):
     return R.min(), R.max(), Z.min(), Z.max()
 
 
-def cartesian_grid(eq, N=None, h=None, pad=0.0):
-    """Uniform grid G2 covering the plasma.
+def cartesian_grid(eq, h, factor=2.0):
+    """Periodic Cartesian box G3 with spacing h around the plasma.
 
-    x and y span [-R_max, R_max], z spans [Z_min, Z_max], each widened by
-    ``pad`` metres on both sides. Give either
-      N = (Nx, Ny, Nz): points including both ends, x_p = x_min + p dx with
-          dx = (x_max - x_min) / (Nx - 1), or
-      h: the same spacing dx = dy = dz = h in all directions; the number of
-          points is the smallest odd number covering the span (odd, so the
-          grid has a plane through the box centre, e.g. y = 0), centred on it.
+    In each direction the period L = N h is at least ``factor`` times the
+    plasma extent (2 R_max in x and y, Z_max - Z_min in z), with N rounded up
+    to an FFT-friendly size (small prime factors). The box is centred on the
+    plasma, x_p = c + h (p - N // 2), so it has a point at the centre, e.g.
+    the plane y = 0. Returns the axes (xs, ys, zs).
     """
     _, R_max, Z_min, Z_max = plasma_extent(eq)
-    lo = np.array([-R_max, -R_max, Z_min]) - pad
-    hi = np.array([R_max, R_max, Z_max]) + pad
-    if (N is None) == (h is None):
-        raise ValueError("give exactly one of N and h")
-    if N is not None:
-        return tuple(np.linspace(lo[i], hi[i], N[i]) for i in range(3))
-    n = np.ceil((hi - lo) / h).astype(int) // 2 * 2 + 1  # intervals, odd points
-    n = np.where((n - 1) * h < hi - lo, n + 2, n)
-    c = (lo + hi) / 2
-    return tuple(c[i] + h * (np.arange(n[i]) - (n[i] - 1) / 2) for i in range(3))
+    c = np.array([0.0, 0.0, (Z_min + Z_max) / 2])
+    extent = np.array([2 * R_max, 2 * R_max, Z_max - Z_min])
+    n = [next_fast_len(int(np.ceil(factor * e / h))) for e in extent]
+    return tuple(c[i] + h * (np.arange(n[i]) - n[i] // 2) for i in range(3))
 
 
 class _Separable:
@@ -235,53 +230,67 @@ def _evaluate(series, rho, theta, zeta):
 
 
 def current_on_cartesian(eq, current, axes, guess_grid=None, newton_chunk=200000,
-                         eval_chunk=20000, verbose=False, **kw):
+                         eval_chunk=200000, dtype=np.float32, verbose=False, **kw):
     """J on the Cartesian grid ``axes = (xs, ys, zs)``, zero outside the plasma.
 
-    Returns a dict with arrays of shape (Nx, Ny, Nz[, 3]):
-        J     Cartesian components of J                             [A/m^2]
-        mask  chi_{Omega_p}: True inside the plasma (rho <= 1)
-        rtz   flux coordinates (rho, theta, zeta), NaN outside
+    Only the block of the grid inside the plasma's (R, Z) extent is solved
+    for; the rest of the grid (the zero padding of the box) is never formed
+    as points. Returns a dict with
+        J       Cartesian components of J, shape (Nx, Ny, Nz, 3)    [A/m^2]
+        mask    chi_{Omega_p}, shape (Nx, Ny, Nz): True for rho <= 1
+        inside  flat indices of the points inside the plasma
+        rtz     their flux coordinates (rho, theta, zeta), (n_inside, 3)
     plus the axes xs, ys, zs and spacings dx. ``newton_chunk`` and
     ``eval_chunk`` are the numbers of points per call of the inverse map and of
-    the series evaluation; ``verbose`` prints progress.
+    the series evaluation; ``verbose`` prints progress. The inverse map and the
+    series are computed in float64; J on the box is stored as ``dtype``
+    (float32 by default, half the memory of the largest array).
     """
-    xs, ys, zs = axes
-    X = np.stack(np.meshgrid(xs, ys, zs, indexing="ij"), axis=-1)
-    x = X.reshape(-1, 3)
+    shape = tuple(len(a) for a in axes)
+    _, R_max, Z_min, Z_max = plasma_extent(eq)
+    block = [np.flatnonzero(np.abs(axes[0]) <= R_max),
+             np.flatnonzero(np.abs(axes[1]) <= R_max),
+             np.flatnonzero((axes[2] >= Z_min) & (axes[2] <= Z_max))]
+    x = np.stack(np.meshgrid(*(a[b] for a, b in zip(axes, block)), indexing="ij"),
+                 axis=-1).reshape(-1, 3)
     rtz = map_to_flux(eq, x, guess_grid=guess_grid, chunk=newton_chunk,
                       verbose=verbose, **kw)
-    inside = np.flatnonzero(np.isfinite(rtz[:, 0]))
+    ok = np.flatnonzero(np.isfinite(rtz[:, 0]))
+    x, rtz = x[ok], rtz[ok]
+    inside = np.ravel_multi_index(
+        [b[i] for b, i in zip(block, np.unravel_index(ok, [len(b) for b in block]))],
+        shape)
 
-    J = np.zeros_like(x)
     series = _Separable([current.basis] * 3, [current.c[:, i] for i in range(3)],
                         current.basis.NFP)
-    phi = np.arctan2(x[inside, 1], x[inside, 0])
-    eval_chunk = min(eval_chunk, max(inside.size, 1))
-    n_chunks, t0 = -(-inside.size // eval_chunk), time.time()
-    for k, i in enumerate(range(0, inside.size, eval_chunk)):
-        sl = inside[i : i + eval_chunk]
-        pad = np.pad(np.arange(sl.size), (0, eval_chunk - sl.size), mode="edge")
-        y = rtz[sl[pad]]
-        J_cyl = np.asarray(_evaluate(series, *(jnp.asarray(y[:, j]) for j in range(3))))
-        J_cyl = J_cyl[: sl.size]
-        c, s = np.cos(phi[i : i + sl.size]), np.sin(phi[i : i + sl.size])
-        J[sl] = np.column_stack(
-            [J_cyl[:, 0] * c - J_cyl[:, 1] * s,
-             J_cyl[:, 0] * s + J_cyl[:, 1] * c,
-             J_cyl[:, 2]]
-        )
+    J_in = np.empty_like(x)
+    phi = np.arctan2(x[:, 1], x[:, 0])
+    eval_chunk = min(eval_chunk, max(len(x), 1))
+    n_chunks, t0 = -(-len(x) // eval_chunk), time.time()
+    for k, i in enumerate(range(0, len(x), eval_chunk)):
+        sl = slice(i, i + eval_chunk)
+        n = len(x[sl])
+        pad = np.pad(np.arange(i, i + n), (0, eval_chunk - n), mode="edge")
+        J_cyl = np.asarray(_evaluate(series, *(jnp.asarray(rtz[pad, j]) for j in range(3))))[:n]
+        c, s = np.cos(phi[sl]), np.sin(phi[sl])
+        J_in[sl] = np.column_stack([J_cyl[:, 0] * c - J_cyl[:, 1] * s,
+                                    J_cyl[:, 0] * s + J_cyl[:, 1] * c,
+                                    J_cyl[:, 2]])
         if verbose and ((k + 1) % 20 == 0 or k + 1 == n_chunks):
-            _progress("J series", k + 1, n_chunks, i + sl.size, inside.size, t0,
+            _progress("J series", k + 1, n_chunks, i + n, len(x), t0,
                       f"{current.basis.num_modes} modes")
 
-    shape = X.shape[:3]
+    J = np.zeros(shape + (3,), dtype=dtype)
+    J.reshape(-1, 3)[inside] = J_in
+    mask = np.zeros(shape, dtype=bool)
+    mask.ravel()[inside] = True
     return {
-        "xs": xs,
-        "ys": ys,
-        "zs": zs,
+        "xs": axes[0],
+        "ys": axes[1],
+        "zs": axes[2],
         "dx": np.array([a[1] - a[0] if len(a) > 1 else np.nan for a in axes]),
-        "J": J.reshape(shape + (3,)),
-        "mask": np.isfinite(rtz[:, 0]).reshape(shape),
-        "rtz": rtz.reshape(shape + (3,)),
+        "J": J,
+        "mask": mask,
+        "inside": inside,
+        "rtz": rtz,
     }
