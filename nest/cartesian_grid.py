@@ -18,10 +18,10 @@ import numpy as np
 from scipy.fft import next_fast_len
 from scipy.spatial import cKDTree
 
-from desc.basis import fourier, zernike_radial
 from desc.grid import LinearGrid
 
 from desc_grid import flux_grid
+from separable import Separable
 
 
 def plasma_extent(eq, M=None, N=None):
@@ -48,52 +48,6 @@ def cartesian_grid(eq, h, factor=2.0):
     extent = np.array([2 * R_max, 2 * R_max, Z_max - Z_min])
     n = [next_fast_len(int(np.ceil(factor * e / h))) for e in extent]
     return tuple(c[i] + h * (np.arange(n[i]) - n[i] // 2) for i in range(3))
-
-
-class _Separable:
-    """Fourier-Zernike series regrouped by the toroidal factor.
-
-    A series f(rho, theta, zeta) = sum_k c_k Z_k(rho) T_k(theta) F_k(zeta) in
-    DESC's basis is stored as a tensor C[p, q, c] over the distinct (l, m)
-    pairs p, the distinct n values q and the components c, so that
-
-        f_c = sum_p P_p(rho, theta) sum_q C[p, q, c] F_q(zeta),
-
-    with P_p = Z_l^|m|(rho) T_m(theta). At fixed zeta the inner sum collapses
-    to a 2-D Zernike series with coefficients a[p, c] = sum_q C[p, q, c] F_q.
-    """
-
-    def __init__(self, bases, coefs, NFP):
-        modes = np.concatenate([b.modes for b in bases])
-        self.lm, p = np.unique(modes[:, :2], axis=0, return_inverse=True)
-        self.n, q = np.unique(modes[:, 2], return_inverse=True)
-        self.NFP = NFP
-        C = np.zeros((len(self.lm), len(self.n), len(bases)))
-        k0 = 0
-        for c, (b, coef) in enumerate(zip(bases, coefs)):
-            k = slice(k0, k0 + b.num_modes)
-            C[p.ravel()[k], q.ravel()[k], c] = np.asarray(coef)
-            k0 += b.num_modes
-        self.C = jnp.asarray(C)
-
-    def poloidal(self, rho, theta, dr=0, dt=0):
-        """P_p(rho, theta) and derivatives, shape (n_points, n_lm)."""
-        l, m = self.lm[:, 0], self.lm[:, 1]
-        return zernike_radial(rho[:, None], l, m, dr=dr) * fourier(theta[:, None], m, dt=dt)
-
-    def toroidal(self, zeta):
-        """F_q(zeta), shape (n_points, n_n)."""
-        return fourier(zeta[:, None], self.n, NFP=self.NFP)
-
-    def collapse(self, zeta):
-        """2-D coefficients a[i, p, c] at each point's zeta."""
-        return jnp.einsum("iq,pqc->ipc", self.toroidal(zeta), self.C)
-
-    def evaluate(self, rho, theta, zeta):
-        """f_c at the points, shape (n_points, n_components)."""
-        # (P C) first, then the toroidal factor: never forms (points, p, q, c)
-        PC = jnp.einsum("ip,pqc->iqc", self.poloidal(rho, theta), self.C)
-        return jnp.einsum("iqc,iq->ic", PC, self.toroidal(zeta))
 
 
 def _check_phi_is_zeta(eq):
@@ -183,7 +137,7 @@ def map_to_flux(eq, x, guess_grid=None, atol=1e-8, maxiter=20, rho_max=1.3,
     nodes, xg = _torus_nodes(eq, guess_grid)
     _, nn = cKDTree(xg).query(x[cand])
 
-    RZ = _Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP)
+    RZ = Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP)
     chunk = min(chunk, cand.size)
     n_chunks = -(-cand.size // chunk)
     t0 = time.time()
@@ -224,13 +178,8 @@ def _torus_nodes(eq, grid):
     return nodes, np.column_stack([R * np.cos(phi), R * np.sin(phi), Z])
 
 
-@functools.partial(jax.jit, static_argnums=0)
-def _evaluate(series, rho, theta, zeta):
-    return series.evaluate(rho, theta, zeta)
-
-
 def current_on_cartesian(eq, current, axes, guess_grid=None, newton_chunk=200000,
-                         eval_chunk=200000, dtype=np.float32, verbose=False, **kw):
+                         eval_chunk=50000, dtype=np.float32, verbose=False, **kw):
     """J on the Cartesian grid ``axes = (xs, ys, zs)``, zero outside the plasma.
 
     Only the block of the grid inside the plasma's (R, Z) extent is solved
@@ -261,8 +210,7 @@ def current_on_cartesian(eq, current, axes, guess_grid=None, newton_chunk=200000
         [b[i] for b, i in zip(block, np.unravel_index(ok, [len(b) for b in block]))],
         shape)
 
-    series = _Separable([current.basis] * 3, [current.c[:, i] for i in range(3)],
-                        current.basis.NFP)
+    evaluate = current.point_evaluator(eq)
     J_in = np.empty_like(x)
     phi = np.arctan2(x[:, 1], x[:, 0])
     eval_chunk = min(eval_chunk, max(len(x), 1))
@@ -271,7 +219,7 @@ def current_on_cartesian(eq, current, axes, guess_grid=None, newton_chunk=200000
         sl = slice(i, i + eval_chunk)
         n = len(x[sl])
         pad = np.pad(np.arange(i, i + n), (0, eval_chunk - n), mode="edge")
-        J_cyl = np.asarray(_evaluate(series, *(jnp.asarray(rtz[pad, j]) for j in range(3))))[:n]
+        J_cyl = np.asarray(evaluate(*(jnp.asarray(rtz[pad, j]) for j in range(3))))[:n]
         c, s = np.cos(phi[sl]), np.sin(phi[sl])
         J_in[sl] = np.column_stack([J_cyl[:, 0] * c - J_cyl[:, 1] * s,
                                     J_cyl[:, 0] * s + J_cyl[:, 1] * c,

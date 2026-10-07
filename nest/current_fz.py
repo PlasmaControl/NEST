@@ -9,11 +9,14 @@ squares in DESC's real basis
     
 """
 
+import jax
 import numpy as np
 
 from desc.basis import FourierZernikeBasis
 from desc.grid import QuadratureGrid
 from desc.transform import Transform
+
+from separable import Separable
 
 COMPONENTS = ("J_R", "J_phi", "J_Z")
 
@@ -62,6 +65,12 @@ class CurrentFZ:
         return np.stack(
             [np.asarray(tr.transform(self.c[:, i])) for i in range(3)], axis=-1
         )
+
+    def point_evaluator(self, eq=None):
+        """Jitted f(rho, theta, zeta) -> (J_R, J_phi, J_Z), shape (n_points, 3)."""
+        series = Separable([self.basis] * 3, [self.c[:, i] for i in range(3)],
+                           self.basis.NFP)
+        return jax.jit(series.evaluate)
 
     def save(self, path):
         b = self.basis
