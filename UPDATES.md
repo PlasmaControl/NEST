@@ -24,8 +24,6 @@ One entry per commit, newest first.
 - `nest/cartesian_grid.py`: uniform grid around the plasma, inverse map to flux coordinates, J on the grid (zero outside).
 - `tests/test_cartesian_grid.py`: current through phi = 0 and int |J| dV vs DESC; to-do list in the README.
 
-## 2026-10-05: Remove .claude/settings.json
-
 ## 2026-10-05: Fourier-Zernike current fit
 - `nest/current_fz.py`, `nest/desc_grid.py`: J fitted as a Fourier-Zernike series, evaluated on a ConcentricGrid; test vs DESC J.
 
