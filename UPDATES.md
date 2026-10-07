@@ -26,5 +26,3 @@ One entry per commit, newest first.
 
 ## 2026-10-05: Fourier-Zernike current fit
 - `nest/current_fz.py`, `nest/desc_grid.py`: J fitted as a Fourier-Zernike series, evaluated on a ConcentricGrid; test vs DESC J.
-
-## 2026-10-05: Create README.md
