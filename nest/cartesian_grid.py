@@ -163,7 +163,8 @@ def _progress(stage, k, n, done, total, t0, extra=""):
     """One line of progress: chunk k of n, points done, elapsed time and ETA."""
     dt = time.time() - t0
     eta = dt / done * (total - done)
-    print(f"  {stage} chunk {k}/{n}: {done:,}/{total:,} points, {extra}, "
+    extra = f"{extra}, " if extra else ""
+    print(f"  {stage} chunk {k}/{n}: {done:,}/{total:,} points, {extra}"
           f"{dt:.0f}s elapsed, ETA {eta:.0f}s", flush=True)
 
 
@@ -210,26 +211,10 @@ def current_on_cartesian(eq, current, axes, guess_grid=None, newton_chunk=200000
         [b[i] for b, i in zip(block, np.unravel_index(ok, [len(b) for b in block]))],
         shape)
 
-    evaluate = current.point_evaluator(eq)
-    J_in = np.empty_like(x)
-    phi = np.arctan2(x[:, 1], x[:, 0])
-    eval_chunk = min(eval_chunk, max(len(x), 1))
-    n_chunks, t0 = -(-len(x) // eval_chunk), time.time()
-    for k, i in enumerate(range(0, len(x), eval_chunk)):
-        sl = slice(i, i + eval_chunk)
-        n = len(x[sl])
-        pad = np.pad(np.arange(i, i + n), (0, eval_chunk - n), mode="edge")
-        J_cyl = np.asarray(evaluate(*(jnp.asarray(rtz[pad, j]) for j in range(3))))[:n]
-        c, s = np.cos(phi[sl]), np.sin(phi[sl])
-        J_in[sl] = np.column_stack([J_cyl[:, 0] * c - J_cyl[:, 1] * s,
-                                    J_cyl[:, 0] * s + J_cyl[:, 1] * c,
-                                    J_cyl[:, 2]])
-        if verbose and ((k + 1) % 20 == 0 or k + 1 == n_chunks):
-            _progress("J series", k + 1, n_chunks, i + n, len(x), t0,
-                      f"{current.basis.num_modes} modes")
-
+    J_cyl = evaluate_chunked(current.point_evaluator(eq), rtz, eval_chunk,
+                             verbose and f"J series ({current.basis.num_modes} modes)")
     J = np.zeros(shape + (3,), dtype=dtype)
-    J.reshape(-1, 3)[inside] = J_in
+    J.reshape(-1, 3)[inside] = cylindrical_to_cartesian(J_cyl, np.arctan2(x[:, 1], x[:, 0]))
     mask = np.zeros(shape, dtype=bool)
     mask.ravel()[inside] = True
     return {
@@ -242,3 +227,44 @@ def current_on_cartesian(eq, current, axes, guess_grid=None, newton_chunk=200000
         "inside": inside,
         "rtz": rtz,
     }
+
+
+def evaluate_chunked(evaluate, rtz, chunk=50000, label=None):
+    """``evaluate(rho, theta, zeta)`` on the rows of ``rtz``, in chunks.
+
+    Every call gets exactly ``chunk`` points (the last chunk is padded), so a
+    jitted ``evaluate`` compiles once. ``label`` (a string) prints progress.
+    Returns the stacked outputs, shape (len(rtz), ...).
+    """
+    chunk = min(chunk, max(len(rtz), 1))
+    n_chunks, t0, out = -(-len(rtz) // chunk), time.time(), []
+    for k, i in enumerate(range(0, len(rtz), chunk)):
+        n = min(chunk, len(rtz) - i)
+        pad = np.pad(np.arange(i, i + n), (0, chunk - n), mode="edge")
+        out.append(np.asarray(evaluate(*(jnp.asarray(rtz[pad, j]) for j in range(3))))[:n])
+        if label and ((k + 1) % 20 == 0 or k + 1 == n_chunks):
+            _progress(label, k + 1, n_chunks, i + n, len(rtz), t0, "")
+    return np.concatenate(out)
+
+
+def cylindrical_to_cartesian(V, phi):
+    """(V_R, V_phi, V_Z) at angles phi -> (V_x, V_y, V_z)."""
+    c, s = np.cos(phi), np.sin(phi)
+    return np.column_stack([V[:, 0] * c - V[:, 1] * s, V[:, 0] * s + V[:, 1] * c, V[:, 2]])
+
+
+def pressure_on_cartesian(eq, pressure, d, eval_chunk=50000, dtype=np.float32):
+    """p and grad p on the box of ``d = current_on_cartesian(...)``, zero outside.
+
+    Reuses the flux coordinates of the inside points from ``d``, so only the
+    series is evaluated. Returns p, shape (Nx, Ny, Nz) [Pa], and grad p in
+    Cartesian components, shape (Nx, Ny, Nz, 3) [Pa/m].
+    """
+    shape = d["mask"].shape
+    X = [a[i] for a, i in zip((d["xs"], d["ys"], d["zs"]), np.unravel_index(d["inside"], shape))]
+    out = evaluate_chunked(pressure.point_evaluator(eq), d["rtz"], eval_chunk)
+    p = np.zeros(shape, dtype=dtype)
+    p.ravel()[d["inside"]] = out[:, 0]
+    grad_p = np.zeros(shape + (3,), dtype=dtype)
+    grad_p.reshape(-1, 3)[d["inside"]] = cylindrical_to_cartesian(out[:, 1:], np.arctan2(X[1], X[0]))
+    return p, grad_p

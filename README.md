@@ -10,8 +10,8 @@ free-boundary equilibrium.
 - [x] Map J to a uniform Cartesian grid G2 with a 2-D Newton inverse map (`nest/cartesian_grid.py`)
 - [x] Tests vs DESC: fit on G1, current through phi = 0, int |J| dV (`tests/`)
 - [x] Use the free-boundary equilibrium from `desc_input` instead of the precise_QA example
-- [ ] Extend to the periodic computational box (step 3), with free-space handling of B
-- [ ] FFT of J and B_plasma = i mu0 k x J / |k|^2 (steps 4-5)
-- [ ] find a way to compute the pressure
+- [x] Extend to the periodic computational box (step 3), with free-space handling of B (`nest/magnetic_field.py`)
+- [x] FFT of J and B_plasma = i mu0 k x J / |k|^2 (steps 4-5) (`nest/fourier.py`, `nest/magnetic_field.py`)
+- [x] Pressure as a Fourier-Zernike field, optimized with T (`nest/pressure.py`)
 - [ ] B = B_ext + B_plasma and force residual J x B - grad p inside the plasma
 - [ ] Optimization loop over the J coefficients
