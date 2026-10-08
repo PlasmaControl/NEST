@@ -1,6 +1,6 @@
 """Step 5: B_plasma from J on the box G3, periodic FFT vs free-space convolution.
 
-J = curl T (``CurrentPotential``, J.n = 0) on G3 with h = a / frac, then B_plasma
+J = curl T (``CurrentPotential``) on G3 with h = a / frac, then B_plasma
 by both methods of ``magnetic_field``, compared with three references:
 
   1. discrete Biot-Savart: the direct sum over the same grid J at sample points
@@ -17,9 +17,8 @@ by both methods of ``magnetic_field``, compared with three references:
   3. inside the plasma (free-boundary precise_QA, which has its coils): the
      total field B_coil + B_plasma vs DESC's B, as |B_desc - B| / |B_desc| at
      each point (max and rms). Printed only: it is the field error the force
-     residual will see, limited by DESC's free-boundary residual (B.n / |B| =
-     2.2e-3) rather than by B_plasma; on the boundary, DESC's B minus the coil
-     field and DESC's own virtual-casing B_plasma differ by 39 % rms.
+     residual will see, limited by DESC's free-boundary residual (B.n / |B|
+     rms 2.45e-3 for the smooth-current precise_QA) rather than by B_plasma.
 
 Errors of checks 1 and 2 are max |B - B_ref| / max |B_ref| over the points.
 
@@ -46,7 +45,7 @@ from desc import set_device  # noqa: E402
 set_device(os.environ.get("NEST_DEVICE", "cpu"))
 
 import desc.io  # noqa: E402
-from desc.grid import Grid, QuadratureGrid  # noqa: E402
+from desc.grid import Grid, LinearGrid, QuadratureGrid  # noqa: E402
 from desc.magnetic_fields._core import biot_savart_general  # noqa: E402
 from scipy.spatial import cKDTree  # noqa: E402
 
@@ -62,7 +61,8 @@ from magnetic_field import (  # noqa: E402
 COILS = os.path.join(ROOT, "desc_input", "precise_QA_free_boundary",
                      "precise_QA_helical_coils.h5")
 EQ_FILES = {  # equilibrium: its coils (None: no coils, no interior check)
-    os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_L16N14.h5"): COILS,
+    os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_smooth_J",
+                 "precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5"): COILS,
     os.path.join(ROOT, "desc_input", "W7-X_output.h5"): None,
 }
 TOL_DISCRETE = 1e-4  # free space vs direct sum (float32)
@@ -101,6 +101,19 @@ def continuous_biot_savart(eq, current, x, chunk=20):
         Js.append(rpz_to_xyz(J, phi))
     return np.asarray(biot_savart_general(x, np.concatenate(rs), np.concatenate(Js),
                                           np.tile(dV, eq.NFP), chunk_size=chunk))
+
+
+def iota_at(eq, rho, deg=24):
+    """(iota, d iota / d rho) at the radii ``rho``: from the profile when iota is
+    prescribed, else a Chebyshev fit of iota computed on 64 flux surfaces."""
+    if eq.iota is not None:
+        g = Grid(np.column_stack([rho, 0 * rho, 0 * rho]), sort=False)
+        return [np.asarray(eq.iota.compute(g, dr=i)) for i in range(2)]
+    r = (1 - np.cos(np.pi * (np.arange(64) + 0.5) / 64)) / 2
+    gr = LinearGrid(rho=r, M=eq.M_grid, N=eq.N_grid, NFP=eq.NFP)
+    f = np.polynomial.Chebyshev.fit(r, gr.compress(eq.compute("iota", grid=gr)["iota"]),
+                                    deg, domain=[0, 1])
+    return [f(rho), f.deriv()(rho)]
 
 
 def check_magnetic_field(path, coils=None, frac=10, n_sample=100, seed=0):
@@ -158,8 +171,8 @@ def check_magnetic_field(path, coils=None, frac=10, n_sample=100, seed=0):
         sub = rng.choice(len(inside), min(20000, len(inside)), replace=False)
         phi = np.arctan2(x_in[sub, 1], x_in[sub, 0])
         g = Grid(rtz[sub], sort=False)
-        # iota from its profile: computing it on scattered points needs surface integrals
-        iota = {k: np.asarray(eq.iota.compute(g, dr=i)) for i, k in enumerate(["iota", "iota_r"])}
+        # iota passed in: computing it on scattered points needs surface integrals
+        iota = dict(zip(["iota", "iota_r"], iota_at(eq, rtz[sub, 0])))
         B_desc = np.asarray(eq.compute("B", grid=g, data=iota)["B"])
         R = np.hypot(x_in[sub, 0], x_in[sub, 1])
         B_coil = np.asarray(coilset.compute_magnetic_field(

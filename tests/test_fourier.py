@@ -1,9 +1,8 @@
 """Step 4: FFT of J on the periodic box G3.
 
   1. wavevectors: a cosine with a known k peaks at that k
-  2. FFT of J = curl T (free-boundary precise_QA and W7-X, J.n = 0 on the
-     boundary): the inverse returns J,
-     Parseval holds (normalization), and J_hat(k = 0) = sum J
+  2. FFT of J = curl T (free-boundary precise_QA and W7-X): the inverse
+     returns J, Parseval holds (normalization), and J_hat(k = 0) = sum J
 
 Also printed: the fraction of J_hat along k, i.e. of J that is not
 divergence-free (removed by the projection in step 5).
@@ -36,7 +35,8 @@ from current_potential import CurrentPotential  # noqa: E402
 from fourier import fft_J, ifft_J, nyquist, wavevectors  # noqa: E402
 
 EQ_FILES = [
-    os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_L16N14.h5"),
+    os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_smooth_J",
+                 "precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5"),
     os.path.join(ROOT, "desc_input", "W7-X_output.h5"),
 ]
 

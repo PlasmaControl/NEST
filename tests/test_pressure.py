@@ -41,7 +41,8 @@ from desc_grid import flux_grid  # noqa: E402
 from pressure import Pressure  # noqa: E402
 
 EQ_FILES = [
-    os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_L16N14.h5"),
+    os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_smooth_J",
+                 "precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5"),
     os.path.join(ROOT, "desc_input", "W7-X_output.h5"),
 ]
 TOL_FIT = 1e-8  # max |p - p_desc| / max p, same for grad p

@@ -18,6 +18,12 @@ polynomial is 1 at rho = 1, p(1, theta, zeta) = sum_mn (sum_l c_lmn) F_mn, and
 p = 0 on the boundary means sum_l c_lmn = 0 for each (m, n);
 ``impose_zero_edge`` sets the lowest-l coefficient of each (m, n) from the
 others, the smoothest correction (rho^|m| F_mn).
+
+Smooth edge (``edge_order`` k, e.g. 2, as for J): p = w(rho) Q(rho, theta,
+zeta) with w = (1 - rho^2)^(k+1) and Q the Fourier-Zernike series (the
+coefficients ``c``). Then p = O((1 - rho^2)^(k+1)) and grad p =
+O((1 - rho^2)^k), like J x B, for any coefficients; p = 0 on the edge holds by
+construction.
 """
 
 import functools
@@ -32,13 +38,23 @@ from desc.grid import LinearGrid
 from separable import Separable
 
 
-@functools.partial(jax.jit, static_argnums=(0, 1))
-def _p_and_grad(P, RZ, rho, theta, zeta):
+def window(rho, k, dr=0):
+    """w = (1 - rho^2)^(k+1) (dr = 0) or dw/drho (dr = 1)."""
+    if dr == 0:
+        return (1 - rho**2) ** (k + 1)
+    return -2 * (k + 1) * rho * (1 - rho**2) ** k
+
+
+@functools.partial(jax.jit, static_argnums=(0, 1, 2))
+def _p_and_grad(P, RZ, k, rho, theta, zeta):
     """(p, dp/dR, dp/(R dphi), dp/dZ) at the points, shape (n_points, 4)."""
     p = P.evaluate(rho, theta, zeta)[:, 0]
     pr = P.evaluate(rho, theta, zeta, dr=1)[:, 0]
     pt = P.evaluate(rho, theta, zeta, dt=1)[:, 0]
     pz = P.evaluate(rho, theta, zeta, dz=1)[:, 0]
+    if k is not None:  # p = w Q
+        w = window(rho, k)
+        p, pr, pt, pz = w * p, window(rho, k, dr=1) * p + w * pr, w * pt, w * pz
     R = RZ.evaluate(rho, theta, zeta)[:, 0]  # columns: R, Z
     Rr, Zr = RZ.evaluate(rho, theta, zeta, dr=1).T
     Rt, Zt = RZ.evaluate(rho, theta, zeta, dt=1).T
@@ -59,22 +75,28 @@ class Pressure:
     ----------
     basis : FourierZernikeBasis
     c : ndarray, shape (basis.num_modes,)
-        Coefficients of p in Pa.
+        Coefficients of p in Pa, or of Q with ``edge_order``.
     eq : Equilibrium
         The equilibrium whose flux coordinates and geometry p refers to.
+    edge_order : int or None
+        k of the smooth edge, p = (1 - rho^2)^(k+1) Q; None for p itself a
+        Fourier-Zernike series.
     """
 
-    def __init__(self, basis, c, eq):
+    def __init__(self, basis, c, eq, edge_order=None):
         self.basis = basis
         self.c = np.asarray(c)
         self.eq = eq
+        self.edge_order = edge_order
 
     @classmethod
-    def fit(cls, eq, L=None, M=None, N=None, factors=(3, 3, 2.5)):
+    def fit(cls, eq, L=None, M=None, N=None, factors=(3, 3, 2.5), edge_order=None):
         """DESC's p(rho) on a basis of resolution (L, M, N), default that of T.
 
         Only the m = n = 0 modes are fitted (least squares on 4 L + 8 points
         in rho); the others start at zero. Then p = 0 is imposed on rho = 1.
+        With ``edge_order`` the fit is of p by w Q (exact when p(rho) is w
+        times a polynomial in rho^2).
         """
         L = int(round(factors[0] * eq.L)) if L is None else L
         M = int(round(factors[1] * eq.M)) if M is None else M
@@ -87,9 +109,11 @@ class Pressure:
         k = np.flatnonzero((basis.modes[:, 1] == 0) & (basis.modes[:, 2] == 0))
         l = basis.modes[k, 0]
         Z = np.asarray(zernike_radial(rho[:, None], l, np.zeros_like(l)))
+        if edge_order is not None:
+            Z = window(rho, edge_order)[:, None] * Z
         c = np.zeros(basis.num_modes)
         c[k] = np.linalg.lstsq(Z, p, rcond=None)[0]
-        return cls(basis, c, eq).impose_zero_edge()
+        return cls(basis, c, eq, edge_order).impose_zero_edge()
 
     def impose_zero_edge(self):
         """Copy with p = 0 on rho = 1: sum_l c_lmn = 0 for each (m, n).
@@ -98,7 +122,10 @@ class Pressure:
         its lowest-l coefficient (l = |m|): the correction is that value times
         rho^|m| F_mn, smooth and regular at the axis. As a parametrization for
         the optimizer, c_|m|mn is a linear function of the other coefficients.
+        With ``edge_order`` p = 0 on the edge already: returned unchanged.
         """
+        if self.edge_order is not None:
+            return self
         modes = self.basis.modes
         _, g = np.unique(modes[:, 1:], axis=0, return_inverse=True)
         g = g.ravel()
@@ -114,7 +141,7 @@ class Pressure:
         eq = self.eq if eq is None else eq
         P = Separable([self.basis], [self.c], self.basis.NFP)
         RZ = Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP)
-        return functools.partial(_p_and_grad, P, RZ)
+        return functools.partial(_p_and_grad, P, RZ, self.edge_order)
 
     def evaluate(self, grid, chunk=50000):
         """(p, grad p) at the nodes of ``grid``, shape (num_nodes, 4)."""
@@ -127,7 +154,8 @@ class Pressure:
     def save(self, path):
         b = self.basis
         np.savez_compressed(path, c=self.c, modes=b.modes, L=b.L, M=b.M, N=b.N,
-                            NFP=b.NFP, spectral_indexing=b.spectral_indexing)
+                            NFP=b.NFP, spectral_indexing=b.spectral_indexing,
+                            edge_order=-1 if self.edge_order is None else self.edge_order)
 
     @classmethod
     def load(cls, path, eq):
@@ -137,4 +165,5 @@ class Pressure:
                 sym=False, spectral_indexing=str(f["spectral_indexing"]),
             )
             assert np.array_equal(basis.modes, f["modes"]), "basis mode mismatch"
-            return cls(basis, f["c"], eq)
+            k = int(f["edge_order"]) if "edge_order" in f else -1
+            return cls(basis, f["c"], eq, None if k < 0 else k)

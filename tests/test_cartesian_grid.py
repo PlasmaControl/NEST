@@ -1,10 +1,12 @@
 """J = curl T on a uniform Cartesian grid (steps 2-3), for finite-beta equilibria.
 
-J comes from the current potential T (``CurrentPotential``, with J.n = 0 on
-the boundary), so the current through every cross-section is the net current.
+J comes from the current potential T (``CurrentPotential``). J.n = 0 is not
+imposed, so the current through a cross-section varies with phi (it equals the
+net current I(rho = 1) only on average); the reference is DESC's J through the
+same cross-section.
 
   1. toroidal current: sum of J_y dx dz over the half-plane phi = 0 (y = 0, x > 0)
-     vs DESC's net toroidal current I(rho = 1)
+     vs DESC's sqrt(g) J^zeta integrated over the cross-section zeta = 0
   2. int |J| dV: sum of |J| dx dy dz over the periodic box G3 vs the same J
      integrated in flux coordinates, plus checks of the box (spacing, size,
      zero padding)
@@ -34,7 +36,7 @@ from desc import set_device  # noqa: E402
 set_device(os.environ.get("NEST_DEVICE", "cpu"))
 
 import desc.io  # noqa: E402
-from desc.grid import LinearGrid, QuadratureGrid  # noqa: E402
+from desc.grid import Grid, QuadratureGrid  # noqa: E402
 
 from cartesian_grid import (  # noqa: E402
     cartesian_grid,
@@ -44,7 +46,8 @@ from cartesian_grid import (  # noqa: E402
 from current_potential import CurrentPotential  # noqa: E402
 
 EQ_FILES = [
-    os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_L16N14.h5"),
+    os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_smooth_J",
+                 "precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5"),
     os.path.join(ROOT, "desc_input", "W7-X_output.h5"),
 ]
 
@@ -77,9 +80,14 @@ def test_current_through_phi0(eq_current, frac=60, tol=1e-2):
     I = Jy.sum(dtype=np.float64) * h * h
     I_abs = np.abs(Jy).sum(dtype=np.float64) * h * h
 
-    # div J = 0 and J.n = 0: the current through any cross-section is I(rho=1)
-    g1 = LinearGrid(rho=1.0, M=eq.M_grid, N=eq.N_grid, NFP=eq.NFP)
-    I_desc = float(g1.compress(eq.compute("current", grid=g1)["current"])[0])
+    # DESC: int sqrt(g) J^zeta drho dtheta over zeta = 0 (= phi = 0), Gauss in rho
+    x, w = np.polynomial.legendre.leggauss(4 * eq.L)
+    t = np.linspace(0, 2 * np.pi, 4 * eq.M + 1, endpoint=False)
+    r_, t_ = np.meshgrid((x + 1) / 2, t, indexing="ij")
+    g = Grid(np.column_stack([r_.ravel(), t_.ravel(), np.zeros(r_.size)]), sort=False)
+    dd = eq.compute(["sqrt(g)", "J^zeta"], grid=g)
+    I_desc = np.sum(np.asarray(dd["sqrt(g)"]) * np.asarray(dd["J^zeta"])
+                    * np.repeat(w / 2, len(t))) * 2 * np.pi / len(t)
 
     rel = abs(I - I_desc) / I_abs
     print(f"current through phi=0 (h = a/{frac} = {h * 1e3:.2f} mm): {I:.3f} A vs DESC "

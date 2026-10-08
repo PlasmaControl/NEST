@@ -26,7 +26,8 @@ from current_fz import CurrentFZ  # noqa: E402
 from desc_grid import evaluate_on_flux_grid, flux_grid  # noqa: E402
 
 EQ_FILES = [
-    os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_L16N14.h5"),
+    os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_smooth_J",
+                 "precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5"),
     os.path.join(ROOT, "desc_input", "W7-X_output.h5"),
 ]
 TOL = 1e-3  # max |J_fit - J_desc| / max |J_desc|
