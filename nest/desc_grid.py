@@ -8,39 +8,36 @@ equilibrium.
 
 import numpy as np
 
-from desc.grid import ConcentricGrid
+from desc_input import DESCInput, equilibrium
+from grid import FluxGrid
 
 
 def flux_grid(eq, L, M, N, node_pattern="cheb1", axis=False):
-    """Concentric grid G1 in (rho, theta, zeta) over one field period.
+    """Concentric grid G1 in (rho, theta, zeta) over one field period (a DESC grid).
 
     "cheb1" puts surfaces at rho = 1 and, with axis=False, just off the axis
-    (DESC's J is undefined at rho = 0), clustered toward both ends.
+    (DESC's J is undefined at rho = 0), clustered toward both ends. See
+    ``grid.FluxGrid.concentric``, which this wraps.
     """
-    return ConcentricGrid(
-        L, M, N, NFP=eq.NFP, sym=False, axis=axis, node_pattern=node_pattern
-    )
+    return FluxGrid.concentric(eq, L, M, N, node_pattern, axis).desc
 
 
 def evaluate_on_flux_grid(eq, grid, current):
     """Positions from ``eq`` and J from the series ``current``, full torus.
 
+    ``grid`` is a one-period DESC grid or a ``FluxGrid``.
     """
-    NFP = eq.NFP
-    if grid.NFP != NFP:
-        raise ValueError(f"grid.NFP={grid.NFP} must equal eq.NFP={NFP}")
-    names = ["R", "phi", "Z", "p", "sqrt(g)"]
-    d = {k: np.asarray(v) for k, v in eq.compute(names, grid=grid).items()}
-    J_cyl = current.evaluate(grid)
-
-    shift = np.repeat(2 * np.pi * np.arange(NFP) / NFP, grid.num_nodes)
-    tile = lambda f: np.tile(f, (NFP,) + (1,) * (np.ndim(f) - 1))
-    nodes = tile(np.asarray(grid.nodes))
-    nodes[:, 2] += shift
-    R, Z, phi, J_cyl = tile(d["R"]), tile(d["Z"]), tile(d["phi"]) + shift, tile(J_cyl)
+    fg = grid if isinstance(grid, FluxGrid) else FluxGrid(grid)
+    NFP = equilibrium(eq).NFP
+    if fg.NFP != NFP:
+        raise ValueError(f"grid.NFP={fg.NFP} must equal eq.NFP={NFP}")
+    inp = eq if isinstance(eq, DESCInput) else DESCInput(eq, check=False)
+    d = inp.compute(["p", "sqrt(g)"], fg.desc)
+    pos = fg.positions(inp)
+    nodes, phi = fg.torus_nodes(), pos["phi"]
+    J_cyl = fg.tile(current.evaluate(fg.desc))
 
     c, s = np.cos(phi), np.sin(phi)
-    x = np.stack([R * c, R * s, Z], axis=-1)
     J = np.stack(
         [J_cyl[:, 0] * c - J_cyl[:, 1] * s,
          J_cyl[:, 0] * s + J_cyl[:, 1] * c,
@@ -52,15 +49,15 @@ def evaluate_on_flux_grid(eq, grid, current):
         "rho": nodes[:, 0],
         "theta": nodes[:, 1],
         "zeta": nodes[:, 2],
-        "x": x,
+        "x": pos["x"],
         "J": J,
         "J_cyl": J_cyl,
-        "R": R,
-        "Z": Z,
+        "R": pos["R"],
+        "Z": pos["Z"],
         "phi": phi,
-        "p": tile(d["p"]),
-        "sqrt_g": tile(d["sqrt(g)"]),
-        "weights": tile(np.asarray(grid.weights)) / NFP,
+        "p": fg.tile(d["p"]),
+        "sqrt_g": fg.tile(d["sqrt(g)"]),
+        "weights": fg.torus_weights(),
         "NFP": np.asarray(NFP),
     }
 
