@@ -208,6 +208,18 @@ def map_to_flux(eq, x, guess_grid=None, atol=1e-8, maxiter=20, rho_max=1.3,
     return rtz
 
 
+def scatter(values, inside, shape):
+    """Values (n_inside, ...) at the flat indices ``inside`` of a grid of ``shape``,
+    zero elsewhere: shape + values.shape[1:]. Pure JAX (linear, jvp/vjp/transpose)."""
+    out = jnp.zeros((int(np.prod(shape)),) + values.shape[1:], values.dtype)
+    return out.at[inside].set(values, unique_indices=True).reshape(tuple(shape) + values.shape[1:])
+
+
+def gather(field, inside):
+    """A field on the grid, (Nx, Ny, Nz, ...), at the flat indices ``inside``. Pure JAX."""
+    return field.reshape((-1,) + field.shape[3:])[inside]
+
+
 # ----------------------------------------------------------------------- G3
 class CartesianGrid:
     """Uniform Cartesian grid with axes (xs, ys, zs), and the plasma inside it.
@@ -348,18 +360,16 @@ class CartesianGrid:
         return len(self.inside) * self.dV
 
     def scatter(self, values, dtype=np.float32):
-        """Values at the inside points onto the full grid, zero elsewhere.
+        """Values at the inside points onto the full grid, zero elsewhere (JAX).
 
-        ``values`` has shape (n_inside, ...); the result (Nx, Ny, Nz, ...).
+        ``values`` has shape (n_inside, ...); the result (Nx, Ny, Nz, ...), a JAX
+        array of ``dtype``. Inside jitted code use ``scatter(values, inside, shape)``
+        with the indices passed as an argument.
         """
         self._require_plasma()
-        values = np.asarray(values)
-        out = np.zeros(self.shape + values.shape[1:], dtype=dtype)
-        out.reshape((-1,) + values.shape[1:])[self.inside] = values
-        return out
+        return scatter(jnp.asarray(values, dtype=dtype), jnp.asarray(self.inside), self.shape)
 
     def gather(self, field):
-        """A field on the grid, shape (Nx, Ny, Nz, ...), at the inside points."""
+        """A field on the grid, shape (Nx, Ny, Nz, ...), at the inside points (JAX)."""
         self._require_plasma()
-        field = np.asarray(field)
-        return field.reshape((-1,) + field.shape[3:])[self.inside]
+        return gather(jnp.asarray(field), jnp.asarray(self.inside))

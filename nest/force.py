@@ -7,9 +7,9 @@ period), with the volume weights sqrt(g) w:
 
     J, grad p  evaluated at the points from their series
     B_ext      the external field (coils) of the ``DESCInput`` at the points
-    B_plasma   free-space Biot-Savart of J sampled on the periodic box G3 (FFT,
-               ``magnetic_field.b_plasma_free``), interpolated to the points
-               spectrally with a type-2 non-uniform FFT (``magnetic_field.interpolate``)
+    B_plasma   free-space Biot-Savart of J sampled on the periodic box G3
+               (``magnetic_field.BiotSavart``: FFT, the free-space kernel, then the
+               type-2 non-uniform FFT from the half spectrum to the points)
     F          J x (B_ext + B_plasma) - grad p
 
 The box carries only the sampling of J for the FFT; the residual never uses the
@@ -33,8 +33,7 @@ import numpy as np
 from desc.grid import QuadratureGrid
 
 from cartesian_grid import cylindrical_to_cartesian, evaluate_chunked
-from fourier import fft_J
-from magnetic_field import b_plasma_free, biot_savart_kernel_hat, interpolate
+from magnetic_field import BiotSavart
 
 
 class ForceResidual:
@@ -51,12 +50,19 @@ class ForceResidual:
         QuadratureGrid(2 L, 2 M, 2 N) of the equilibrium.
     eval_chunk : int
         Points per call of the series evaluators.
+    kernel : {"vico_greengard", "hockney"}
+        Free-space kernel of B_plasma (``magnetic_field``).
+    dtype : np.float32 or np.float64
+        Precision of J on the box and of the transforms.
+    bs_kw : dict
+        Other ``BiotSavart`` arguments (eps, upsampfac, R_cut, cache_dir, ...).
 
     The points' positions, volume weights, B_ext, the Biot-Savart kernel and
     DESC's normalization do not depend on J or p: computed once, here.
     """
 
-    def __init__(self, inp, box, grid=None, eval_chunk=50000):
+    def __init__(self, inp, box, grid=None, eval_chunk=50000, kernel="vico_greengard",
+                 dtype=np.float32, bs_kw=None):
         if box.inside is None:
             raise RuntimeError("locate the plasma on the box first (box.locate_plasma)")
         eq = inp.eq
@@ -71,7 +77,7 @@ class ForceResidual:
         self.norm = float(np.ravel(d["<|grad(|B|^2)|/2mu0>_vol"])[0])
         self.F_desc_vol = float(np.ravel(d["<|F|>_vol"])[0])  # DESC's own <|F|>
         self.B_ext = inp.B_ext(self.x)
-        self.K_hat = biot_savart_kernel_hat(box.axes)
+        self.bs = BiotSavart(box, self.x, kernel=kernel, dtype=dtype, **(bs_kw or {}))
 
     def _series(self, evaluator, rtz):
         return evaluate_chunked(evaluator, rtz, self.eval_chunk)
@@ -80,10 +86,7 @@ class ForceResidual:
         """B_plasma at the collocation points: J on the box -> FFT -> interpolation."""
         J_box = cylindrical_to_cartesian(self._series(current.point_evaluator(self.inp.eq),
                                                       self.box.rtz), self.box.phi_inside)
-        J_hat = fft_J(self.box.scatter(J_box, np.float32))
-        B_box = np.asarray(b_plasma_free(J_hat, self.box.axes, self.K_hat))  # to the host
-        del J_box, J_hat  # free the GPU for the interpolation
-        return interpolate(B_box, self.box.axes, self.x)
+        return np.asarray(self.bs.apply(J_box)).astype(float)
 
     def evaluate(self, current, pressure):
         """J, B_plasma, B, grad p and F at the collocation points, each (n, 3)."""

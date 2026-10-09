@@ -20,7 +20,7 @@ of a ``DESCInput``:
 
 import numpy as np
 
-from biot_savart import BiotSavart
+from magnetic_field import BiotSavart
 from cartesian_grid import cylindrical_to_cartesian
 from grid import map_to_flux
 

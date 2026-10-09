@@ -45,7 +45,7 @@ import jax.numpy as jnp
 import numpy as np
 from desc.grid import QuadratureGrid
 
-from biot_savart import BiotSavart
+from magnetic_field import BiotSavart
 from grid import progress
 from separable import Separable
 

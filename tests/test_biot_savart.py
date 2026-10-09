@@ -1,4 +1,4 @@
-"""``biot_savart.BiotSavart``: B_plasma as a linear JAX map of J, both kernels.
+"""``magnetic_field.BiotSavart``: B_plasma as a linear JAX map of J, both kernels.
 
 1. Gaussian current blob J = exp(-r^2 / 2 s^2) z_hat on boxes of even and odd
    sizes, against the exact B (curl of A_z = mu0 Q erf(r / sqrt2 s) / (4 pi r),
@@ -7,14 +7,16 @@
                      s = 2 h;
      hockney         the discrete sum, second order: the error falls about 4x
                      when h halves;
-   and hockney against the existing path (b_plasma_free, then interpolate), the
-   same discrete operator: equal to round-off.
+     vico_greengard with the type-2 NUFFT on the half spectrum (half=True,
+                     eps = 1e-14): the same accuracy;
+   and hockney against the box route (b_plasma_free, then interpolate): the same
+   operator, equal to round-off.
 2. The map is linear and pure JAX: linearity, jvp, the adjoint identity
    <A J, V> = <J, A^T V> (vjp and linear_transpose), vmap over columns against a
    loop, and float32 against float64.
-3. On the smooth-current precise_QA box (h = a / frac): hockney equals the
-   existing path at the force-residual points; vico_greengard against hockney,
-   which measures the second-order error of the discrete sum.
+3. On the smooth-current precise_QA box (h = a / frac): hockney equals the box
+   route at the force-residual points; vico_greengard against hockney, which
+   measures the second-order error of the discrete sum.
 
 run: pytest tests/test_biot_savart.py -s     or     python tests/test_biot_savart.py [frac]
 """
@@ -44,13 +46,12 @@ from desc.grid import QuadratureGrid  # noqa: E402
 from scipy.constants import mu_0  # noqa: E402
 from scipy.special import erf  # noqa: E402
 
-from biot_savart import BiotSavart  # noqa: E402
 from boundary_potential import BoundaryPotential  # noqa: E402
 from cartesian_grid import cylindrical_to_cartesian, evaluate_chunked  # noqa: E402
 from desc_input import DESCInput  # noqa: E402
 from fourier import fft_J  # noqa: E402
 from grid import CartesianGrid  # noqa: E402
-from magnetic_field import b_plasma_free, interpolate  # noqa: E402
+from magnetic_field import BiotSavart, b_plasma_free, interpolate  # noqa: E402
 
 EQ = os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_smooth_J",
                   "precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5")
@@ -97,10 +98,13 @@ def check_blob(s=0.1, n_targets=2000, seed=0):
             row[kernel] = np.asarray(BiotSavart(box, x, kernel=kernel).apply(J))
             print(f"box {shape}, h = {h}: {kernel:15s} error vs exact "
                   f"{rel(row[kernel], B_exact):.1e} ({time.time() - t0:.1f} s)")
-        B_box = np.asarray(b_plasma_free(fft_J(box.scatter(J, np.float64)), box.axes))
+        B_half = BiotSavart(box, x, half=True, eps=1e-14).apply(J)
+        print(f"   vico_greengard, half spectrum: error vs exact {rel(B_half, B_exact):.1e}")
+        B_box = np.asarray(b_plasma_free(fft_J(box.scatter(J, np.float64)), box.axes, kernel="hockney"))
         e_same = rel(row["hockney"], interpolate(B_box, box.axes, x))
         print(f"   hockney vs b_plasma_free + interpolate: {e_same:.1e}")
         assert rel(row["vico_greengard"], B_exact) < TOL_VG
+        assert rel(B_half, B_exact) < TOL_VG
         assert e_same < TOL_SAME
         err[(shape, h)] = rel(row["hockney"], B_exact)
     order = np.log2(err[((48, 40, 36), 0.05)] / err[((96, 80, 72), 0.025)])
@@ -149,7 +153,7 @@ def check_equilibrium(frac=10):
     t0 = time.time()
     B_vg = np.asarray(BiotSavart(box, x, kernel="vico_greengard").apply(J))
     t_vg = time.time() - t0
-    B_box = np.asarray(b_plasma_free(fft_J(box.scatter(J, np.float64)), box.axes))
+    B_box = np.asarray(b_plasma_free(fft_J(box.scatter(J, np.float64)), box.axes, kernel="hockney"))
     e_same = rel(B_h, interpolate(B_box, box.axes, x))
     print(f"\n{inp.name}: box {box.shape}, h = a/{frac}, {len(box.inside):,} inside points, "
           f"{len(x):,} targets; hockney {t_h:.1f} s, vico_greengard {t_vg:.1f} s (with setup)")
