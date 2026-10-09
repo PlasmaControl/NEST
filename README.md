@@ -13,7 +13,7 @@ free-boundary equilibrium.
 - [x] Extend to the periodic computational box (step 3), with free-space handling of B (`nest/magnetic_field.py`)
 - [x] FFT of J and B_plasma = i mu0 k x J / |k|^2 (steps 4-5) (`nest/fourier.py`, `nest/magnetic_field.py`)
 - [x] Pressure as a Fourier-Zernike field, optimized with T (`nest/pressure.py`)
-- [ ] Math representation of J as potential T, with smoothness at the edge 
+- [x] Math representation of J as potential T, with smoothness at the edge (`nest/boundary_potential.py`)
 - [x] Grid class and DESC common input class (`nest/grid.py`, `nest/desc_input.py`)
 - [ ] B = B_ext + B_plasma and force residual J x B - grad p inside the plasma
 - [ ] Jacobian construction

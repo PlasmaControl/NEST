@@ -8,6 +8,10 @@ p, the distinct n values q and the components c, so that
 
 with P_p = Z_l^|m|(rho) T_m(theta). At fixed zeta the inner sum collapses to a
 2-D Zernike series with coefficients a[p, c] = sum_q C[p, q, c] F_q.
+
+``scatter`` builds C from coefficient arrays with JAX and ``evaluate`` accepts
+it as an argument, so a series can be evaluated (and differentiated) for
+coefficients that are traced JAX arrays, with the regrouping fixed.
 """
 
 import jax.numpy as jnp
@@ -24,13 +28,16 @@ class Separable:
         self.lm, p = np.unique(modes[:, :2], axis=0, return_inverse=True)
         self.n, q = np.unique(modes[:, 2], return_inverse=True)
         self.NFP = NFP
-        C = np.zeros((len(self.lm), len(self.n), len(bases)))
-        k0 = 0
-        for c, (b, coef) in enumerate(zip(bases, coefs)):
-            k = slice(k0, k0 + b.num_modes)
-            C[p.ravel()[k], q.ravel()[k], c] = np.asarray(coef)
-            k0 += b.num_modes
-        self.C = jnp.asarray(C)
+        bounds = np.cumsum([0] + [b.num_modes for b in bases])
+        self._pq = [(p.ravel()[i:j], q.ravel()[i:j]) for i, j in zip(bounds[:-1], bounds[1:])]
+        self.C = self.scatter(coefs)
+
+    def scatter(self, coefs):
+        """C[p, q, c] from one coefficient array per basis (JAX, differentiable)."""
+        C = jnp.zeros((len(self.lm), len(self.n), len(self._pq)))
+        for c, ((p, q), coef) in enumerate(zip(self._pq, coefs)):
+            C = C.at[p, q, c].set(jnp.asarray(coef, dtype=C.dtype))
+        return C
 
     def poloidal(self, rho, theta, dr=0, dt=0):
         """P_p(rho, theta) and derivatives, shape (n_points, n_lm)."""
@@ -45,8 +52,12 @@ class Separable:
         """2-D coefficients a[i, p, c] at each point's zeta."""
         return jnp.einsum("iq,pqc->ipc", self.toroidal(zeta), self.C)
 
-    def evaluate(self, rho, theta, zeta, dr=0, dt=0, dz=0):
-        """f_c (or a derivative) at the points, shape (n_points, n_components)."""
+    def evaluate(self, rho, theta, zeta, dr=0, dt=0, dz=0, C=None):
+        """f_c (or a derivative) at the points, shape (n_points, n_components).
+
+        ``C`` (from ``scatter``) replaces the stored coefficients.
+        """
+        C = self.C if C is None else C
         # (P C) first, then the toroidal factor: never forms (points, p, q, c)
-        PC = jnp.einsum("ip,pqc->iqc", self.poloidal(rho, theta, dr, dt), self.C)
+        PC = jnp.einsum("ip,pqc->iqc", self.poloidal(rho, theta, dr, dt), C)
         return jnp.einsum("iqc,iq->ic", PC, self.toroidal(zeta, dz))
