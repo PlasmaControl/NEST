@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-10-09: Plot scripts
+- `scripts/plot_J_vs_desc.py`: makes `figures/J_vs_desc.png` (DESC J vs the BoundaryPotential fit).
+- `scripts/plot_edge_layer.py`: makes `figures/edge_layer_J.png`; needs the removed edge taper (run at commit a5cbd41).
+
 ## 2026-10-09: Job scripts, step 2 driver and figures
 - `run.sbatch`: sets NEST_DEVICE=gpu and stops if JAX does not get the GPU; `run_cpu.sbatch` (CPU jobs on Stellar); `run_della.sbatch` (one A100 on Della, env `nest-gpu` in /scratch/gpfs/EKOLEMEN/lk1158).
 - `nest/run_step2.py`: driver for J on a Cartesian grid (h = a / frac) with checks against DESC (uses `CurrentFZ`).
