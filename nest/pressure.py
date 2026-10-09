@@ -32,7 +32,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from desc.basis import FourierZernikeBasis, zernike_radial
+from desc.basis import FourierZernikeBasis, fourier, zernike_radial
 from desc.grid import LinearGrid
 
 from separable import Separable
@@ -46,12 +46,15 @@ def window(rho, k, dr=0):
 
 
 @functools.partial(jax.jit, static_argnums=(0, 1, 2))
-def _p_and_grad(P, RZ, k, rho, theta, zeta):
-    """(p, dp/dR, dp/(R dphi), dp/dZ) at the points, shape (n_points, 4)."""
-    p = P.evaluate(rho, theta, zeta)[:, 0]
-    pr = P.evaluate(rho, theta, zeta, dr=1)[:, 0]
-    pt = P.evaluate(rho, theta, zeta, dt=1)[:, 0]
-    pz = P.evaluate(rho, theta, zeta, dz=1)[:, 0]
+def _p_and_grad(P, RZ, k, rho, theta, zeta, C=None):
+    """(p, dp/dR, dp/(R dphi), dp/dZ) at the points, shape (n_points, 4).
+
+    ``C`` (``Separable.scatter``) replaces the stored coefficients; linear in C.
+    """
+    p = P.evaluate(rho, theta, zeta, C=C)[:, 0]
+    pr = P.evaluate(rho, theta, zeta, dr=1, C=C)[:, 0]
+    pt = P.evaluate(rho, theta, zeta, dt=1, C=C)[:, 0]
+    pz = P.evaluate(rho, theta, zeta, dz=1, C=C)[:, 0]
     if k is not None:  # p = w Q
         w = window(rho, k)
         p, pr, pt, pz = w * p, window(rho, k, dr=1) * p + w * pr, w * pt, w * pz
@@ -66,6 +69,34 @@ def _p_and_grad(P, RZ, k, rho, theta, zeta):
     g_phi = pr * (Zt * Rz - Rt * Zz) + pt * (Zz * Rr - Rz * Zr) + pz * (Zr * Rt - Rr * Zt)
     g_Z = pr * R * Rt - pt * R * Rr
     return jnp.stack([p, g_R / sqrt_g, g_phi / sqrt_g, g_Z / sqrt_g], axis=-1)
+
+
+def _p_columns(k, l, m, n, l0, NFP, rho, theta, zeta):
+    """(p, d_rho p, d_theta p, d_zeta p) of single free coefficients, (n_points, n_cols, 4).
+
+    Column j is the function w(rho) [Z_l^|m| - Z_l0^|m|](rho) F_m(theta) F_n(zeta):
+    with ``edge_order`` k, w = (1 - rho^2)^(k+1) and no l0 term (l0 < 0); without it,
+    w = 1 and l0 the lowest l of the (m, n) group, whose coefficient is fixed by
+    p = 0 on rho = 1 (``impose_zero_edge``). Closed form, cost independent of the
+    number of modes.
+    """
+    am = jnp.abs(m)
+    R = zernike_radial(rho[:, None], l[None], am[None])
+    Rr = zernike_radial(rho[:, None], l[None], am[None], dr=1)
+    sub = (l0 >= 0)[None]
+    l0c = jnp.maximum(l0, 0)
+    R = R - jnp.where(sub, zernike_radial(rho[:, None], l0c[None], am[None]), 0)
+    Rr = Rr - jnp.where(sub, zernike_radial(rho[:, None], l0c[None], am[None], dr=1), 0)
+    if k is not None:
+        w, w1 = window(rho, k)[:, None], window(rho, k, dr=1)[:, None]
+        R, Rr = w * R, w1 * R + w * Rr
+    Ft, Ftt = fourier(theta[:, None], m[None]), fourier(theta[:, None], m[None], dt=1)
+    Fz = fourier(zeta[:, None], n[None], NFP=NFP)
+    Fzz = fourier(zeta[:, None], n[None], NFP=NFP, dt=1)
+    return jnp.stack([R * Ft * Fz, Rr * Ft * Fz, R * Ftt * Fz, R * Ft * Fzz], axis=-1)
+
+
+_p_columns_jit = jax.jit(_p_columns, static_argnums=(0, 5))
 
 
 class Pressure:
@@ -115,6 +146,46 @@ class Pressure:
         c[k] = np.linalg.lstsq(Z, p, rcond=None)[0]
         return cls(basis, c, eq, edge_order).impose_zero_edge()
 
+    def free_coefficients(self):
+        """Indices of the free coefficients of p, and for each the dependent lowest-l
+        coefficient of its (m, n) group (-1 if none).
+
+        With ``edge_order`` every coefficient is free. Without it, p = 0 on rho = 1
+        fixes the lowest-l coefficient of each (m, n) group (``impose_zero_edge``):
+        those are not free, and each free coefficient c_lmn carries -c_lmn into it.
+        """
+        modes = self.basis.modes
+        if self.edge_order is not None:
+            return np.arange(len(modes)), np.full(len(modes), -1)
+        _, g = np.unique(modes[:, 1:], axis=0, return_inverse=True)
+        g = g.ravel()
+        order = np.lexsort((modes[:, 0], g))
+        first = order[np.r_[0, np.flatnonzero(np.diff(g[order])) + 1]]
+        lowest = {gi: fi for gi, fi in zip(g[first], first)}
+        free = np.array([i for i in range(len(modes)) if lowest[g[i]] != i], dtype=int)
+        return free, np.array([lowest[g[i]] for i in free], dtype=int)
+
+    def to_coefficients(self, x):
+        """All coefficients c from the free ones x (``free_coefficients`` order)."""
+        free, dep = self.free_coefficients()
+        c = jnp.zeros(self.basis.num_modes).at[free].set(x)
+        return c.at[dep[dep >= 0]].add(-jnp.asarray(x)[dep >= 0])
+
+    def free_values(self):
+        """The free coefficients of ``self.c`` (which must satisfy the edge constraint)."""
+        return np.asarray(self.c)[self.free_coefficients()[0]]
+
+    def p_columns(self, cols, rho, theta, zeta):
+        """(p, d_rho p, d_theta p, d_zeta p) of the free coefficients ``cols`` (indices
+        into ``free_coefficients()``), (n_points, len(cols), 4); see ``_p_columns``."""
+        free, dep = self.free_coefficients()
+        cols = np.asarray(cols)
+        md = self.basis.modes
+        l, m, n = (jnp.asarray(md[free[cols], i]) for i in range(3))
+        l0 = np.where(dep[cols] >= 0, md[np.maximum(dep[cols], 0), 0], -1)
+        return _p_columns_jit(self.edge_order, l, m, n, jnp.asarray(l0), self.basis.NFP,
+                              rho, theta, zeta)
+
     def impose_zero_edge(self):
         """Copy with p = 0 on rho = 1: sum_l c_lmn = 0 for each (m, n).
 
@@ -136,12 +207,29 @@ class Pressure:
         c[first] -= edge[g[first]]
         return Pressure(self.basis, c, self.eq)
 
+    @functools.cached_property
+    def _separable(self):
+        """(P, RZ): the series of p and of the geometry, built once (jit static args)."""
+        eq = self.eq
+        return (Separable([self.basis], [self.c], self.basis.NFP),
+                Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP))
+
     def point_evaluator(self, eq=None):
         """Jitted f(rho, theta, zeta) -> (p, grad p in (R, phi, Z) components)."""
-        eq = self.eq if eq is None else eq
-        P = Separable([self.basis], [self.c], self.basis.NFP)
-        RZ = Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP)
+        P, RZ = self._separable
+        if eq is not None and eq is not self.eq:  # another geometry
+            RZ = Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP)
         return functools.partial(_p_and_grad, P, RZ, self.edge_order)
+
+    def pressure_function(self):
+        """Jitted f(c, rho, theta, zeta) -> (p, grad p), linear in the coefficients c
+        (shape (basis.num_modes,)), for JAX differentiation; c replaces ``self.c``.
+
+        Without ``edge_order`` p = 0 on the edge only if c satisfies the constraint of
+        ``impose_zero_edge``; with it, for every c."""
+        P, RZ = self._separable
+        k = self.edge_order
+        return lambda c, rho, theta, zeta: _p_and_grad(P, RZ, k, rho, theta, zeta, P.scatter([c]))
 
     def evaluate(self, grid, chunk=50000):
         """(p, grad p) at the nodes of ``grid``, shape (num_nodes, 4)."""

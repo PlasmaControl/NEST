@@ -39,12 +39,12 @@ def plasma_extent(eq, M=None, N=None):
     return _as_input(eq).extent(M, N)
 
 
-def progress(stage, k, n, done, total, t0, extra=""):
-    """One line of progress: chunk k of n, points done, elapsed time and ETA."""
+def progress(stage, k, n, done, total, t0, extra="", unit="points"):
+    """One line of progress: chunk k of n, items (``unit``) done, elapsed time and ETA."""
     dt = time.time() - t0
     eta = dt / done * (total - done)
     extra = f"{extra}, " if extra else ""
-    print(f"  {stage} chunk {k}/{n}: {done:,}/{total:,} points, {extra}"
+    print(f"  {stage} chunk {k}/{n}: {done:,}/{total:,} {unit}, {extra}"
           f"{dt:.0f}s elapsed, ETA {eta:.0f}s", flush=True)
 
 

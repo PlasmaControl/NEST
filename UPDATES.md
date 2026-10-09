@@ -2,6 +2,14 @@
 
 One entry per commit, newest first.
 
+## 2026-10-09: J, B, p, grad p as affine maps of the coefficients; DESC external field
+- `nest/fields.py`: `Fields`, at the collocation points (default QuadratureGrid(2 L, 2 M, 2 N) of the current basis) J = J_0 + D_J u, B = B_0 + D_B u, p = D_p x_p, grad p = D_gp x_p, exact and constant; D_B = Biot-Savart of each coefficient's current on the box (one application per column, progress by elapsed time). Opt-in D_B cache (`cache_dir`): column blocks keyed by the geometry, box, kernel, points, basis and edge power; an interrupted build resumes. `fit_pressure`: the force-optimal pressure at a given current (linear least squares). `B_direct`: B without D_B (independent evaluation grids).
+- `nest/boundary_potential.py`: `_sqrtg_J_columns` / `sqrtg_J_columns`, sqrt(g) J^i of single coefficients in closed form (cost independent of the number of modes; equal to the jvp of `_current` to 6.5e-15), `coefficient_modes`, `sqrtg_J`.
+- `nest/pressure.py`: `pressure_function` (p linear in coefficients passed as an argument), `free_coefficients` / `to_coefficients` (without `edge_order`, the lowest-l coefficient of each (m, n) is fixed by p = 0 on the edge), `p_columns` in closed form.
+- `nest/desc_external_field.py`: `DESCExternalField`, B_DESC - BS_h(J_DESC) as a field object to pass as the external field of a `DESCInput` (verification: B = B_DESC exactly for J = J_DESC at every h).
+- `nest/grid.py`: `progress(..., unit=)`.
+- `tests/test_fields.py` (precise_QA, bases 4, 4, 3, h = a/4): affine maps vs direct evaluation J 4.7e-16, p 6.0e-17, grad p 4.1e-16, B 8.6e-16; D_B cache identical (25 s build, 1 s restore); force-optimal p lowers rms |F| / rms |grad p| from 7.40e-3 to 6.78e-3; DESCExternalField reproduces DESC's B to 7.6e-13.
+
 ## 2026-10-09: B_plasma as a linear, differentiable map of J; Vico-Greengard kernel
 - `nest/biot_savart.py`: `BiotSavart`, J at the box points inside the plasma -> B_plasma at fixed target points, one jitted JAX function (scatter, FFT, kernel, type-2 NUFFT straight from B_hat, with no inverse FFT to the box and back), linear in J: jvp, vjp and linear_transpose work, and the Jacobian columns of B are `apply` of one coefficient's current. Constants (inside indices, kernel, target angles) are a pytree passed as a jit argument (`consts()`). float64 by default (the solve path needs it), float32 optional.
 - Two kernels: `hockney` (the discrete sum of `b_plasma_free`, second order in h) and `vico_greengard` (truncated free-space Green's function, Vico, Greengard and Ferrando 2016: spectrally accurate for the sampled J), R_cut = diagonal of the half-period box, precompute grid max(2 L_i, 2 R_cut) per axis, Nyquist planes removed; boxes of odd or even sizes.

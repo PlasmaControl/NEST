@@ -185,6 +185,39 @@ def _current(S, RZ, u, I, rho, theta, zeta):
     return jnp.where(axis[:, None], J_axis, N / jnp.where(axis, 1.0, sqrt_g)[:, None])
 
 
+def _sqrtg_J_columns(S, kind, l, m, n, rho, theta, zeta):
+    """sqrt(g) (J^rho, J^theta, J^zeta) of single unit coefficients, (n_points, n_cols, 3).
+
+    Column j is the coefficient (kind[j], l[j], m[j], n[j]), kind 0 = chi, 1 = a,
+    2 = b (``BoundaryPotential.coefficient_modes``), with I = 0. Closed form from
+    one radial factor and two Fourier factors per column, so the cost does not
+    grow with the number of modes; equal to ``_sqrtg_J`` of the unit vector:
+        a:   f (-rho^2 d_zeta A),  0,                     g' A + g d_rho A
+        b:   f d_theta B,          -(f' B + f d_rho B),   0
+        chi: 0,                    -d_rho d_zeta chi,     d_rho d_theta chi
+    with A, B = Z_l^|m|(rho) F_m(theta) F_n(zeta) and chi = h_|m|(rho) F_m F_n.
+    """
+    f, f1, _, g, g1, _ = (v[:, None] for v in _window(S, rho))
+    am = jnp.abs(m)
+    chi = (kind == 0)[None]
+    P = jnp.where(chi, _h(S, rho, 0)[:, am], zernike_radial(rho[:, None], l[None], am[None]))
+    Pr = jnp.where(chi, _h(S, rho, 1)[:, am],
+                   zernike_radial(rho[:, None], l[None], am[None], dr=1))
+    Ft, Ftt = fourier(theta[:, None], m[None]), fourier(theta[:, None], m[None], dt=1)
+    Fz = fourier(zeta[:, None], n[None], NFP=S.NFP)
+    Fzz = fourier(zeta[:, None], n[None], NFP=S.NFP, dt=1)
+    a_, b_ = (kind == 1)[None], (kind == 2)[None]
+    r2 = rho[:, None] ** 2
+    sJr = jnp.where(a_, -f * r2 * P * Ft * Fzz, 0) + jnp.where(b_, f * P * Ftt * Fz, 0)
+    sJt = jnp.where(b_, -(f1 * P + f * Pr) * Ft * Fz, 0) + jnp.where(chi, -Pr * Ft * Fzz, 0)
+    sJz = jnp.where(a_, (g1 * P + g * Pr) * Ft * Fz, 0) + jnp.where(chi, Pr * Ftt * Fz, 0)
+    return jnp.stack([sJr, sJt, sJz], axis=-1)
+
+
+_sqrtg_J_columns_jit = jax.jit(_sqrtg_J_columns, static_argnums=0)
+_sqrtg_J_jit = jax.jit(_sqrtg_J, static_argnums=0)
+
+
 class BoundaryPotential:
     """The boundary-adapted potential: J = curl T, J = 0 on the LCFS.
 
@@ -223,6 +256,28 @@ class BoundaryPotential:
     def with_u(self, u):
         """The same representation with other free coefficients (no recompilation)."""
         return BoundaryPotential(self.basis, u, self.I, self.eq, self.edge_power, self.S)
+
+    def coefficient_modes(self):
+        """(kind, l, m, n) of every free coefficient, in u order; kind 0 = chi, 1 = a,
+        2 = b (l = 0 for chi)."""
+        S, md = self.S, self.basis.modes
+        kind = np.repeat([0, 1, 2], [S.n_chi, S.K, S.K])
+        l = np.concatenate([np.zeros(S.n_chi, int), md[:, 0], md[:, 0]])
+        m = np.concatenate([S.chi_modes[:, 0], md[:, 1], md[:, 1]])
+        n = np.concatenate([S.chi_modes[:, 1], md[:, 2], md[:, 2]])
+        return kind, l.astype(int), m.astype(int), n.astype(int)
+
+    def sqrtg_J_columns(self, cols, rho, theta, zeta):
+        """sqrt(g) J^i of the unit coefficients ``cols`` (indices into u) at the points,
+        (n_points, len(cols), 3), I = 0; see ``_sqrtg_J_columns``. Jitted."""
+        kind, l, m, n = (jnp.asarray(v[np.asarray(cols)]) for v in self.coefficient_modes())
+        return _sqrtg_J_columns_jit(self.S, kind, l, m, n, rho, theta, zeta)
+
+    def sqrtg_J(self, u, rho, theta, zeta, I=None):
+        """sqrt(g) (J^rho, J^theta, J^zeta) for coefficients u and net current I
+        (default ``self.I``), shape (n_points, 3). Jitted, linear in (u, I)."""
+        I = self.I if I is None else I
+        return jnp.stack(_sqrtg_J_jit(self.S, jnp.asarray(u), I, rho, theta, zeta), axis=-1)
 
     def current_function(self):
         """Jitted f(u, rho, theta, zeta) -> (J_R, J_phi, J_Z), linear in u, for JAX
