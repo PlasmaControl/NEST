@@ -35,6 +35,7 @@ import numpy as np
 from desc.basis import FourierZernikeBasis, fourier, zernike_radial
 from desc.grid import LinearGrid
 
+from desc_input import covariant_basis, dual_basis
 from separable import Separable
 
 
@@ -58,17 +59,9 @@ def _p_and_grad(P, RZ, k, rho, theta, zeta, C=None):
     if k is not None:  # p = w Q
         w = window(rho, k)
         p, pr, pt, pz = w * p, window(rho, k, dr=1) * p + w * pr, w * pt, w * pz
-    R = RZ.evaluate(rho, theta, zeta)[:, 0]  # columns: R, Z
-    Rr, Zr = RZ.evaluate(rho, theta, zeta, dr=1).T
-    Rt, Zt = RZ.evaluate(rho, theta, zeta, dt=1).T
-    Rz, Zz = RZ.evaluate(rho, theta, zeta, dz=1).T
-    # e_rho = (R_r, 0, Z_r), e_theta = (R_t, 0, Z_t), e_zeta = (R_z, R, Z_z) in
-    # (R, phi, Z) components (phi = zeta); sqrt(g) = e_rho . e_theta x e_zeta
-    sqrt_g = R * (Rt * Zr - Rr * Zt)
-    g_R = -pr * R * Zt + pt * R * Zr
-    g_phi = pr * (Zt * Rz - Rt * Zz) + pt * (Zz * Rr - Rz * Zr) + pz * (Zr * Rt - Rr * Zt)
-    g_Z = pr * R * Rt - pt * R * Rr
-    return jnp.stack([p, g_R / sqrt_g, g_phi / sqrt_g, g_Z / sqrt_g], axis=-1)
+    _, E, sqrt_g = covariant_basis(RZ, rho, theta, zeta)
+    grad = jnp.einsum("ni,nia->na", jnp.stack([pr, pt, pz], axis=-1), dual_basis(E, sqrt_g))
+    return jnp.concatenate([p[:, None], grad], axis=-1)
 
 
 def _p_columns(k, l, m, n, l0, NFP, rho, theta, zeta):

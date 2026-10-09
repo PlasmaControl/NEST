@@ -46,6 +46,7 @@ from desc.basis import FourierZernikeBasis, fourier, zernike_radial
 from desc.grid import LinearGrid
 from desc.transform import Transform
 
+from desc_input import covariant_basis, current_from_sqrtg
 from separable import Separable
 
 MU_0 = 4e-7 * np.pi
@@ -72,17 +73,8 @@ def _J_from_T(T, RZ, rho, theta, zeta):
     a = Tt[:, 1] - Tz[:, 0]  # sqrt(g) J^rho
     b = -Tr[:, 1]  # sqrt(g) J^theta
     c = Tr[:, 0]  # sqrt(g) J^zeta
-    X = RZ.evaluate(rho, theta, zeta)  # columns: R, Z
-    Xr = RZ.evaluate(rho, theta, zeta, dr=1)
-    Xt = RZ.evaluate(rho, theta, zeta, dt=1)
-    Xz = RZ.evaluate(rho, theta, zeta, dz=1)
-    R = X[:, 0]
-    # e_rho = (R_r, 0, Z_r), e_theta = (R_t, 0, Z_t), e_zeta = (R_z, R, Z_z) in
-    # (R, phi, Z) components (phi = zeta); sqrt(g) = e_rho . e_theta x e_zeta
-    sqrt_g = R * (Xt[:, 0] * Xr[:, 1] - Xr[:, 0] * Xt[:, 1])
-    J_R = a * Xr[:, 0] + b * Xt[:, 0] + c * Xz[:, 0]
-    J_Z = a * Xr[:, 1] + b * Xt[:, 1] + c * Xz[:, 1]
-    return jnp.stack([J_R, c * R, J_Z], axis=-1) / sqrt_g[:, None]
+    _, E, sqrt_g = covariant_basis(RZ, rho, theta, zeta)
+    return current_from_sqrtg(jnp.stack([a, b, c], axis=-1), E, sqrt_g)
 
 
 class CurrentPotential:

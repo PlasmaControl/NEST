@@ -56,6 +56,7 @@ from desc.basis import FourierZernikeBasis, fourier, zernike_radial
 from desc.grid import LinearGrid
 
 from current_potential import MU_0, _radial_integral_matrix
+from desc_input import covariant_basis, current_from_sqrtg
 from separable import Separable
 
 
@@ -156,17 +157,16 @@ def _sqrtg_J(S, u, I, rho, theta, zeta, deriv=False):
 def _current(S, RZ, u, I, rho, theta, zeta):
     """(J_R, J_phi, J_Z) at the points, shape (n_points, 3); linear in (u, I)."""
     a, b, c = _sqrtg_J(S, u, I, rho, theta, zeta)
-    X, Xr = RZ.evaluate(rho, theta, zeta), RZ.evaluate(rho, theta, zeta, dr=1)
-    Xt, Xz = RZ.evaluate(rho, theta, zeta, dt=1), RZ.evaluate(rho, theta, zeta, dz=1)
+    X, E, sqrt_g = covariant_basis(RZ, rho, theta, zeta)
     R = X[:, 0]
-    # e_rho = (R_r, 0, Z_r), e_theta = (R_t, 0, Z_t), e_zeta = (R_z, R, Z_z) in
-    # (R, phi, Z) components (phi = zeta); sqrt(g) = e_rho . e_theta x e_zeta
-    sqrt_g = R * (Xt[:, 0] * Xr[:, 1] - Xr[:, 0] * Xt[:, 1])
-    N = jnp.stack([a * Xr[:, 0] + b * Xt[:, 0] + c * Xz[:, 0], c * R,
-                   a * Xr[:, 1] + b * Xt[:, 1] + c * Xz[:, 1]], axis=-1)
     axis = rho == 0
+    sJ = jnp.stack([a, b, c], axis=-1)
+    J = current_from_sqrtg(sJ, E, jnp.where(axis, 1.0, sqrt_g))
 
     def on_axis():  # J = d_rho N / d_rho sqrt(g) along the ray (0 / 0 at rho = 0)
+        # N = a e_rho + b e_theta + c e_zeta, e_rho = (R_r, 0, Z_r), e_theta = (R_t, 0, Z_t),
+        # e_zeta = (R_z, R, Z_z) in (R, phi, Z) components
+        Xr, Xt, Xz = E[:, 0, ::2], E[:, 1, ::2], E[:, 2, ::2]
         ar, br, cr = _sqrtg_J(S, u, I, rho, theta, zeta, deriv=True)
         Xrr = RZ.evaluate(rho, theta, zeta, dr=2)
         Xrt = RZ.evaluate(rho, theta, zeta, dr=1, dt=1)
@@ -181,8 +181,8 @@ def _current(S, RZ, u, I, rho, theta, zeta):
                            - Xrr[:, 0] * Xt[:, 1] - Xr[:, 0] * Xrt[:, 1]))
         return Nr / jnp.where(axis, sqrt_g_r, 1.0)[:, None]
 
-    J_axis = jax.lax.cond(jnp.any(axis), on_axis, lambda: jnp.zeros_like(N))
-    return jnp.where(axis[:, None], J_axis, N / jnp.where(axis, 1.0, sqrt_g)[:, None])
+    J_axis = jax.lax.cond(jnp.any(axis), on_axis, lambda: jnp.zeros_like(J))
+    return jnp.where(axis[:, None], J_axis, J)
 
 
 def _sqrtg_J_columns(S, kind, l, m, n, rho, theta, zeta):

@@ -35,6 +35,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from cartesian_grid import cylindrical_to_cartesian
+
 
 class Term:
     """One residual block: weight, name, and arrays (``data``) along the points.
@@ -65,13 +67,8 @@ class Term:
 def _desc_at_points(fields, names):
     """DESC quantities at the collocation points; vectors in Cartesian components."""
     d = fields.inp.compute(names, fields.grid)
-    c, s = np.cos(fields.phi), np.sin(fields.phi)
-    out = {}
-    for k in names:
-        v = d[k]
-        out[k] = (np.column_stack([v[:, 0] * c - v[:, 1] * s, v[:, 0] * s + v[:, 1] * c, v[:, 2]])
-                  if v.ndim == 2 and v.shape[1] == 3 else v)
-    return out
+    return {k: cylindrical_to_cartesian(v, fields.phi) if v.ndim == 2 and v.shape[1] == 3 else v
+            for k, v in d.items()}
 
 
 def _rms(fields, v):

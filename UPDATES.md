@@ -2,6 +2,13 @@
 
 One entry per commit, newest first.
 
+## 2026-10-09: One geometry for every series; evaluate_chunked with per-point arrays
+- `nest/desc_input.py`: `covariant_basis` (e_rho, e_theta, e_zeta and sqrt(g) of the geometry series, JAX), `dual_basis`, `current_from_sqrtg` (J = sum_i sqrt(g) J^i e_i / sqrt(g)); `DESCInput.basis_vectors(rtz)` (tangent and dual basis, sqrt(g), positions, in Cartesian components).
+- `boundary_potential._current`, `current_potential._J_from_T` and `pressure._p_and_grad` use them instead of their own copies of the geometry; `fields.py` uses `basis_vectors` and `current_from_sqrtg` instead of its own geometry and assembly.
+- `nest/cartesian_grid.py`: `evaluate_chunked(..., extra=)` (arrays along the points, sliced and padded with the chunk; e.g. precomputed geometry), used by `fields.py` instead of its own chunk loops; `cartesian_to_cylindrical` (used by `desc_external_field.py`); `objectives.py` uses `cylindrical_to_cartesian`.
+- Equivalence with the previous commit (5000 random points, 50 on the axis, fitted 4, 4, 3 series of the smooth-current precise_QA): `_current` 4.4e-16 (axis points identical); `_p_and_grad` p identical, grad p 2.5e-16 (rho = 0 non-finite before and after, as sqrt(g) = 0 there); `Fields` arrays D_J, J_0, D_p, x, dV, E, sqrt_g identical, D_gp 5.7e-16, G 2.1e-16, B_0 1.1e-16, D_B 9.1e-14, J_box 4.6e-18.
+- Tests: `test_current_potential`, `test_boundary_potential`, `test_pressure`, `test_smooth_edge`, `test_cartesian_grid`, `test_fields`, `test_optimize`, `test_force`, `test_desc_grid`, `test_grid` pass (26).
+
 ## 2026-10-09: One spectral chain in magnetic_field.py; Vico-Greengard the default kernel; scatter and gather in JAX
 - `nest/magnetic_field.py` now holds the whole chain, built from NEST's own pieces: `vico_greengard_kernel_hat` (G on the rfft modes, zero on the Nyquist planes of k) beside `biot_savart_kernel_hat` (unchanged), `kernel_hat`; `b_hat_free` (the B_hat formula, factored out of `b_plasma_free`); `b_plasma_free(..., kernel=)`, Vico-Greengard by default; `interpolate_hat`, pure JAX, from the rfft half spectrum (the full spectrum rebuilt by Hermitian reflection, `full_spectrum`, or with `half=True` the NUFFT on the half spectrum itself); `interpolate` = rfftn + `interpolate_hat`; `BiotSavart` = scatter -> fft_J -> b_hat_free -> interpolate_hat, moved here from `biot_savart.py` (removed).
 - `nest/grid.py`: `scatter`, `gather` in JAX (`CartesianGrid.scatter/gather` call them; module functions take the indices as an argument, for jitted code). `nest/fourier.py`: `wavevectors(full=)` removed again.

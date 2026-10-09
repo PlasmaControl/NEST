@@ -66,19 +66,22 @@ def current_on_cartesian(eq, current, axes, guess_grid=None, newton_chunk=200000
     }
 
 
-def evaluate_chunked(evaluate, rtz, chunk=50000, label=None):
-    """``evaluate(rho, theta, zeta)`` on the rows of ``rtz``, in chunks.
+def evaluate_chunked(evaluate, rtz, chunk=50000, label=None, extra=()):
+    """``evaluate(rho, theta, zeta, *extra)`` on the rows of ``rtz``, in chunks.
 
     Every call gets exactly ``chunk`` points (the last chunk is padded), so a
-    jitted ``evaluate`` compiles once. ``label`` (a string) prints progress.
-    Returns the stacked outputs, shape (len(rtz), ...).
+    jitted ``evaluate`` compiles once. ``extra``: arrays with the points along the
+    first axis (e.g. precomputed geometry), sliced and padded like ``rtz``.
+    ``label`` (a string) prints progress. Returns the stacked outputs, shape
+    (len(rtz), ...).
     """
     chunk = min(chunk, max(len(rtz), 1))
     n_chunks, t0, out = -(-len(rtz) // chunk), time.time(), []
     for k, i in enumerate(range(0, len(rtz), chunk)):
         n = min(chunk, len(rtz) - i)
         pad = np.pad(np.arange(i, i + n), (0, chunk - n), mode="edge")
-        out.append(np.asarray(evaluate(*(jnp.asarray(rtz[pad, j]) for j in range(3))))[:n])
+        args = [jnp.asarray(rtz[pad, j]) for j in range(3)] + [e[pad] for e in extra]
+        out.append(np.asarray(evaluate(*args))[:n])
         if label and ((k + 1) % 20 == 0 or k + 1 == n_chunks):
             progress(label, k + 1, n_chunks, i + n, len(rtz), t0, "")
     return np.concatenate(out)
@@ -88,6 +91,12 @@ def cylindrical_to_cartesian(V, phi):
     """(V_R, V_phi, V_Z) at angles phi -> (V_x, V_y, V_z)."""
     c, s = np.cos(phi), np.sin(phi)
     return np.column_stack([V[:, 0] * c - V[:, 1] * s, V[:, 0] * s + V[:, 1] * c, V[:, 2]])
+
+
+def cartesian_to_cylindrical(V, phi):
+    """(V_x, V_y, V_z) at angles phi -> (V_R, V_phi, V_Z); inverse of ``cylindrical_to_cartesian``."""
+    c, s = np.cos(phi), np.sin(phi)
+    return np.column_stack([V[:, 0] * c + V[:, 1] * s, -V[:, 0] * s + V[:, 1] * c, V[:, 2]])
 
 
 def pressure_on_cartesian(eq, pressure, d, eval_chunk=50000, dtype=np.float32):

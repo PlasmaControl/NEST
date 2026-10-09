@@ -45,59 +45,16 @@ import jax.numpy as jnp
 import numpy as np
 from desc.grid import QuadratureGrid
 
-from magnetic_field import BiotSavart
+from cartesian_grid import evaluate_chunked
+from desc_input import current_from_sqrtg
 from grid import progress
-from separable import Separable
+from magnetic_field import BiotSavart
 
 
-def _geometry_chunk(RZ, rho, theta, zeta):
-    """e_rho, e_theta, e_zeta (rows) and sqrt(g) at the points, (R, phi, Z) components."""
-    X, Xr = RZ.evaluate(rho, theta, zeta), RZ.evaluate(rho, theta, zeta, dr=1)
-    Xt, Xz = RZ.evaluate(rho, theta, zeta, dt=1), RZ.evaluate(rho, theta, zeta, dz=1)
-    R, zero = X[:, 0], jnp.zeros_like(rho)
-    E = jnp.stack([jnp.stack([Xr[:, 0], zero, Xr[:, 1]], -1),
-                   jnp.stack([Xt[:, 0], zero, Xt[:, 1]], -1),
-                   jnp.stack([Xz[:, 0], R, Xz[:, 1]], -1)], axis=1)
-    sqrt_g = R * (Xt[:, 0] * Xr[:, 1] - Xr[:, 0] * Xt[:, 1])
-    return E, sqrt_g, X
-
-
-_geometry_jit = jax.jit(_geometry_chunk, static_argnums=0)
-
-
-def geometry(eq, rtz, chunk=50000):
-    """Geometry of the fixed equilibrium at flux coordinates ``rtz`` (n, 3).
-
-    Returns a dict of NumPy arrays: E (n, 3, 3) the tangent basis e_rho, e_theta,
-    e_zeta (rows) and G (n, 3, 3) the dual basis grad(rho), grad(theta), grad(zeta),
-    both in Cartesian components; sqrt_g (n,); x (n, 3) the Cartesian positions;
-    phi (n,) = zeta.
-    """
-    RZ = Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP)
-    rtz = np.asarray(rtz, dtype=float)
-    E, sg, X = [], [], []
-    for i in range(0, len(rtz), chunk):
-        n = min(chunk, len(rtz) - i)
-        pad = np.pad(np.arange(i, i + n), (0, chunk - n), mode="edge") if len(rtz) > chunk \
-            else np.arange(i, i + n)
-        e, s, x = _geometry_jit(RZ, *(jnp.asarray(rtz[pad, j]) for j in range(3)))
-        E.append(np.asarray(e)[:n]), sg.append(np.asarray(s)[:n]), X.append(np.asarray(x)[:n])
-    E, sg, X = np.concatenate(E), np.concatenate(sg), np.concatenate(X)
-    phi = rtz[:, 2]
-    c, s = np.cos(phi), np.sin(phi)
-    rot = np.zeros((len(phi), 3, 3))  # (R, phi, Z) -> (x, y, z)
-    rot[:, 0, 0], rot[:, 0, 1], rot[:, 1, 0], rot[:, 1, 1], rot[:, 2, 2] = c, -s, s, c, 1
-    E = np.einsum("nab,nib->nia", rot, E)
-    G = np.stack([np.cross(E[:, 1], E[:, 2]), np.cross(E[:, 2], E[:, 0]),
-                  np.cross(E[:, 0], E[:, 1])], axis=1) / sg[:, None, None]
-    x = np.column_stack([X[:, 0] * c, X[:, 0] * s, X[:, 1]])
-    return {"E": E, "G": G, "sqrt_g": sg, "x": x, "phi": phi}
-
-
-@jax.jit
-def _to_cartesian(sJ, E, sqrt_g):
-    """(n, k, 3) sqrt(g) J^i and the basis E (n, 3, 3) -> Cartesian J, (n, 3, k)."""
-    return jnp.einsum("nki,nia->nak", sJ, E) / sqrt_g[:, None, None]
+def _columns(f, rtz, extra, n_cols, budget):
+    """f(rho, theta, zeta, *extra) -> (n, ..., n_cols) on the points, chunked so that a
+    chunk holds about ``budget`` values per column set (memory)."""
+    return evaluate_chunked(f, rtz, max(1, budget // max(n_cols, 1)), extra=extra)
 
 
 class Fields:
@@ -137,7 +94,7 @@ class Fields:
         b = current.basis
         self.grid = grid or QuadratureGrid(L=2 * b.L, M=2 * b.M, N=2 * b.N, NFP=eq.NFP)
         self.rtz = np.asarray(self.grid.nodes)
-        geo = geometry(eq, self.rtz)
+        geo = inp.basis_vectors(self.rtz)
         self.x, self.phi, self.E, self.G, self.sqrt_g = (geo[k] for k in ("x", "phi", "E", "G",
                                                                           "sqrt_g"))
         self.dV = np.abs(self.sqrt_g) * np.asarray(self.grid.weights)
@@ -158,7 +115,7 @@ class Fields:
                   f"{(self.D_J.nbytes + self.D_p.nbytes + self.D_gp.nbytes) / 1e9:.2f} GB")
         # the box: geometry (once) and the net-current term
         t0 = time.time()
-        bg = geometry(eq, box.rtz)
+        bg = inp.basis_vectors(box.rtz)
         self.E_box, self.sqrt_g_box = jnp.asarray(bg["E"]), jnp.asarray(bg["sqrt_g"])
         self._log(f"box geometry at {len(box.inside):,} points ({time.time() - t0:.1f} s)")
         self.B_ext = self._external_field()
@@ -172,37 +129,33 @@ class Fields:
 
     # ----------------------------------------------------------- columns
     def _current_columns(self, rtz, E, sqrt_g, cols=None):
-        """D_J at the points ``rtz``, (n, 3, len(cols)), chunked over points."""
+        """D_J at the points ``rtz``, (n, 3, len(cols)): closed-form columns, then
+        J = sum_i sqrt(g) J^i e_i / sqrt(g) with the precomputed geometry."""
         cols = np.arange(self.n_u) if cols is None else np.asarray(cols)
-        step = max(1, self.chunk * 8 // max(len(cols), 1))
-        out = []
-        for i in range(0, len(rtz), step):
-            r = [jnp.asarray(rtz[i : i + step, j]) for j in range(3)]
-            sJ = self.current.sqrtg_J_columns(cols, *r)
-            out.append(np.asarray(_to_cartesian(sJ, jnp.asarray(E[i : i + step]),
-                                                jnp.asarray(sqrt_g[i : i + step]))))
-        return np.concatenate(out)
 
-    def _net_current(self, rtz, E, sqrt_g):
-        """J_0 = J(u = 0) (the net-current term), (n, 3)."""
-        out = []
-        for i in range(0, len(rtz), self.chunk):
-            r = [jnp.asarray(rtz[i : i + self.chunk, j]) for j in range(3)]
-            sJ = self.current.sqrtg_J(np.zeros(self.n_u), *r)[:, None, :]
-            out.append(np.asarray(_to_cartesian(sJ, jnp.asarray(E[i : i + self.chunk]),
-                                                jnp.asarray(sqrt_g[i : i + self.chunk])))[..., 0])
-        return np.concatenate(out)
+        def f(rho, theta, zeta, E, sqrt_g):
+            sJ = self.current.sqrtg_J_columns(cols, rho, theta, zeta)    # (n, k, 3)
+            return jnp.swapaxes(current_from_sqrtg(sJ, E, sqrt_g), 1, 2)
+        return _columns(f, rtz, (jnp.asarray(E), jnp.asarray(sqrt_g)), len(cols), self.chunk * 8)
+
+    def _net_current(self, rtz, E, sqrt_g, u=None):
+        """J(u) (default u = 0: the net-current term J_0) at the points, (n, 3)."""
+        u = jnp.zeros(self.n_u) if u is None else jnp.asarray(u)
+
+        def f(rho, theta, zeta, E, sqrt_g):
+            return current_from_sqrtg(self.current.sqrtg_J(u, rho, theta, zeta), E, sqrt_g)
+        return evaluate_chunked(f, rtz, self.chunk, extra=(jnp.asarray(E), jnp.asarray(sqrt_g)))
 
     def _pressure_columns(self):
-        """D_p (n, n_p) and D_gp (n, 3, n_p)."""
-        Dp, Dgp = [], []
-        step = max(1, self.chunk * 8 // max(self.n_p, 1))
-        for i in range(0, len(self.rtz), step):
-            r = [jnp.asarray(self.rtz[i : i + step, j]) for j in range(3)]
-            c = np.asarray(self.pressure.p_columns(np.arange(self.n_p), *r))  # (n, k, 4)
-            Dp.append(c[:, :, 0])
-            Dgp.append(np.einsum("nki,nia->nak", c[:, :, 1:], self.G[i : i + step]))
-        return np.concatenate(Dp), np.concatenate(Dgp)
+        """D_p (n, n_p) and D_gp (n, 3, n_p): closed-form columns and the dual basis."""
+        cols = np.arange(self.n_p)
+
+        def f(rho, theta, zeta, G):
+            c = self.pressure.p_columns(cols, rho, theta, zeta)            # (n, k, 4)
+            return jnp.concatenate([c[:, None, :, 0], jnp.einsum("nki,nia->nak", c[..., 1:], G)],
+                                   axis=1)
+        out = _columns(f, self.rtz, (jnp.asarray(self.G),), self.n_p, self.chunk * 8)
+        return out[:, 0], out[:, 1:]
 
     def _external_field(self):
         f = self.inp.field
@@ -248,7 +201,7 @@ class Fields:
         for k, i0 in enumerate(todo):
             i1 = min(i0 + col_chunk, self.n_u)
             sJ = self.current.sqrtg_J_columns(np.arange(i0, i1), rho, theta, zeta)
-            J = _to_cartesian(sJ, self.E_box, self.sqrt_g_box)       # (n_inside, 3, k)
+            J = jnp.swapaxes(current_from_sqrtg(sJ, self.E_box, self.sqrt_g_box), 1, 2)
             D_B[:, :, i0:i1] = np.asarray(apply(J, C))
             if path is not None:
                 np.save(os.path.join(path, f"cols_{i0}_{i1}.npy"), D_B[:, :, i0:i1])
@@ -282,13 +235,7 @@ class Fields:
 
     def J_box(self, u):
         """Cartesian J of coefficients u at the box points inside the plasma, (n_inside, 3)."""
-        rtz, out = self.box.rtz, []
-        for i in range(0, len(rtz), self.chunk):
-            r = [jnp.asarray(rtz[i : i + self.chunk, j]) for j in range(3)]
-            sJ = self.current.sqrtg_J(u, *r)[:, None, :]
-            out.append(np.asarray(_to_cartesian(sJ, self.E_box[i : i + self.chunk],
-                                                self.sqrt_g_box[i : i + self.chunk]))[..., 0])
-        return np.concatenate(out)
+        return self._net_current(self.box.rtz, self.E_box, self.sqrt_g_box, u)
 
     def B_direct(self, u):
         """B = B_ext + BS_h(J(u) on the box) at the points, without D_B, (n, 3)."""

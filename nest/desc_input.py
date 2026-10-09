@@ -18,6 +18,8 @@ functions of NEST accept either a ``DESCInput`` or a bare ``Equilibrium``
 import functools
 import os
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 
 import desc.io
@@ -39,6 +41,47 @@ def _load_equilibrium(path):
     if not isinstance(eq, Equilibrium):
         raise TypeError(f"{path} holds a {type(eq).__name__}, not a DESC equilibrium")
     return eq
+
+
+def covariant_basis(RZ, rho, theta, zeta):
+    """Tangent basis and Jacobian of the geometry series ``RZ`` (columns R, Z) at the points.
+
+    Returns (X, E, sqrt_g): X (n, 2) = (R, Z), E (n, 3, 3) the rows e_rho = (R_r, 0, Z_r),
+    e_theta = (R_t, 0, Z_t), e_zeta = (R_z, R, Z_z) in (R, phi, Z) components
+    (phi = zeta), and sqrt(g) = e_rho . e_theta x e_zeta = R (R_t Z_r - R_r Z_t).
+    Pure JAX.
+    """
+    X, Xr = RZ.evaluate(rho, theta, zeta), RZ.evaluate(rho, theta, zeta, dr=1)
+    Xt, Xz = RZ.evaluate(rho, theta, zeta, dt=1), RZ.evaluate(rho, theta, zeta, dz=1)
+    R, zero = X[:, 0], jnp.zeros_like(rho)
+    E = jnp.stack([jnp.stack([Xr[:, 0], zero, Xr[:, 1]], -1),
+                   jnp.stack([Xt[:, 0], zero, Xt[:, 1]], -1),
+                   jnp.stack([Xz[:, 0], R, Xz[:, 1]], -1)], axis=1)
+    return X, E, R * (Xt[:, 0] * Xr[:, 1] - Xr[:, 0] * Xt[:, 1])
+
+
+def dual_basis(E, sqrt_g):
+    """grad(rho), grad(theta), grad(zeta) as rows, (n, 3, 3): e_theta x e_zeta / sqrt(g) etc."""
+    return jnp.stack([jnp.cross(E[:, 1], E[:, 2]), jnp.cross(E[:, 2], E[:, 0]),
+                      jnp.cross(E[:, 0], E[:, 1])], axis=1) / sqrt_g[:, None, None]
+
+
+def current_from_sqrtg(sJ, E, sqrt_g):
+    """J = sum_i sqrt(g) J^i e_i / sqrt(g) in the components of E.
+
+    ``sJ`` (n, ..., 3) the sqrt(g) J^i, ``E`` (n, 3, 3) the tangent basis as rows
+    (``desc_input.covariant_basis``), ``sqrt_g`` (n,). Returns (n, ..., 3). For
+    rho > 0 every term of the sum is O(rho) on its own, so there is no
+    cancellation near the axis; at rho = 0 see ``_current``.
+    """
+    return jnp.einsum("n...i,nia->n...a", sJ, E) / sqrt_g.reshape((-1,) + (1,) * (sJ.ndim - 1))
+
+
+@functools.partial(jax.jit, static_argnums=0)
+def _basis_chunk(RZ, rho, theta, zeta):
+    X, E, sqrt_g = covariant_basis(RZ, rho, theta, zeta)
+    return jnp.concatenate([X, E.reshape(-1, 9), dual_basis(E, sqrt_g).reshape(-1, 9),
+                            sqrt_g[:, None]], axis=1)
 
 
 class DESCInput:
@@ -130,6 +173,22 @@ class DESCInput:
         """R(rho, theta, zeta), Z(rho, theta, zeta) as one ``Separable`` (columns R, Z)."""
         eq = self.eq
         return Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP)
+
+    def basis_vectors(self, rtz, chunk=50000):
+        """Geometry at flux coordinates ``rtz`` (n, 3), NumPy, vectors in Cartesian
+        components: E (n, 3, 3) tangent basis (rows e_rho, e_theta, e_zeta), G (n, 3,
+        3) dual basis (rows grad(rho), grad(theta), grad(zeta)), sqrt_g (n,), x (n, 3)
+        the positions and phi (n,) = zeta. From ``geometry`` (``covariant_basis``)."""
+        from cartesian_grid import cylindrical_to_cartesian, evaluate_chunked
+
+        rtz = np.asarray(rtz, dtype=float)
+        out = evaluate_chunked(functools.partial(_basis_chunk, self.geometry), rtz, chunk)
+        phi = rtz[:, 2]
+        cart = lambda V: np.stack([cylindrical_to_cartesian(V[:, i], phi) for i in range(3)], 1)
+        R, Z = out[:, 0], out[:, 1]
+        return {"E": cart(out[:, 2:11].reshape(-1, 3, 3)), "G": cart(out[:, 11:20].reshape(-1, 3, 3)),
+                "sqrt_g": out[:, 20], "phi": phi,
+                "x": np.column_stack([R * np.cos(phi), R * np.sin(phi), Z])}
 
     # ---------------------------------------------------------------- checks
     def check(self):

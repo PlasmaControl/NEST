@@ -21,13 +21,8 @@ of a ``DESCInput``:
 import numpy as np
 
 from magnetic_field import BiotSavart
-from cartesian_grid import cylindrical_to_cartesian
+from cartesian_grid import cartesian_to_cylindrical, cylindrical_to_cartesian
 from grid import map_to_flux
-
-
-def _xyz_to_rpz(V, phi):
-    c, s = np.cos(phi), np.sin(phi)
-    return np.column_stack([V[:, 0] * c + V[:, 1] * s, -V[:, 0] * s + V[:, 1] * c, V[:, 2]])
 
 
 class DESCExternalField:
@@ -83,4 +78,4 @@ class DESCExternalField:
             raise ValueError(f"DESCExternalField: {outside.sum()} of {len(x)} points are "
                              "outside the plasma, where B_DESC is not defined")
         B = self.at_flux(rtz, x)
-        return _xyz_to_rpz(B, np.arctan2(x[:, 1], x[:, 0])) if basis == "rpz" else B
+        return cartesian_to_cylindrical(B, np.arctan2(x[:, 1], x[:, 0])) if basis == "rpz" else B
