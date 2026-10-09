@@ -10,9 +10,8 @@ admissible coefficient vectors u are checked for:
      equal to it; for random u restricted to |m| = 0, 1, 2 and for the fit
   D. net toroidal current int int sqrt(g) J^zeta drho dtheta = I on several
      cross-sections zeta = const, for the fit and random u
-  E. DESC reconstruction: the fit error in T against the (tapered) target it was
-     fitted to (with the dropped gauge alpha(zeta)), and the error in J against
-     DESC's J (components and |J|), by radius
+  E. DESC reconstruction: the fit error in T (with the dropped gauge alpha(zeta))
+     and in J (components and |J|), by radius
   F. differentiability: JAX derivatives of J with respect to u vs finite
      differences (J is linear in u)
   G. save / load: same u, I, J, net current and J = 0 on the LCFS
@@ -169,8 +168,7 @@ def check_boundary_potential(path):
           f"max |I_cs - I| / |I| = {I_err:.1e} (fit and random)")
 
     # E. DESC reconstruction
-    rho, theta, zeta, T_t = target_potential(eq, 2 * eq.L + 3, 2 * eq.M + 5, 2 * eq.N + 3,
-                                             pot.fit_info["edge_width"])
+    rho, theta, zeta, T_t = target_potential(eq, 2 * eq.L + 3, 2 * eq.M + 5, 2 * eq.N + 3)
     R_, Th, Ze = np.meshgrid(rho, theta, zeta, indexing="ij")
     nodes = np.column_stack([R_.ravel(), Th.ravel(), Ze.ravel()])
     T_t = T_t.reshape(-1, 2)
@@ -179,8 +177,7 @@ def check_boundary_potential(path):
     J, J_desc = pot.evaluate(g), np.asarray(eq.compute("J", grid=g)["J"])
     r, J_max = np.asarray(g.nodes[:, 0]), np.abs(J_desc).max()
     mod = np.abs(np.linalg.norm(J, axis=1) - np.linalg.norm(J_desc, axis=1)) / J_max
-    print(f"E. fit of T (target tapered over {pot.fit_info['edge_width']} in rho): max |T - "
-          f"T_target| / max |T_target|: T_theta {dT[0]:.1e}, T_zeta {dT[1]:.1e}")
+    print(f"E. fit of T: max |T - T_desc| / max |T_desc|: T_theta {dT[0]:.1e}, T_zeta {dT[1]:.1e}")
     for r0 in (0.5, 0.8, 0.9, 1.0):
         k = r <= r0
         e = np.abs(J - J_desc)[k].max(0) / J_max

@@ -55,7 +55,7 @@ from numpy.polynomial import Polynomial
 from desc.basis import FourierZernikeBasis, fourier, zernike_radial
 from desc.grid import LinearGrid
 
-from current_potential import MU_0, _radial_integral_matrix, edge_taper
+from current_potential import MU_0, _radial_integral_matrix
 from separable import Separable
 
 
@@ -252,7 +252,7 @@ class BoundaryPotential:
 
     @classmethod
     def fit(cls, eq, L=None, M=None, N=None, factors=(3, 3, 2.5), n_rho=None,
-            edge_power=2, I=None, edge_width=0.1):
+            edge_power=2, I=None):
         """Fit the free coefficients to DESC's potential, T itself (not J).
 
         DESC's sqrt(g) J^zeta, sqrt(g) J^theta (Ampere's law from B_theta_r -
@@ -264,12 +264,6 @@ class BoundaryPotential:
         theta, zeta and rho drho in rho) with the gauge alpha(zeta) of T_zeta
         free (the target is only defined up to it); alpha is then dropped. I is
         DESC's net toroidal current I(rho = 1) unless given.
-
-        With ``edge_width`` (default 0.1), DESC's current is first tapered to
-        zero over 1 - edge_width < rho < 1 (``target_potential``), so the
-        initial J goes to zero across that layer instead of in a thin layer at
-        the LCFS. Only the initial target changes; the representation and its
-        constraints do not. ``edge_width=None`` fits DESC's current as it is.
 
         The problem separates in the Fourier modes: each chi_mn couples the
         T_theta mode (-m, n) (via d_theta) with the T_zeta mode (m, -n) (via
@@ -289,7 +283,7 @@ class BoundaryPotential:
         # target potential in the radial gauge, then its real Fourier
         # coefficients C[rho, m, n, component] (uniform theta, zeta)
         rho, theta, zeta, T = target_potential(eq, 2 * L if n_rho is None else n_rho,
-                                               4 * M + 1, 4 * N + 1, edge_width)
+                                               4 * M + 1, 4 * N + 1)
         ms, ns = np.arange(-M, M + 1), np.arange(-N, N + 1)
         Pt = np.linalg.pinv(np.asarray(fourier(theta[:, None], ms[None, :])))
         Pz = np.linalg.pinv(np.asarray(fourier(zeta[:, None], ns[None, :], NFP=eq.NFP)))
@@ -298,8 +292,7 @@ class BoundaryPotential:
         q = np.sqrt(np.sqrt(1 - x**2) * rho)  # sqrt of the weights of int . rho drho
         u, alpha = _fit_blocks(S, I, rho, q, C, ms, ns)
         pot = cls(basis, u, I, eq, edge_power, S)
-        # the dropped gauge alpha(zeta) = sum alpha_n F_n(zeta), and the taper of the target
-        pot.fit_info = {"alpha": alpha, "alpha_n": ns, "edge_width": edge_width}
+        pot.fit_info = {"alpha": alpha, "alpha_n": ns}  # the dropped gauge, sum alpha_n F_n(zeta)
         return pot
 
     def gauge(self, zeta):
@@ -324,7 +317,7 @@ class BoundaryPotential:
             return pot
 
 
-def target_potential(eq, n_rho, n_theta, n_zeta, edge_width=None):
+def target_potential(eq, n_rho, n_theta, n_zeta):
     """DESC's potential in the radial gauge on a tensor grid.
 
     T_theta = int_0^rho sqrt(g) J^zeta, T_zeta = -int_0^rho sqrt(g) J^theta, with
@@ -332,19 +325,6 @@ def target_potential(eq, n_rho, n_theta, n_zeta, edge_width=None):
     n_rho Chebyshev-Gauss points in rho and n_theta, n_zeta uniform points in
     theta and zeta (one field period). Returns rho, theta, zeta and T of shape
     (n_rho, n_theta, n_zeta, 2).
-
-    With ``edge_width``, sqrt(g) J^theta, sqrt(g) J^zeta are tapered first:
-    s sqrt(g) J + (-s') <int_0^1 (1 - s) sqrt(g) J drho>, with s the smooth step
-    ``edge_taper`` from 1 at rho = 1 - edge_width to 0 at rho = 1 and < > the
-    mean over theta, zeta: the current goes to zero across the layer and the
-    net currents removed from it are put back in it. Then the boundary values
-    T(1) are made compatible with the representation, (I / 2pi + d_theta chi,
-    d_zeta chi + alpha(zeta)): each Fourier mode (m, n NFP) of (T_theta, T_zeta)(1)
-    is projected on the wavevector (m, n NFP), keeping the (0, 0) mode (net
-    currents). DESC's T(1) is not of that form (its J.n and the zeta-variation
-    of its cross-section current); the correction d(theta, zeta) is added as
-    (1 - s(rho)) d, i.e. across the same layer, instead of being left to the fit,
-    which would put it in a thin layer at rho = 1.
     """
     rho, Q, _ = _radial_integral_matrix(n_rho)
     grid = LinearGrid(rho=rho, theta=n_theta, zeta=n_zeta, NFP=eq.NFP, sym=False)
@@ -352,25 +332,8 @@ def target_potential(eq, n_rho, n_theta, n_zeta, edge_width=None):
     sJ_zeta = (np.asarray(d["B_theta_r"]) - np.asarray(d["B_rho_t"])) / MU_0
     sJ_theta = (np.asarray(d["B_rho_z"]) - np.asarray(d["B_zeta_r"])) / MU_0
     idx = np.asarray(grid.meshgrid_reshape(np.arange(grid.num_nodes), "rtz"))
-    dT = np.stack([sJ_zeta[idx], -sJ_theta[idx]], axis=-1)  # d_rho (T_theta, T_zeta)
-    if edge_width:
-        _, _, q1 = _radial_integral_matrix(n_rho)
-        s, ds = edge_taper(rho, edge_width), edge_taper(rho, edge_width, dr=1)
-        lost = np.einsum("j,jtzc->c", q1, (1 - s)[:, None, None, None] * dT)
-        lost /= n_theta * n_zeta * (-q1 @ ds)  # mean; int -s' = 1 for the quadrature too
-        dT = s[:, None, None, None] * dT - ds[:, None, None, None] * lost
-    T = np.einsum("ij,jtzc->itzc", Q, dT)
-    if edge_width:
-        Th = np.fft.fft2(np.einsum("j,jtzc->tzc", q1, dT), axes=(0, 1))
-        m = np.fft.fftfreq(n_theta, 1 / n_theta)[:, None]
-        k = eq.NFP * np.fft.fftfreq(n_zeta, 1 / n_zeta)[None, :]
-        k2 = m**2 + k**2
-        k2[0, 0] = 1
-        proj = (m * Th[..., 0] + k * Th[..., 1]) / k2
-        Th_new = np.stack([m * proj, k * proj], axis=-1)
-        Th_new[0, 0] = Th[0, 0]  # net currents
-        d = np.fft.ifft2(Th_new - Th, axes=(0, 1)).real
-        T = T + (1 - s)[:, None, None, None] * d[None]
+    T = np.stack([np.einsum("ij,jtz->itz", Q, sJ_zeta[idx]),
+                  -np.einsum("ij,jtz->itz", Q, sJ_theta[idx])], axis=-1)
     nodes = np.asarray(grid.nodes)
     return rho, nodes[idx[0, :, 0], 1], nodes[idx[0, 0, :], 2], T
 

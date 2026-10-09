@@ -1,4 +1,4 @@
-"""Smooth edge (k = 2, taper width 0.1): J and p vanish smoothly at the LCFS.
+"""Smooth edge (k = 2): J and p vanish smoothly at the LCFS.
 
 For each equilibrium, with ``edge_order=2``:
   1. the tangential current sqrt(g) (J^theta, J^zeta) = (-d_rho T_zeta,

@@ -52,18 +52,6 @@ MU_0 = 4e-7 * np.pi
 COMPONENTS = ("T_theta", "T_zeta")
 
 
-def edge_taper(rho, width, dr=0):
-    """s = 1 for rho <= 1 - width, falling to 0 at rho = 1 (quintic smoothstep).
-
-    s, s', s'' vanish at rho = 1 and s is C^2 at rho = 1 - width. ``dr=1``
-    gives ds/drho, with -int_0^1 s' drho = 1.
-    """
-    t = np.clip((rho - 1 + width) / width, 0, 1)
-    if dr == 0:
-        return 1 - t**3 * (10 - 15 * t + 6 * t**2)
-    return -30 * t**2 * (1 - t) ** 2 / width
-
-
 def _radial_integral_matrix(n):
     """Chebyshev-Gauss nodes rho in (0, 1), Q with (Q f)_i = int_0^rho_i f drho,
     and the row q1 with q1 f = int_0^1 f drho."""
@@ -120,7 +108,7 @@ class CurrentPotential:
 
     @classmethod
     def fit(cls, eq, L=None, M=None, N=None, factors=(3, 3, 2.5), n_rho=None,
-            edge_order=None, edge_width=0.1):
+            edge_order=None):
         """Fit T to DESC's J of ``eq`` (radial integral, then least squares).
 
         T is sampled on a tensor grid with n_rho Chebyshev-Gauss points in rho
@@ -128,12 +116,7 @@ class CurrentPotential:
         With ``edge_order`` k, the fit is instead a least-squares fit of
         d_rho T = (sqrt(g) J^zeta, -sqrt(g) J^theta), i.e. of J, under the
         constraints d_rho^j T(1) = 0 (j = 1..k), T = 0 on the axis and T(1)
-        equal to that of the target J (so the net currents are DESC's). The
-        target is DESC's J tapered over the layer 1 - ``edge_width`` < rho < 1:
-        d_rho T becomes s d_rho T + (-s') <int_0^1 (1 - s) d_rho T drho>
-        (``edge_taper`` s, < > the mean over theta, zeta), so J goes to zero
-        across the layer and the net currents removed from it are put back in
-        it (the surface-gradient part of the layer's current is dropped).
+        equal to DESC's (so the net currents are DESC's).
         """
         L = int(round(factors[0] * eq.L)) if L is None else L
         M = int(round(factors[1] * eq.M)) if M is None else M
@@ -159,11 +142,6 @@ class CurrentPotential:
         else:
             nodes = np.asarray(grid.nodes)
             dT = np.stack([sJ_zeta[idx], -sJ_theta[idx]], axis=-1)
-            if edge_width:
-                s, ds = edge_taper(rho, edge_width), edge_taper(rho, edge_width, dr=1)
-                lost = np.einsum("j,jtzc->c", q1, (1 - s)[:, None, None, None] * dT)
-                lost /= np.prod(dT.shape[1:3]) * (-q1 @ ds)  # mean; int -s' = 1 here too
-                dT = s[:, None, None, None] * dT - ds[:, None, None, None] * lost
             T1 = np.einsum("j,jtzc->tzc", q1, dT)  # T on rho = 1
             c = _fit_smooth_edge(basis, edge_order, rho, nodes[idx[0, :, 0], 1],
                                  nodes[idx[0, 0, :], 2], dT, T1)
