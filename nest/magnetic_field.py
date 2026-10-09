@@ -25,6 +25,7 @@ shape (Nx, Ny, Nz, 3), in Cartesian components [T].
 
 import jax.numpy as jnp
 import numpy as np
+from nufftax import nufft3d2
 from scipy.constants import mu_0
 
 from fourier import wavevectors
@@ -79,7 +80,7 @@ def biot_savart_kernel_hat(axes, dtype=jnp.float32):
     nyq = _broadcast([jnp.asarray(_not_nyquist(n), dtype) for n in shape])
     r2 = d[0] ** 2 + d[1] ** 2 + d[2] ** 2
     w = jnp.where(r2 > 0, 1 / (4 * np.pi * jnp.where(r2 > 0, r2, 1) ** 1.5), 0)
-    w = w * nyq[0] * nyq[1] * nyq[2] * np.prod(h)
+    w = w * nyq[0] * nyq[1] * nyq[2] * float(np.prod(h))  # Python float: keeps dtype
     return jnp.stack([jnp.fft.rfftn(w * d[i]) for i in range(3)], axis=-1)
 
 
@@ -98,3 +99,44 @@ def b_plasma_free(J_hat, axes, K_hat=None):
         return jnp.fft.irfftn(B_hat, s=shape)
 
     return jnp.stack([component(i) for i in range(3)], axis=-1)
+
+
+def interpolate(field, axes, x, eps=1e-10, upsampfac=1.25, chunk=16384):
+    """Spectral (trigonometric) interpolation of a periodic field on the box.
+
+    ``field`` has shape (Nx, Ny, Nz) or (Nx, Ny, Nz, n) on the grid ``axes``;
+    the result, at the Cartesian points x (n_points, 3), is the box's Fourier
+    series sum_k F_k exp(i k . (x - x_0)) / N, evaluated with a type-2
+    non-uniform FFT (``nufftax``, relative precision ``eps``). It equals the
+    field at the grid nodes. Shape (n_points,) or (n_points, n).
+
+    Memory: the transform works on a grid ``upsampfac`` times finer per axis
+    (1.25: about 2 times the box, against 8 times for the usual 2), one
+    component at a time (a NumPy ``field`` is sent to the GPU one component
+    at a time), and on ``chunk`` points at a time. A float32 field is
+    interpolated in single precision (complex64, precision max(eps, 1e-6)),
+    half the memory of double.
+    """
+    vector = np.ndim(field) == 4
+    f = field if vector else field[..., None]
+    shape = f.shape[:3]
+    # full spectrum per component, centred modes (-N/2 .. N/2 - 1), axes (z, y, x)
+    x0 = np.array([a[0] for a in axes])
+    L = np.array([len(a) * (a[1] - a[0]) for a in axes])
+    t = 2 * np.pi * (np.asarray(x) - x0) / L  # angle of each point along each axis
+    t = jnp.asarray((t + np.pi) % (2 * np.pi) - np.pi)  # in [-pi, pi)
+    single = f.dtype == jnp.float32
+    ctype, eps = (jnp.complex64, max(eps, 1e-6)) if single else (jnp.complex128, eps)
+    t = t.astype(jnp.float32) if single else t
+    out = []
+    for c in range(f.shape[3]):
+        F = jnp.fft.fftshift(jnp.fft.fftn(jnp.asarray(f[..., c]).astype(ctype)))
+        F = jnp.transpose(F, (2, 1, 0))  # axes (z, y, x), the x mode last
+        v = [np.asarray(jnp.real(nufft3d2(t[i : i + chunk, 0], t[i : i + chunk, 1],
+                                          t[i : i + chunk, 2], F, eps=eps, isign=1,
+                                          upsampfac=upsampfac)))
+             for i in range(0, len(t), chunk)]
+        out.append(np.concatenate(v).astype(float) / np.prod(shape))
+        del F
+    out = np.stack(out, axis=-1)
+    return out if vector else out[:, 0]

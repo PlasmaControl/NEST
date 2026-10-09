@@ -22,7 +22,7 @@ import numpy as np
 
 import desc.io
 from desc.equilibrium import Equilibrium
-from desc.grid import LinearGrid, QuadratureGrid
+from desc.grid import Grid, LinearGrid, QuadratureGrid
 
 from separable import Separable
 
@@ -150,6 +150,40 @@ class DESCInput:
         if not (np.all(sqrt_g > 0) or np.all(sqrt_g < 0)):
             raise ValueError(f"{self.name}: sqrt(g) changes sign (bad flux coordinates)")
         return self
+
+    # ------------------------------------------------- scattered points
+    @functools.cached_property
+    def _iota_fit(self):
+        """Chebyshev fit (degree 24) of iota on 64 flux surfaces (current prescribed)."""
+        r = (1 - np.cos(np.pi * (np.arange(64) + 0.5) / 64)) / 2
+        g = LinearGrid(rho=r, M=self.eq.M_grid, N=self.eq.N_grid, NFP=self.NFP)
+        return np.polynomial.Chebyshev.fit(r, g.compress(self.compute(["iota"], g)["iota"]),
+                                           24, domain=[0, 1])
+
+    def iota(self, rho):
+        """(iota, d iota / d rho) at the radii ``rho``: from the profile when iota
+        is prescribed, else from a fit of iota on flux surfaces."""
+        rho = np.asarray(rho, dtype=float)
+        if self.eq.iota is not None:
+            g = Grid(np.column_stack([rho, 0 * rho, 0 * rho]), sort=False)
+            return [np.asarray(self.eq.iota.compute(g, dr=i)) for i in range(2)]
+        return [self._iota_fit(rho), self._iota_fit.deriv()(rho)]
+
+    def compute_points(self, names, rtz, chunk=20000):
+        """DESC quantities at scattered flux coordinates ``rtz`` (n, 3), in chunks.
+
+        iota is passed in (``iota``): DESC would otherwise need surface
+        integrals, which scattered points do not have. Vectors are in (R, phi, Z).
+        """
+        out = {k: [] for k in names}
+        for i in range(0, len(rtz), chunk):
+            x = np.asarray(rtz[i : i + chunk], dtype=float)
+            iota, iota_r = self.iota(x[:, 0])
+            d = self.eq.compute(names, grid=Grid(x, sort=False),
+                                data={"iota": iota, "iota_r": iota_r})
+            for k in names:
+                out[k].append(np.asarray(d[k]))
+        return {k: np.concatenate(v) for k, v in out.items()}
 
     # --------------------------------------------------------- external field
     def B_ext(self, x, source_grid=None, chunk_size=None):
