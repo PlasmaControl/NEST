@@ -15,9 +15,9 @@ free-boundary equilibrium.
 - [x] Pressure as a Fourier-Zernike field, optimized with T (`nest/pressure.py`)
 - [x] Math representation of J as potential T, with smoothness at the edge (`nest/boundary_potential.py`)
 - [x] Grid class and DESC common input class (`nest/grid.py`, `nest/desc_input.py`)
-- [ ] B = B_ext + B_plasma and force residual J x B - grad p inside the plasma
-- [ ] Jacobian construction
-- [ ] Optimization loop over the J coefficients
+- [x] B = B_ext + B_plasma and force residual J x B - grad p inside the plasma (`nest/force.py`, `nest/fields.py`)
+- [x] Jacobian construction (`nest/fields.py`: affine J, B, p; `nest/objectives.py`)
+- [x] Optimization loop over the J coefficients (`nest/optimize.py`: Gauss-Newton trust region, lambda continuation)
 
 # Questions?
 - [ ] Should we raise s in (1-rho^2)^s to 3 or 4?

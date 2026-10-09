@@ -2,6 +2,11 @@
 
 One entry per commit, newest first.
 
+## 2026-10-09: Objectives and the Gauss-Newton trust region
+- `nest/objectives.py`: `ObjectiveFunction`, sum_i w_i ||r_i(x)||^2 over terms built from the fields, with volume weights sqrt(dV / V): `ForceBalance` ((J x B - grad p) / rms |grad(|B|^2)| / 2 mu0 of DESC), `FieldDistance`, `CurrentDistance`, `PressureDistance` (targets default to DESC's fields at the points); new terms subclass `Term`. Jacobian by forward-mode products through the affine fields in column chunks (no Biot-Savart call); `blocks` gives the rows by blocks of points.
+- `nest/optimize.py`: `gauss_newton`, DESC's trust region (exact Cholesky or QR subproblem, column scaling, radius update) with step acceptance at rho > 0.1 and a stop at the rounding level; `points_per_block` reduces the rows to J^T J (cho) or R, z (qr, TSQR) without forming J; one `GN` JSON line per trial step. `continuation` over term weights, e.g. lambda in ||r_D||^2 + lambda^-1 ||r_F||^2.
+- `tests/test_optimize.py` (precise_QA, bases 4, 4, 3, h = a/4): Jacobian vs central difference 1.2e-14, row blocks vs dense 1.0e-15; lambda continuation over 4 decades, each solve stops at the rounding level and the force term falls 3.5e-3 -> 9.9e-4 -> 6.2e-4; the QR step with row blocks reaches the Cholesky end state to 1.6e-8. With no pressure term in the objective, p departs from DESC's by up to 20 % as lambda falls.
+
 ## 2026-10-09: J, B, p, grad p as affine maps of the coefficients; DESC external field
 - `nest/fields.py`: `Fields`, at the collocation points (default QuadratureGrid(2 L, 2 M, 2 N) of the current basis) J = J_0 + D_J u, B = B_0 + D_B u, p = D_p x_p, grad p = D_gp x_p, exact and constant; D_B = Biot-Savart of each coefficient's current on the box (one application per column, progress by elapsed time). Opt-in D_B cache (`cache_dir`): column blocks keyed by the geometry, box, kernel, points, basis and edge power; an interrupted build resumes. `fit_pressure`: the force-optimal pressure at a given current (linear least squares). `B_direct`: B without D_B (independent evaluation grids).
 - `nest/boundary_potential.py`: `_sqrtg_J_columns` / `sqrtg_J_columns`, sqrt(g) J^i of single coefficients in closed form (cost independent of the number of modes; equal to the jvp of `_current` to 6.5e-15), `coefficient_modes`, `sqrtg_J`.
