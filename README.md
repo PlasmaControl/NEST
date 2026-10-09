@@ -18,3 +18,10 @@ free-boundary equilibrium.
 - [ ] B = B_ext + B_plasma and force residual J x B - grad p inside the plasma
 - [ ] Jacobian construction
 - [ ] Optimization loop over the J coefficients
+
+# Questions?
+- [ ] Should we raise s in (1-rho^2)^s to 3 or 4?
+- [ ] How do we do the reconstruction of the potential current T (not simply a FZ series anymore) with .fit from DESC?
+- [ ] Does the interpolation we do for the current density J between the flux grid coordinates to a cartesian grid has to remain a closed point interpolation?
+- [ ] This implies this question: how much refinement do we need for the flux grid to have a good interpolation with an arbitrary and less refined cartesian grid?
+- [ ] Should we smooth out the B Fourier modes with a kernel G(k) (remove the periodicity)?
