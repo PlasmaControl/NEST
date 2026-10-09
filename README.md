@@ -22,6 +22,6 @@ free-boundary equilibrium.
 # Questions?
 - [ ] Should we raise s in (1-rho^2)^s to 3 or 4?
 - [ ] How do we do the reconstruction of the potential current T (not simply a FZ series anymore) with .fit from DESC?
-- [ ] Does the interpolation we do for the current density J between the flux grid coordinates to a cartesian grid has to remain a closed point interpolation?
+- [ ] Does the way we find the current density on cartesian grid has to remain this one: each Cartesian point is mapped back to flux coordinates by Newton and J is evaluated there exactly ; the nearest flux-grid node is only the Newton starting guess?
 - [ ] This implies this question: how much refinement do we need for the flux grid to have a good interpolation with an arbitrary and less refined cartesian grid?
 - [ ] Should we smooth out the B Fourier modes with a kernel G(k) (remove the periodicity)?
