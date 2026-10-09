@@ -19,16 +19,18 @@ import jax.numpy as jnp
 import numpy as np
 
 
-def wavevectors(axes):
+def wavevectors(axes, full=False):
     """(kx, ky, kz) of the rfft of a field on the grid ``axes``.
 
     kx and ky have the full length Nx, Ny in FFT order (0, 1, ..., -1); kz
-    has Nz // 2 + 1 non-negative values. Units 1/m.
+    has Nz // 2 + 1 non-negative values, or all Nz in FFT order with ``full``
+    (the full fftn). Units 1/m.
     """
     k = []
     for i, a in enumerate(axes):
         n, h = len(a), a[1] - a[0]
-        k.append(2 * np.pi * (np.fft.rfftfreq(n, d=h) if i == 2 else np.fft.fftfreq(n, d=h)))
+        half = i == 2 and not full
+        k.append(2 * np.pi * (np.fft.rfftfreq(n, d=h) if half else np.fft.fftfreq(n, d=h)))
     return tuple(k)
 
 

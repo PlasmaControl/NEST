@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-09: B_plasma as a linear, differentiable map of J; Vico-Greengard kernel
+- `nest/biot_savart.py`: `BiotSavart`, J at the box points inside the plasma -> B_plasma at fixed target points, one jitted JAX function (scatter, FFT, kernel, type-2 NUFFT straight from B_hat, with no inverse FFT to the box and back), linear in J: jvp, vjp and linear_transpose work, and the Jacobian columns of B are `apply` of one coefficient's current. Constants (inside indices, kernel, target angles) are a pytree passed as a jit argument (`consts()`). float64 by default (the solve path needs it), float32 optional.
+- Two kernels: `hockney` (the discrete sum of `b_plasma_free`, second order in h) and `vico_greengard` (truncated free-space Green's function, Vico, Greengard and Ferrando 2016: spectrally accurate for the sampled J), R_cut = diagonal of the half-period box, precompute grid max(2 L_i, 2 R_cut) per axis, Nyquist planes removed; boxes of odd or even sizes.
+- `nest/fourier.py`: `wavevectors(..., full=True)` for the full spectrum.
+- `tests/test_biot_savart.py`: Gaussian blob vs its exact field (vico_greengard 5e-10 to 7e-10 already at s = 2 h; hockney 4.1e-2 -> 1.1e-2 when h halves, order 1.98); hockney equals `b_plasma_free` + `interpolate` to 4e-15; linearity 2e-13, jvp, vjp, linear_transpose and vmap to round-off, adjoint identity 1e-12 (upsampfac 1.25); float32 3e-5. Smooth-current precise_QA at h = a/10 (119,678 inside points, 62,985 targets): hockney equals the existing path to 2.6e-14 and differs from vico_greengard by 4.1e-2 of max |B_plasma|, the second-order error of the discrete sum at that h.
+
 ## 2026-10-09: Plot scripts
 - `scripts/plot_J_vs_desc.py`: makes `figures/J_vs_desc.png` (DESC J vs the BoundaryPotential fit).
 - `scripts/plot_edge_layer.py`: makes `figures/edge_layer_J.png`; needs the removed edge taper (run at commit a5cbd41).
