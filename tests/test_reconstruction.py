@@ -86,8 +86,9 @@ def _chunked(f, x, chunk=200000):
                            for i in range(0, len(x), chunk)])
 
 
-def check_manufactured(fracs=(5, 10, 20), n_points=2000, seed=0):
-    """FFT + interpolation of the bump's J against its exact B."""
+def check_manufactured(fracs=(5, 10, 20), n_points=2000, seed=0, kernel="hockney"):
+    """FFT + interpolation of the bump's J against its exact B, with the Hockney-Eastwood
+    (``kernel="hockney"``) or the truncated Vico-Greengard ("truncated") kernel."""
     rng = np.random.default_rng(seed)
     # points in the bump (s < 1) and around it (1 < s < 2.25), in its bounding box
     pts = []
@@ -98,7 +99,7 @@ def check_manufactured(fracs=(5, 10, 20), n_points=2000, seed=0):
     x = np.concatenate(pts)[:n_points]
     s = ((np.hypot(x[:, 0], x[:, 1]) - R0) ** 2 + x[:, 2] ** 2) / W**2
     B_ref = _chunked(_B, x)
-    print(f"\n1. manufactured bump (R0 = {R0} m, w = {W} m), {np.sum(s < 1)} points inside, "
+    print(f"\n1. manufactured bump (R0 = {R0} m, w = {W} m), kernel {kernel}, {np.sum(s < 1)} points inside, "
           f"{np.sum(s >= 1)} around; max |B| = {np.abs(B_ref).max():.3e}")
     errs = []
     for frac in fracs:
@@ -112,7 +113,12 @@ def check_manufactured(fracs=(5, 10, 20), n_points=2000, seed=0):
         J = np.zeros((X.shape[0], 3))
         J[on] = _chunked(_J, X[on])
         t0 = time.time()
-        B_box = b_plasma_free(fft_J(J.reshape(tuple(n) + (3,))), axes)
+        J_hat = fft_J(J.reshape(tuple(n) + (3,)))
+        if kernel == "truncated":
+            from magnetic_field import b_plasma_truncated
+            B_box = b_plasma_truncated(J_hat, axes)
+        else:
+            B_box = b_plasma_free(J_hat, axes)
         B = np.asarray(interpolate(B_box, axes, x))
         e_in = np.abs(B - B_ref)[s < 1].max() / np.abs(B_ref).max()
         e_out = np.abs(B - B_ref)[s >= 1].max() / np.abs(B_ref).max()
@@ -196,7 +202,7 @@ if __name__ == "__main__":
     # "qa s=3" with edge_power 3. Large boxes: XLA_PYTHON_CLIENT_ALLOCATOR=platform
     parts = sys.argv[1:] or ["manufactured", "qa"]
     if "manufactured" in parts:
-        check_manufactured()
+        check_manufactured(kernel="truncated" if "truncated" in parts else "hockney")
     if "qa" in parts:  # "qa s=3": edge_power 3
         fracs = tuple(int(p) for p in parts if p.isdigit()) or (10, 20, 30)
         s = [int(p[2:]) for p in parts if p.startswith("s=")]

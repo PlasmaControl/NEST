@@ -3,7 +3,8 @@
 For the smooth-current free-boundary precise_QA in its coils: J from the fitted
 ``BoundaryPotential``, p from the fitted ``Pressure``, B_ext from the coils, and
 B_plasma by FFT of J sampled on the box (h = a / frac), interpolated spectrally
-(non-uniform FFT) to the collocation points, DESC's QuadratureGrid(2 L, 2 M, 2 N).
+(non-uniform FFT) to the collocation points, a Gauss-uniform tensor grid in flux
+coordinates (half a field period with stellarator symmetry).
 Printed:
   - the force error <|F|>_vol / <|grad |B|^2 / 2 mu0|>_vol over the plasma and by
     radius, against DESC's own on the same points
@@ -11,8 +12,8 @@ Printed:
     - (grad p - grad p_desc), each term in the same normalization
   - the time of the one-off setup (B_ext, kernel) and of one evaluation of F
   - |B_ext + B_plasma - B_desc| / |B| at the points (DESC's free-boundary residual)
-Asserted: the split adds up to F, and DESC's force balance on the collocation
-points gives DESC's own force error.
+Asserted: the split adds up to F, and DESC's force error on the collocation
+points matches its own (QuadratureGrid) value within the quadrature difference.
 
 run: pytest tests/test_force.py -s     or     python tests/test_force.py [frac ...]
 """
@@ -36,6 +37,7 @@ from desc import set_device  # noqa: E402
 # DESC uses the CPU unless set_device('gpu') runs before any other DESC import
 set_device(os.environ.get("NEST_DEVICE", "cpu"))
 
+import fit_cache  # noqa: E402
 from boundary_potential import BoundaryPotential  # noqa: E402
 from desc_input import DESCInput  # noqa: E402
 from force import ForceResidual  # noqa: E402
@@ -47,7 +49,7 @@ EQ = os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_smooth_J",
 COILS = os.path.join(ROOT, "desc_input", "precise_QA_free_boundary",
                      "precise_QA_helical_coils.h5")
 TOL_SPLIT = 1e-10  # max |F - sum of the parts| / max |J| |B|
-TOL_DESC = 1e-8  # <|F_desc|> on the points vs DESC's <|F|>_vol, relative
+TOL_DESC = 5e-2  # <|F_desc|> on the points vs DESC's <|F|>_vol (another quadrature), relative
 
 
 def check_force(frac=10):
@@ -55,17 +57,17 @@ def check_force(frac=10):
     inp = DESCInput.load(EQ, field=COILS)
     h = inp.a / frac
     grid = CartesianGrid.periodic_box(inp, h).locate_plasma(inp)
-    current, pressure = BoundaryPotential.fit(inp.eq), Pressure.fit(inp.eq)
+    current, pressure = fit_cache.fit(BoundaryPotential, inp), fit_cache.fit(Pressure, inp)
     t1 = time.time()
     fr = ForceResidual(inp, grid)
     t2 = time.time()
     out = fr.evaluate(current, pressure)
     t3 = time.time()
     m = fr.metrics(out["F"])
-    g = fr.grid
+    g = fr.tgrid
     print(f"\n{inp}\nbox {grid.shape}, h = a/{frac} = {h * 1e3:.2f} mm, {len(grid.inside):,} "
           f"points inside (J sampled for B_plasma); collocation grid "
-          f"{type(g).__name__}(L={g.L}, M={g.M}, N={g.N}), {g.num_nodes:,} points per period")
+          f"{g.shape} = {len(fr.rtz):,} points (sym {fr.sym})")
     print(f"time: fits + box {t1 - t0:.0f} s, setup (positions, B_ext, kernel) "
           f"{t2 - t1:.0f} s, one evaluation of F {t3 - t2:.1f} s")
     print(f"normalization <|grad |B|^2 / 2 mu0|>_vol = {fr.norm:.4e} N/m^3; "

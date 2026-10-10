@@ -61,6 +61,7 @@ class DESCInput:
         self.eq = eq
         self.field = field
         self.name = name or "equilibrium"
+        self.path = None  # the equilibrium file, if loaded from one (``fit_cache``)
         if check:
             self.check()
 
@@ -70,7 +71,9 @@ class DESCInput:
         eq = _load_equilibrium(path)
         if isinstance(field, (str, os.PathLike)):
             field = desc.io.load(field)
-        return cls(eq, field, name or os.path.basename(str(path)), check)
+        inp = cls(eq, field, name or os.path.basename(str(path)), check)
+        inp.path = os.path.abspath(str(path))
+        return inp
 
     # ----------------------------------------------------------------- basics
     @property
@@ -183,6 +186,23 @@ class DESCInput:
                                 data={"iota": iota, "iota_r": iota_r})
             for k in names:
                 out[k].append(np.asarray(d[k]))
+        return {k: np.concatenate(v) for k, v in out.items()}
+
+    def compute_tensor(self, names, rho, theta, zeta, rho_chunk=8):
+        """DESC quantities on the tensor grid rho x theta x zeta, as arrays in its
+        C order (rho, theta, zeta), first axis the point. DESC's transforms use
+        the tensor structure (much faster than ``compute_points``); iota is passed
+        in as there. Computed ``rho_chunk`` radii at a time."""
+        out = {k: [] for k in names}
+        rho = np.asarray(rho, dtype=float)
+        for i in range(0, len(rho), rho_chunk):
+            g = LinearGrid(rho=rho[i : i + rho_chunk], theta=np.asarray(theta, float),
+                           zeta=np.asarray(zeta, float), NFP=self.NFP, sym=False)
+            iota, iota_r = self.iota(np.asarray(g.nodes[:, 0]))
+            d = self.eq.compute(names, grid=g, data={"iota": iota, "iota_r": iota_r})
+            for k in names:
+                v = np.asarray(g.meshgrid_reshape(np.asarray(d[k]), "rtz"))
+                out[k].append(v.reshape((-1,) + v.shape[3:]))
         return {k: np.concatenate(v) for k, v in out.items()}
 
     # --------------------------------------------------------- external field

@@ -231,19 +231,26 @@ class CartesianGrid:
         self.inside = self.rtz = None
 
     @classmethod
-    def periodic_box(cls, eq, h, factor=2.0):
+    def periodic_box(cls, eq, h, factor=2.0, odd=False):
         """Periodic box G3 with spacing h around the plasma.
 
         In each direction the period L = N h is at least ``factor`` times the
         plasma extent (2 R_max in x and y, Z_max - Z_min in z), with N rounded
         up to an FFT-friendly size (small prime factors). The box is centred on
         the plasma, x_p = c + h (p - N // 2), so it has a point at the centre,
-        e.g. the plane y = 0.
+        e.g. the plane y = 0. With ``odd`` every N is odd, so the box is
+        symmetric about its centre: (x, y, z) -> (x, -y, -z) maps grid points
+        to grid points (stellarator symmetry, with Z_min = -Z_max).
         """
         _, R_max, Z_min, Z_max = plasma_extent(eq)
         c = np.array([0.0, 0.0, (Z_min + Z_max) / 2])
         extent = np.array([2 * R_max, 2 * R_max, Z_max - Z_min])
-        n = [next_fast_len(int(np.ceil(factor * e / h))) for e in extent]
+        n = []
+        for e in extent:
+            k = next_fast_len(int(np.ceil(factor * e / h)))
+            while odd and k % 2 == 0:
+                k = next_fast_len(k + 1)
+            n.append(k)
         return cls(tuple(c[i] + h * (np.arange(n[i]) - n[i] // 2) for i in range(3)),
                    periodic=True)
 

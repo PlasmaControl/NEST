@@ -36,7 +36,7 @@ class Separable:
         """C[p, q, c] from one coefficient array per basis (JAX, differentiable)."""
         C = jnp.zeros((len(self.lm), len(self.n), len(self._pq)))
         for c, ((p, q), coef) in enumerate(zip(self._pq, coefs)):
-            C = C.at[p, q, c].set(jnp.asarray(coef, dtype=C.dtype))
+            C = C.at[p, q, c].set(jnp.asarray(coef, dtype=C.dtype), unique_indices=True)  # modes distinct
         return C
 
     def poloidal(self, rho, theta, dr=0, dt=0):

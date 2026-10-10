@@ -15,9 +15,10 @@ free-boundary equilibrium.
 - [x] Pressure as a Fourier-Zernike field, optimized with T (`nest/pressure.py`)
 - [x] Math representation of J as potential T, with smoothness at the edge (`nest/boundary_potential.py`)
 - [x] Grid class and DESC common input class (`nest/grid.py`, `nest/desc_input.py`)
-- [ ] B = B_ext + B_plasma and force residual J x B - grad p inside the plasma
-- [ ] Jacobian construction
-- [ ] Optimization loop over the J coefficients
+- [x] B = B_ext + B_plasma and force residual J x B - grad p inside the plasma (`nest/force.py`)
+- [x] Jacobian construction: matrix-free J v and J^T w, explicit columns (`nest/objective.py`, `nest/jacobian.py`)
+- [x] Optimization loop over the J coefficients: Levenberg-Marquardt with a block preconditioner (`nest/optimize.py`, `nest/precondition.py`, `scripts/optimize_qa.py`)
+- [ ] Force balance below DESC's own (now 1.09e-4 against 4.24e-5; see `OPTIMIZATION_STATUS.md`)
 
 # Questions?
 - [ ] Should we raise s in (1-rho^2)^s to 3 or 4?

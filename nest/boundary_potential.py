@@ -81,7 +81,11 @@ class _Structure:
         self.chi_m = np.array([m for m in range(-M, M + 1) if m != 0])
         self.chi_n = np.arange(-N, N + 1)
         mm, nn = np.meshgrid(self.chi_m, self.chi_n, indexing="ij")
-        self.chi_modes = np.column_stack([mm.ravel(), nn.ravel()])
+        keep = np.ones(mm.shape, bool)
+        if basis.sym:  # stellarator symmetry: chi is sin-type, (m < 0) != (n < 0)
+            keep = (mm < 0) != (nn < 0)
+        self.chi_idx = np.nonzero(keep)  # (i_m, i_n) of the free chi_mn
+        self.chi_modes = np.column_stack([mm[keep], nn[keep]])
         self.n_chi, self.K = len(self.chi_modes), K
         # h_|m| and its first two derivatives as rows of monomial coefficients
         polys = [h_polynomial(m + 2, s) for m in range(M + 1)]
@@ -96,7 +100,9 @@ class _Structure:
     def split(self, u):
         """u -> (C_chi[m, n], C_ab) as JAX arrays."""
         chi, a, b = u[: self.n_chi], u[self.n_chi : self.n_chi + self.K], u[self.n_chi + self.K :]
-        return chi.reshape(len(self.chi_m), len(self.chi_n)), self.ab.scatter([a, b])
+        Cchi = jnp.zeros((len(self.chi_m), len(self.chi_n)), chi.dtype).at[self.chi_idx].set(
+            chi, unique_indices=True)  # each chi_mn once
+        return Cchi, self.ab.scatter([a, b])
 
 
 def _h(S, rho, d):
@@ -252,7 +258,7 @@ class BoundaryPotential:
 
     @classmethod
     def fit(cls, eq, L=None, M=None, N=None, factors=(3, 3, 2.5), n_rho=None,
-            edge_power=2, I=None):
+            edge_power=2, I=None, sym=None):
         """Fit the free coefficients to DESC's potential, T itself (not J).
 
         DESC's sqrt(g) J^zeta, sqrt(g) J^theta (Ampere's law from B_theta_r -
@@ -265,6 +271,11 @@ class BoundaryPotential:
         free (the target is only defined up to it); alpha is then dropped. I is
         DESC's net toroidal current I(rho = 1) unless given.
 
+        ``sym`` (default: the equilibrium's): stellarator symmetry. a, b are then
+        cos-type series (basis sym="cos") and chi sin-type, about half the
+        unknowns: T_theta, T_zeta are even under (theta, zeta) -> (-theta, -zeta)
+        (sqrt(g) J^theta, J^zeta are), so d_theta chi is even and chi odd.
+
         The problem separates in the Fourier modes: each chi_mn couples the
         T_theta mode (-m, n) (via d_theta) with the T_zeta mode (m, -n) (via
         d_zeta), so it is solved as one small least-squares problem per chi_mn,
@@ -273,7 +284,8 @@ class BoundaryPotential:
         L = int(round(factors[0] * eq.L)) if L is None else L
         M = int(round(factors[1] * eq.M)) if M is None else M
         N = int(round(factors[2] * eq.N)) if N is None else N
-        basis = FourierZernikeBasis(L, M, N, NFP=eq.NFP, sym=False,
+        sym = bool(eq.sym) if sym is None else sym
+        basis = FourierZernikeBasis(L, M, N, NFP=eq.NFP, sym="cos" if sym else False,
                                     spectral_indexing=eq.spectral_indexing)
         S = _Structure(basis, edge_power)
         if I is None:
@@ -287,7 +299,7 @@ class BoundaryPotential:
         ms, ns = np.arange(-M, M + 1), np.arange(-N, N + 1)
         Pt = np.linalg.pinv(np.asarray(fourier(theta[:, None], ms[None, :])))
         Pz = np.linalg.pinv(np.asarray(fourier(zeta[:, None], ns[None, :], NFP=eq.NFP)))
-        C = np.einsum("aj,ijkc,bk->iabc", Pt, T, Pz)
+        C = np.einsum("aj,ijkc,bk->iabc", Pt, T, Pz, optimize=True)
         x = 2 * rho - 1
         q = np.sqrt(np.sqrt(1 - x**2) * rho)  # sqrt of the weights of int . rho drho
         u, alpha = _fit_blocks(S, I, rho, q, C, ms, ns)
@@ -304,13 +316,15 @@ class BoundaryPotential:
         b = self.basis
         np.savez_compressed(path, u=self.u, I=self.I, edge_power=self.edge_power,
                             modes=b.modes, chi_modes=self.chi_modes, L=b.L, M=b.M, N=b.N,
-                            NFP=b.NFP, spectral_indexing=b.spectral_indexing)
+                            NFP=b.NFP, spectral_indexing=b.spectral_indexing,
+                            sym=str(b.sym) if b.sym else "")
 
     @classmethod
     def load(cls, path, eq):
         with np.load(path) as f:
+            sym = str(f["sym"]) if "sym" in f and str(f["sym"]) else False
             basis = FourierZernikeBasis(int(f["L"]), int(f["M"]), int(f["N"]), NFP=int(f["NFP"]),
-                                        sym=False, spectral_indexing=str(f["spectral_indexing"]))
+                                        sym=sym, spectral_indexing=str(f["spectral_indexing"]))
             assert np.array_equal(basis.modes, f["modes"]), "basis mode mismatch"
             pot = cls(basis, f["u"], float(f["I"]), eq, int(f["edge_power"]))
             assert np.array_equal(pot.chi_modes, f["chi_modes"]), "chi mode mismatch"
@@ -332,8 +346,8 @@ def target_potential(eq, n_rho, n_theta, n_zeta):
     sJ_zeta = (np.asarray(d["B_theta_r"]) - np.asarray(d["B_rho_t"])) / MU_0
     sJ_theta = (np.asarray(d["B_rho_z"]) - np.asarray(d["B_zeta_r"])) / MU_0
     idx = np.asarray(grid.meshgrid_reshape(np.arange(grid.num_nodes), "rtz"))
-    T = np.stack([np.einsum("ij,jtz->itz", Q, sJ_zeta[idx]),
-                  -np.einsum("ij,jtz->itz", Q, sJ_theta[idx])], axis=-1)
+    T = np.stack([np.einsum("ij,jtz->itz", Q, sJ_zeta[idx], optimize=True),
+                  -np.einsum("ij,jtz->itz", Q, sJ_theta[idx], optimize=True)], axis=-1)
     nodes = np.asarray(grid.nodes)
     return rho, nodes[idx[0, :, 0], 1], nodes[idx[0, 0, :], 2], T
 
@@ -364,9 +378,12 @@ def _fit_blocks(S, I, rho, q, C, ms, ns):
                 coef[index[(l, mode_m, mode_n)]] = v
 
     # chi_mn with the T_theta mode (-m, n) [a] and the T_zeta mode (m, -n) [b]
+    free = set(map(tuple, S.chi_modes))
     for i, m in enumerate(S.chi_m):
         ls, Zm = Z[abs(m)]
         for j, n in enumerate(S.chi_n):
+            if (m, n) not in free:  # not in the symmetric mode set
+                continue
             nl = len(ls)
             A = np.zeros((2 * nr, 1 + 2 * nl))
             A[:nr, 0] = -m * H[:, abs(m)]  # d_theta F_m = -m F_-m
@@ -387,4 +404,4 @@ def _fit_blocks(S, I, rho, q, C, ms, ns):
         sol = solve(np.column_stack([f[:, None] * Z0, np.ones(nr)]), C[:, am[0], an[n], 1])
         put(b_c, 0, n, sol[:-1])
         alpha[an[n]] = sol[-1]
-    return np.concatenate([chi.ravel(), a_c, b_c]), alpha
+    return np.concatenate([chi[S.chi_idx], a_c, b_c]), alpha

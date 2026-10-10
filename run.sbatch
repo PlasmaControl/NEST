@@ -19,6 +19,8 @@ cd "$SLURM_SUBMIT_DIR"
 ENV=/scratch/gpfs/lk1158/.conda/envs/desc-env
 export LD_PRELOAD=$ENV/lib/libstdc++.so.6
 export NEST_DEVICE=gpu JAX_ENABLE_X64=true XLA_PYTHON_CLIENT_PREALLOCATE=false
+# JAX may use up to 90% of the GPU (default 75%); the rest for cuFFT plans and the like
+export XLA_PYTHON_CLIENT_MEM_FRACTION=0.90
 export PYTHONUNBUFFERED=1 MPLBACKEND=Agg OMP_NUM_THREADS=4
 nvidia-smi --query-gpu=name,memory.total --format=csv
 # stop if DESC/JAX do not get the GPU instead of running on the CPU

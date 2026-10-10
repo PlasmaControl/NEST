@@ -1,0 +1,327 @@
+"""Evaluation on flux-coordinate tensor grids, and interpolation to fixed points.
+
+The series of NEST (the current potential, the pressure, the geometry R, Z)
+are sums of P_p(rho, theta) F_q(zeta) (``Separable``). On a tensor grid rho x
+theta x zeta the factors P (one matrix per derivative, (n_rho n_theta) x n_p)
+and F (n_zeta x n_q) depend only on the grid, so they are computed once
+(``TensorFactors``) and evaluating any coefficients C[p, q, c] is two matrix
+products, P C F^T, instead of rebuilding the basis at every point.
+
+``TensorGeometry`` caches R, Z and their first derivatives (and sqrt(g)) on a
+tensor grid; ``tensor_current`` and ``tensor_pressure`` give J (cylindrical
+components) and p, grad p there for any coefficients.
+
+``PointInterpolator`` brings a field on a uniform tensor grid to fixed points
+given by their flux coordinates (e.g. the box points, whose (rho, theta, zeta)
+never change): tensor-product Lagrange interpolation of order ``order`` per
+direction (4: cubic), with indices and weights computed once and applied as a
+gather and a weighted sum. In theta and zeta the grid is periodic (one field
+period in zeta: cylindrical components are periodic there); in rho the
+stencils cross the axis by the reflection (-rho, theta) = (rho, theta + pi),
+under which any smooth field in (x, y) is continuous, so no stencil is
+one-sided at the axis. Uniform rho nodes are cell-centred, rho_i = (i + 1/2) d
+with d = 1 / (n_rho - 1/2), the last one at rho = 1, and no node on the axis.
+"""
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+from batching import map_chunks
+from boundary_potential import _h, _window
+from desc.basis import fourier
+
+
+class _Static:
+    """Static (non-array) attributes of a pytree node, hashed by identity."""
+
+    def __init__(self, d):
+        self.d = d
+
+
+class _Pytree:
+    """Register a class of cached arrays as a JAX pytree.
+
+    The attributes named in ``_dynamic`` (arrays, or pytrees of them) are the
+    leaves; every other attribute is static. Passing such an object as an
+    argument of a jitted function keeps its arrays as inputs on the device,
+    instead of embedding them as constants in the compiled program (which costs
+    host memory and compile time for large caches).
+    """
+
+    _dynamic = ()
+
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        jax.tree_util.register_pytree_node(cls, cls._flatten, cls._unflatten)
+
+    def _flatten(self):
+        if "_aux" not in vars(self):
+            stat = {k: v for k, v in vars(self).items() if k not in self._dynamic}
+            object.__setattr__(self, "_aux", _Static(stat))
+        return tuple(getattr(self, k, None) for k in self._dynamic), self._aux
+
+    @classmethod
+    def _unflatten(cls, aux, children):
+        obj = object.__new__(cls)
+        for k, v in aux.d.items():
+            object.__setattr__(obj, k, v)
+        object.__setattr__(obj, "_aux", aux)
+        for k, v in zip(cls._dynamic, children):
+            object.__setattr__(obj, k, v)
+        return obj
+
+
+class TensorGrid:
+    """rho x theta x zeta (one field period); fields have shape (n_rho, n_theta, n_zeta, ...)."""
+
+    def __init__(self, rho, theta, zeta, NFP, sym=False):
+        self.rho, self.theta, self.zeta = (np.asarray(a, dtype=float) for a in (rho, theta, zeta))
+        self.NFP, self.sym = int(NFP), bool(sym)
+
+    @classmethod
+    def uniform(cls, n_rho, n_theta, n_zeta, NFP, sym=False):
+        """Cell-centred rho (last node at 1), uniform periodic theta, and zeta
+        uniform over one field period (n_zeta points) or, with stellarator
+        symmetry, over half of it including both ends (n_zeta + 1 points from 0
+        to pi / NFP)."""
+        assert n_theta % 2 == 0, "n_theta must be even (axis reflection theta + pi)"
+        d = 1 / (n_rho - 0.5)
+        if sym:
+            zeta = np.pi * np.arange(n_zeta + 1) / (n_zeta * NFP)
+        else:
+            zeta = 2 * np.pi * np.arange(n_zeta) / (n_zeta * NFP)
+        return cls((np.arange(n_rho) + 0.5) * d, 2 * np.pi * np.arange(n_theta) / n_theta,
+                   zeta, NFP, sym)
+
+    @property
+    def shape(self):
+        return (len(self.rho), len(self.theta), len(self.zeta))
+
+    @property
+    def size(self):
+        return int(np.prod(self.shape))
+
+    def nodes(self):
+        """(rho, theta, zeta) of all nodes, in the grid's (C) order, (size, 3)."""
+        R, T, Z = np.meshgrid(self.rho, self.theta, self.zeta, indexing="ij")
+        return np.column_stack([R.ravel(), T.ravel(), Z.ravel()])
+
+
+class TensorFactors(_Pytree):
+    """Cached factors of a separable series on a ``TensorGrid``.
+
+    ``poloidal(rho, theta, dr, dt)`` -> (n, n_p) and ``toroidal(zeta, dz)`` ->
+    (n, n_q), as ``Separable.poloidal`` and ``Separable.toroidal``. ``pol`` and
+    ``tor`` list the derivatives to cache.
+    """
+
+    _dynamic = ("P", "F")
+
+    def __init__(self, poloidal, toroidal, grid, pol=((0, 0),), tor=(0,)):
+        self.grid = grid
+        R, T = np.meshgrid(grid.rho, grid.theta, indexing="ij")
+        R, T = jnp.asarray(R.ravel()), jnp.asarray(T.ravel())
+        self.P = {d: jnp.asarray(poloidal(R, T, *d)) for d in pol}
+        self.F = {d: jnp.asarray(toroidal(jnp.asarray(grid.zeta), d)) for d in tor}
+
+    def __call__(self, C, dr=0, dt=0, dz=0):
+        """sum_pq C[p, q, c] P_p F_q (or a derivative), shape grid.shape + (n_c,)."""
+        n_r, n_t, n_z = self.grid.shape
+        PC = jnp.einsum("ip,pqc->iqc", self.P[(dr, dt)], C)
+        return jnp.einsum("iqc,kq->ikc", PC, self.F[dz]).reshape(n_r, n_t, n_z, -1)
+
+
+def separable_factors(sep, grid, pol=((0, 0), (1, 0), (0, 1)), tor=(0, 1)):
+    return TensorFactors(sep.poloidal, sep.toroidal, grid, pol, tor)
+
+
+class TensorGeometry(_Pytree):
+    """R, Z, their first derivatives and sqrt(g) on a tensor grid (cached)."""
+
+    _dynamic = ("R", "Xr", "Xt", "Xz", "sqrt_g")
+
+    def __init__(self, RZ, grid):
+        f = separable_factors(RZ, grid)
+        C = RZ.C
+        X, Xr, Xt, Xz = f(C), f(C, dr=1), f(C, dt=1), f(C, dz=1)
+        self.R, self.Z, self.Xr, self.Xt, self.Xz = X[..., 0], X[..., 1], Xr, Xt, Xz
+        # sqrt(g) = e_rho . e_theta x e_zeta, e_rho = (R_r, 0, Z_r), e_theta = (R_t, 0, Z_t),
+        # e_zeta = (R_z, R, Z_z) in (R, phi, Z) (phi = zeta)
+        self.sqrt_g = self.R * (Xt[..., 0] * Xr[..., 1] - Xr[..., 0] * Xt[..., 1])
+
+    def vector(self, a, b, c):
+        """(a e_rho + b e_theta + c e_zeta) / sqrt(g) in (R, phi, Z) components."""
+        Xr, Xt, Xz = self.Xr, self.Xt, self.Xz
+        V = jnp.stack([a * Xr[..., 0] + b * Xt[..., 0] + c * Xz[..., 0], c * self.R,
+                       a * Xr[..., 1] + b * Xt[..., 1] + c * Xz[..., 1]], axis=-1)
+        return V / self.sqrt_g[..., None]
+
+    def gradient(self, fr, ft, fz):
+        """grad f from d_rho f, d_theta f, d_zeta f, in (R, phi, Z) components."""
+        R, (Rr, Zr), (Rt, Zt), (Rz, Zz) = (self.R, self.Xr.transpose(3, 0, 1, 2),
+                                           self.Xt.transpose(3, 0, 1, 2), self.Xz.transpose(3, 0, 1, 2))
+        g = jnp.stack([-fr * R * Zt + ft * R * Zr,
+                       fr * (Zt * Rz - Rt * Zz) + ft * (Zz * Rr - Rz * Zr) + fz * (Zr * Rt - Rr * Zt),
+                       fr * R * Rt - ft * R * Rr], axis=-1)
+        return g / self.sqrt_g[..., None]
+
+
+class TensorCurrent(_Pytree):
+    """J = curl T of a ``BoundaryPotential`` structure on a tensor grid (rho > 0)."""
+
+    _dynamic = ("geo", "ab", "chi", "w", "h0r", "rho2")
+
+    def __init__(self, S, RZ, grid, geometry=None):
+        self.S, self.grid = S, grid
+        self.geo = geometry or TensorGeometry(RZ, grid)
+        self.ab = separable_factors(S.ab, grid)
+
+        def chi_pol(R, T, dr, dt):
+            return _h(S, R, dr)[:, S.chi_abs] * fourier(T[:, None], S.chi_m, dt=dt)
+
+        def chi_tor(z, dz):
+            return fourier(z[:, None], S.chi_n, NFP=S.NFP, dt=dz)
+
+        self.chi = TensorFactors(chi_pol, chi_tor, grid, pol=((1, 0), (1, 1)), tor=(0, 1))
+        rho = jnp.asarray(grid.rho)
+        self.w = [v[:, None, None] for v in _window(S, rho)]
+        self.h0r = _h(S, rho, 1)[:, 0][:, None, None]
+        self.rho2 = (rho**2)[:, None, None]
+
+    def __call__(self, u, I):
+        """J in (R, phi, Z) components, shape grid.shape + (3,); linear in (u, I)."""
+        Cchi, Cab = self.S.split(u)
+        f, f1, _, g, g1, _ = self.w
+        AB, ABr, ABt, ABz = self.ab(Cab), self.ab(Cab, dr=1), self.ab(Cab, dt=1), self.ab(Cab, dz=1)
+        Cc = Cchi[:, :, None]
+        chi_rz, chi_rt = self.chi(Cc, dr=1, dz=1)[..., 0], self.chi(Cc, dr=1, dt=1)[..., 0]
+        a = f * (ABt[..., 1] - self.rho2 * ABz[..., 0])
+        b = -(chi_rz + f1 * AB[..., 1] + f * ABr[..., 1])
+        c = I / (2 * np.pi) * self.h0r + chi_rt + g1 * AB[..., 0] + g * ABr[..., 0]
+        return self.geo.vector(a, b, c)
+
+
+class TensorPressure(_Pytree):
+    """p and grad p of a ``Pressure`` (``P``: its Separable, ``k``: edge order) on a tensor grid."""
+
+    _dynamic = ("geo", "f", "wk", "wkr")
+
+    def __init__(self, P, k, RZ, grid, geometry=None):
+        self.P, self.k, self.grid = P, k, grid
+        self.wk = self.wkr = None
+        self.geo = geometry or TensorGeometry(RZ, grid)
+        self.f = separable_factors(P, grid)
+        if k is not None:
+            rho = grid.rho[:, None, None]
+            self.wk = jnp.asarray((1 - rho**2) ** (k + 1))
+            self.wkr = jnp.asarray(-2 * (k + 1) * rho * (1 - rho**2) ** k)
+
+    def __call__(self, c_p):
+        """(p, grad p in (R, phi, Z)), shapes grid.shape and grid.shape + (3,)."""
+        C = self.P.scatter([c_p])
+        p, pr, pt, pz = (self.f(C, *d)[..., 0] for d in ((0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)))
+        if self.k is not None:  # p = w Q
+            p, pr, pt, pz = self.wk * p, self.wkr * p + self.wk * pr, self.wk * pt, self.wk * pz
+        return p, self.geo.gradient(pr, pt, pz)
+
+
+def _lagrange(s, order):
+    """Stencil start i0 (n,) and weights (n, order) for node coordinates s (in units
+    of the spacing): nodes i0 .. i0 + order - 1, centred on s."""
+    i0 = np.floor(s).astype(int) - (order // 2 - 1)
+    x = s[:, None] - (i0[:, None] + np.arange(order))
+    w = np.ones((len(s), order))
+    for j in range(order):
+        for k in range(order):
+            if k != j:
+                w[:, j] *= x[:, k] / (j - k)
+    return i0, w
+
+
+class PointInterpolator(_Pytree):
+    """Cached tensor-product Lagrange interpolation from a uniform ``TensorGrid``
+    to fixed points (rho, theta, zeta).
+
+    With a stellarator-symmetric grid (zeta over half a field period), a point
+    with zeta in the other half is mapped by (theta, zeta) -> (-theta, -zeta),
+    and stencil nodes beyond zeta = 0 or pi / NFP are reflected the same way;
+    the reflected values carry the parity of each component (``parity`` in
+    ``__call__``: -1 for V_R of a symmetric vector field, +1 for V_phi, V_Z and
+    for scalars such as p)."""
+
+    _dynamic = ("idx", "w", "sign")
+
+    def __init__(self, grid, rtz, order=4, chunk=65536, dtype=jnp.float64):
+        n_r, n_t, n_z = grid.shape
+        rtz = np.array(rtz, dtype=float)
+        d_r = grid.rho[1] - grid.rho[0]
+        d_t = 2 * np.pi / n_t
+        sign_pt = np.ones(len(rtz))
+        if grid.sym:
+            period = 2 * np.pi / grid.NFP
+            z = np.mod(rtz[:, 2], period)
+            other = z > period / 2  # map to the covered half
+            rtz[:, 1] = np.where(other, -rtz[:, 1], rtz[:, 1])
+            rtz[:, 2] = np.where(other, period - z, z)
+            sign_pt = np.where(other, -1.0, 1.0)
+            d_z = (period / 2) / (n_z - 1)
+        else:
+            d_z = 2 * np.pi / (n_z * grid.NFP)
+        # rho: s with rho_i = (i + 1/2) d; the top of the stencil stays below n_r
+        ir, wr = _lagrange(rtz[:, 0] / d_r - 0.5, order)
+        shift = np.maximum(ir + order - n_r, 0)
+        ir -= shift
+        if shift.any():  # recompute the weights of the shifted (one-sided) stencils
+            x = rtz[:, 0:1] / d_r - 0.5 - (ir[:, None] + np.arange(order))
+            wr = np.ones_like(x)
+            for j in range(order):
+                for k in range(order):
+                    if k != j:
+                        wr[:, j] *= x[:, k] / (j - k)
+        it, wt = _lagrange(np.mod(rtz[:, 1], 2 * np.pi) / d_t, order)
+        zeta = rtz[:, 2] if grid.sym else np.mod(rtz[:, 2], 2 * np.pi / grid.NFP)
+        iz, wz = _lagrange(zeta / d_z, order)
+        R = ir[:, None] + np.arange(order)  # (n, order); < 0: reflected through the axis
+        T = it[:, None] + np.arange(order)
+        Zi = iz[:, None] + np.arange(order)
+        o = order
+        # all combinations (n, r, t, z)
+        Rb = np.broadcast_to(R[:, :, None, None], (len(rtz), o, o, o))
+        Tb = np.broadcast_to(T[:, None, :, None], (len(rtz), o, o, o))
+        Zb = np.broadcast_to(Zi[:, None, None, :], (len(rtz), o, o, o))
+        sign = np.ones((len(rtz), o, o, o))
+        if grid.sym:  # zeta nodes beyond 0 or pi / NFP: (theta, zeta) -> (-theta, -zeta)
+            top = n_z - 1
+            out = (Zb < 0) | (Zb > top)
+            Zb = np.where(Zb < 0, -Zb, np.where(Zb > top, 2 * top - Zb, Zb))
+            Tb = np.where(out, -Tb, Tb)
+            sign = np.where(out, -1.0, 1.0)
+        else:
+            Zb = np.mod(Zb, n_z)
+        refl = Rb < 0  # through the axis: (-rho, theta) = (rho, theta + pi), no parity
+        Rb = np.where(refl, -Rb - 1, Rb)
+        Tb = np.mod(Tb + np.where(refl, n_t // 2, 0), n_t)
+        idx = (Rb * n_t + Tb) * n_z + Zb
+        w = wr[:, :, None, None] * wt[:, None, :, None] * wz[:, None, None, :]
+        self.idx = jnp.asarray(idx.reshape(len(rtz), -1).astype(np.int32))
+        self.w = jnp.asarray(w.reshape(len(rtz), -1), dtype)
+        self.sign = jnp.asarray((sign * sign_pt[:, None, None, None]).reshape(len(rtz), -1), dtype)
+        self.sym = grid.sym
+        self.chunk = chunk
+
+    def __call__(self, field, parity=None):
+        """field (n_rho, n_theta, n_zeta, c) on the grid -> (n_points, c) at the points.
+
+        ``parity``: per component, +1 or -1 under stellarator symmetry (only used
+        with a symmetric grid; default all +1).
+        """
+        flat = field.reshape(-1, field.shape[-1])
+        if not self.sym or parity is None or all(p > 0 for p in parity):
+            return map_chunks(lambda fl, i, w: jnp.einsum("nk,nkc->nc", w, fl[i]),
+                              self.idx, self.w, chunk=self.chunk, carry=flat)
+        par = jnp.asarray(parity, self.w.dtype)  # (c,): components with -1 take the sign
+        def f(fl, i, w, s):
+            ws = w[:, :, None] * jnp.where(par < 0, s[:, :, None], 1.0)
+            return jnp.einsum("nkc,nkc->nc", ws, fl[i])
+        return map_chunks(f, self.idx, self.w, self.sign, chunk=self.chunk, carry=flat)
