@@ -72,7 +72,12 @@ def h_polynomial(q, s):
 
 
 class _Structure:
-    """What is fixed: the bases, mode lists and radial polynomial tables."""
+    """What is fixed: the bases, mode lists and radial polynomial tables.
+
+    With a stellarator-symmetric basis (sym="cos") the chi modes are the odd ones,
+    sin(|m| theta) cos(n zeta) and cos(m theta) sin(|n| zeta) (m < 0 xor n < 0 in
+    DESC's convention): then d_theta chi and d_zeta chi are even, like a and b.
+    """
 
     def __init__(self, basis, s):
         self.basis, self.s, self.NFP = basis, s, basis.NFP
@@ -82,7 +87,10 @@ class _Structure:
         self.chi_m = np.array([m for m in range(-M, M + 1) if m != 0])
         self.chi_n = np.arange(-N, N + 1)
         mm, nn = np.meshgrid(self.chi_m, self.chi_n, indexing="ij")
-        self.chi_modes = np.column_stack([mm.ravel(), nn.ravel()])
+        self.sym = basis.sym == "cos"
+        self.chi_allowed = ((mm < 0) ^ (nn < 0)) if self.sym else np.ones(mm.shape, bool)
+        self.chi_index = np.flatnonzero(self.chi_allowed.ravel())  # free chi in the (m, n) table
+        self.chi_modes = np.column_stack([mm.ravel(), nn.ravel()])[self.chi_index]
         self.n_chi, self.K = len(self.chi_modes), K
         # h_|m| and its first two derivatives as rows of monomial coefficients
         polys = [h_polynomial(m + 2, s) for m in range(M + 1)]
@@ -97,7 +105,8 @@ class _Structure:
     def split(self, u):
         """u -> (C_chi[m, n], C_ab) as JAX arrays."""
         chi, a, b = u[: self.n_chi], u[self.n_chi : self.n_chi + self.K], u[self.n_chi + self.K :]
-        return chi.reshape(len(self.chi_m), len(self.chi_n)), self.ab.scatter([a, b])
+        table = jnp.zeros(len(self.chi_m) * len(self.chi_n)).at[self.chi_index].set(chi)
+        return table.reshape(len(self.chi_m), len(self.chi_n)), self.ab.scatter([a, b])
 
 
 def _h(S, rho, d):
@@ -224,7 +233,8 @@ class BoundaryPotential:
     Parameters
     ----------
     basis : FourierZernikeBasis
-        Basis of a and b (sym=False); chi uses its M, N.
+        Basis of a and b (sym=False, or "cos" for stellarator symmetry); chi uses its
+        M, N.
     u : ndarray, shape (n_free,)
         Free coefficients (chi_mn in ``chi_modes`` order, then a, then b, each in
         ``basis.modes`` order) in A. Any u is admissible.
@@ -307,7 +317,7 @@ class BoundaryPotential:
 
     @classmethod
     def fit(cls, eq, L=None, M=None, N=None, factors=(3, 3, 2.5), n_rho=None,
-            edge_power=2, I=None):
+            edge_power=2, I=None, sym=False):
         """Fit the free coefficients to DESC's potential, T itself (not J).
 
         DESC's sqrt(g) J^zeta, sqrt(g) J^theta (Ampere's law from B_theta_r -
@@ -318,7 +328,8 @@ class BoundaryPotential:
         The coefficients minimize sum_p w_p |T(u) - T_target|^2 (w_p uniform in
         theta, zeta and rho drho in rho) with the gauge alpha(zeta) of T_zeta
         free (the target is only defined up to it); alpha is then dropped. I is
-        DESC's net toroidal current I(rho = 1) unless given.
+        DESC's net toroidal current I(rho = 1) unless given. ``sym``: stellarator-
+        symmetric basis (a, b with sym="cos", chi odd; for symmetric equilibria).
 
         The problem separates in the Fourier modes: each chi_mn couples the
         T_theta mode (-m, n) (via d_theta) with the T_zeta mode (m, -n) (via
@@ -328,7 +339,7 @@ class BoundaryPotential:
         L = int(round(factors[0] * eq.L)) if L is None else L
         M = int(round(factors[1] * eq.M)) if M is None else M
         N = int(round(factors[2] * eq.N)) if N is None else N
-        basis = FourierZernikeBasis(L, M, N, NFP=eq.NFP, sym=False,
+        basis = FourierZernikeBasis(L, M, N, NFP=eq.NFP, sym="cos" if sym else False,
                                     spectral_indexing=eq.spectral_indexing)
         S = _Structure(basis, edge_power)
         if I is None:
@@ -359,13 +370,16 @@ class BoundaryPotential:
         b = self.basis
         np.savez_compressed(path, u=self.u, I=self.I, edge_power=self.edge_power,
                             modes=b.modes, chi_modes=self.chi_modes, L=b.L, M=b.M, N=b.N,
-                            NFP=b.NFP, spectral_indexing=b.spectral_indexing)
+                            NFP=b.NFP, spectral_indexing=b.spectral_indexing,
+                            sym=str(b.sym))
 
     @classmethod
     def load(cls, path, eq):
         with np.load(path) as f:
+            sym = str(f["sym"]) if "sym" in f else "False"
             basis = FourierZernikeBasis(int(f["L"]), int(f["M"]), int(f["N"]), NFP=int(f["NFP"]),
-                                        sym=False, spectral_indexing=str(f["spectral_indexing"]))
+                                        sym=False if sym == "False" else sym,
+                                        spectral_indexing=str(f["spectral_indexing"]))
             assert np.array_equal(basis.modes, f["modes"]), "basis mode mismatch"
             pot = cls(basis, f["u"], float(f["I"]), eq, int(f["edge_power"]))
             assert np.array_equal(pot.chi_modes, f["chi_modes"]), "chi mode mismatch"
@@ -429,7 +443,10 @@ def _fit_blocks(S, I, rho, q, C, ms, ns):
             A[nr:, 0] = -n * NFP * H[:, abs(m)]  # d_zeta F_n = -n NFP F_-n
             A[nr:, 1 + nl :] = f[:, None] * Zm
             y = np.concatenate([C[:, am[-m], an[n], 0], C[:, am[m], an[-n], 1]])
-            sol = solve(A, y)
+            if S.chi_allowed[i, j]:
+                sol = solve(A, y)
+            else:  # symmetric basis, even chi_mn: not in it; its a, b modes are odd
+                sol = np.concatenate([[0.0], solve(A[:, 1:], y)])  # except at m or n = 0
             chi[i, j] = sol[0]
             put(a_c, -m, n, sol[1 : 1 + nl])
             put(b_c, m, -n, sol[1 + nl :])
@@ -442,4 +459,4 @@ def _fit_blocks(S, I, rho, q, C, ms, ns):
         sol = solve(np.column_stack([f[:, None] * Z0, np.ones(nr)]), C[:, am[0], an[n], 1])
         put(b_c, 0, n, sol[:-1])
         alpha[an[n]] = sol[-1]
-    return np.concatenate([chi.ravel(), a_c, b_c]), alpha
+    return np.concatenate([chi.ravel()[S.chi_index], a_c, b_c]), alpha

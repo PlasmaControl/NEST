@@ -123,6 +123,30 @@ class FluxGrid:
         return {"R": R, "phi": phi, "Z": Z, "x": x}
 
 
+def symmetric_half(nodes, NFP, tol=1e-12):
+    """The half theta in [0, pi] of a stellarator-symmetric set of flux-coordinate nodes.
+
+    Stellarator symmetry maps (rho, theta, zeta) to (rho, -theta, -zeta): a symmetric
+    scalar (|F|^2, |B - B_target|^2, ...) takes the same value at a node and at its
+    mirror, so a sum over the full set equals the sum over theta in [0, pi] with each
+    node counted twice, except the nodes on theta = 0 or pi, which are their own
+    mirrors' theta (their mirror, at -zeta, is in the half too). Returns the indices
+    of the half and the multiplicities (1 or 2). Raises if a node's mirror is missing.
+    """
+    nodes = np.asarray(nodes, dtype=float)
+    period = 2 * np.pi / NFP
+    key = lambda t, z: np.round(np.column_stack([nodes[:, 0], np.mod(t, 2 * np.pi),
+                                                 np.mod(z, period)]) / tol).astype(np.int64)
+    have = {tuple(r) for r in key(nodes[:, 1], nodes[:, 2])}
+    mirror = key(-nodes[:, 1], -nodes[:, 2])
+    if not all(tuple(r) in have for r in mirror):
+        raise ValueError("the nodes are not stellarator symmetric (theta, zeta -> -theta, -zeta)")
+    t = np.mod(nodes[:, 1], 2 * np.pi)
+    half = np.flatnonzero(t <= np.pi + tol)
+    edge = (np.abs(t[half]) < tol) | (np.abs(t[half] - np.pi) < tol)
+    return half, np.where(edge, 1.0, 2.0)
+
+
 # -------------------------------------------------------------- inverse map
 @functools.partial(jax.jit, static_argnames=("RZ", "maxiter", "rho_max"))
 def _newton(RZ, target, zeta, rho, theta, maxiter, rho_max):

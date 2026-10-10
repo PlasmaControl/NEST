@@ -123,19 +123,21 @@ class Pressure:
         self.edge_order = edge_order
 
     @classmethod
-    def fit(cls, eq, L=None, M=None, N=None, factors=(3, 3, 2.5), edge_order=None):
+    def fit(cls, eq, L=None, M=None, N=None, factors=(3, 3, 2.5), edge_order=None, sym=False):
         """DESC's p(rho) on a basis of resolution (L, M, N), default that of T.
 
         Only the m = n = 0 modes are fitted (least squares on 4 L + 8 points
         in rho); the others start at zero. Then p = 0 is imposed on rho = 1.
         With ``edge_order`` the fit is of p by w Q (exact when p(rho) is w
-        times a polynomial in rho^2).
+        times a polynomial in rho^2). ``sym``: stellarator-symmetric basis
+        (sym="cos").
         """
         L = int(round(factors[0] * eq.L)) if L is None else L
         M = int(round(factors[1] * eq.M)) if M is None else M
         N = int(round(factors[2] * eq.N)) if N is None else N
         basis = FourierZernikeBasis(
-            L, M, N, NFP=eq.NFP, sym=False, spectral_indexing=eq.spectral_indexing
+            L, M, N, NFP=eq.NFP, sym="cos" if sym else False,
+            spectral_indexing=eq.spectral_indexing
         )
         rho = np.linspace(0, 1, 4 * L + 8)
         p = np.asarray(eq.compute("p", grid=LinearGrid(rho=rho, NFP=eq.NFP))["p"])
@@ -264,14 +266,17 @@ class Pressure:
         b = self.basis
         np.savez_compressed(path, c=self.c, modes=b.modes, L=b.L, M=b.M, N=b.N,
                             NFP=b.NFP, spectral_indexing=b.spectral_indexing,
-                            edge_order=-1 if self.edge_order is None else self.edge_order)
+                            edge_order=-1 if self.edge_order is None else self.edge_order,
+                            sym=str(b.sym))
 
     @classmethod
     def load(cls, path, eq):
         with np.load(path) as f:
+            sym = str(f["sym"]) if "sym" in f else "False"
             basis = FourierZernikeBasis(
                 int(f["L"]), int(f["M"]), int(f["N"]), NFP=int(f["NFP"]),
-                sym=False, spectral_indexing=str(f["spectral_indexing"]),
+                sym=False if sym == "False" else sym,
+                spectral_indexing=str(f["spectral_indexing"]),
             )
             assert np.array_equal(basis.modes, f["modes"]), "basis mode mismatch"
             k = int(f["edge_order"]) if "edge_order" in f else -1

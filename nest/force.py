@@ -33,6 +33,7 @@ import numpy as np
 from desc.grid import QuadratureGrid
 
 from cartesian_grid import cylindrical_to_cartesian, evaluate_chunked
+from grid import symmetric_half
 from magnetic_field import BiotSavart
 
 
@@ -56,24 +57,32 @@ class ForceResidual:
         Precision of J on the box and of the transforms.
     bs_kw : dict
         Other ``BiotSavart`` arguments (eps, upsampfac, R_cut, cache_dir, ...).
+    sym : bool
+        Stellarator symmetry: the points are the half theta in [0, pi] of the grid
+        (``grid.symmetric_half``), with doubled weights off theta = 0, pi; sums of
+        symmetric scalars over them equal those over the whole grid. DESC quantities
+        are computed on the whole grid (surface and volume averages need it).
 
     The points' positions, volume weights, B_ext, the Biot-Savart kernel and
     DESC's normalization do not depend on J or p: computed once, here.
     """
 
     def __init__(self, inp, box, grid=None, eval_chunk=50000, kernel="vico_greengard",
-                 dtype=np.float32, bs_kw=None):
+                 dtype=np.float32, bs_kw=None, sym=False):
         if box.inside is None:
             raise RuntimeError("locate the plasma on the box first (box.locate_plasma)")
         eq = inp.eq
         self.inp, self.box, self.eval_chunk = inp, box, eval_chunk
         self.grid = grid or QuadratureGrid(L=2 * eq.L, M=2 * eq.M, N=2 * eq.N, NFP=eq.NFP)
-        self.rtz = np.asarray(self.grid.nodes)
-        d = inp.compute(["R", "phi", "Z", "sqrt(g)", "<|F|>_vol", "<|grad(|B|^2)|/2mu0>_vol"],
-                        self.grid)
+        nodes = np.asarray(self.grid.nodes)
+        self.sym = bool(sym)
+        self.points, mult = (symmetric_half(nodes, eq.NFP) if sym
+                             else (np.arange(len(nodes)), 1.0))
+        self.rtz = nodes[self.points]
+        d = self._desc(["R", "phi", "Z", "sqrt(g)", "<|F|>_vol", "<|grad(|B|^2)|/2mu0>_vol"])
         self.phi = d["phi"]
         self.x = np.column_stack([d["R"] * np.cos(self.phi), d["R"] * np.sin(self.phi), d["Z"]])
-        self.dV = np.abs(d["sqrt(g)"]) * np.asarray(self.grid.weights)  # volume weights
+        self.dV = np.abs(d["sqrt(g)"]) * np.asarray(self.grid.weights)[self.points] * mult
         self.norm = float(np.ravel(d["<|grad(|B|^2)|/2mu0>_vol"])[0])
         self.F_desc_vol = float(np.ravel(d["<|F|>_vol"])[0])  # DESC's own <|F|>
         self.B_ext = inp.B_ext(self.x, rtz=self.rtz)
@@ -113,9 +122,15 @@ class ForceResidual:
         return {"mean": self.average(f), "rms": float(np.sqrt(self.average(f**2))),
                 "max": float(f.max()), "bins": bins}
 
+    def _desc(self, names):
+        """DESC quantities computed on the whole grid, at the collocation points."""
+        d = self.inp.compute(list(names), self.grid)
+        n = self.grid.num_nodes
+        return {k: v[self.points] if np.ndim(v) and len(v) == n else v for k, v in d.items()}
+
     def desc_fields(self, names=("J", "B", "grad(p)")):
         """DESC quantities at the collocation points; vectors in Cartesian components."""
-        d = self.inp.compute(list(names), self.grid)
+        d = self._desc(names)
         return {k: cylindrical_to_cartesian(d[k], self.phi) if d[k].ndim == 2 else d[k]
                 for k in names}
 

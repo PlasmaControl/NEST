@@ -2,6 +2,15 @@
 
 One entry per commit, newest first.
 
+## 2026-10-10: Stellarator-symmetry option
+- `nest/boundary_potential.py`: `BoundaryPotential.fit(..., sym=True)`: a, b in a sym="cos" basis and chi with odd parity only ((m < 0) xor (n < 0)); `_Structure.chi_allowed`, `chi_index`; `split` scatters u_chi into the (m, n) table. In `_fit_blocks` an even chi_mn (not in the basis) is dropped from its block, whose a, b modes are then fitted without it (they are even only at m = 0 or n = 0). `save`/`load` keep `sym` (files without it load as before).
+- `nest/pressure.py`: `Pressure.fit(..., sym=True)` (sym="cos" basis); `save`/`load` keep `sym`.
+- `nest/grid.py`: `symmetric_half(nodes, NFP)`: the nodes with theta in [0, pi] and their multiplicities (2, or 1 on theta = 0, pi); raises if a node's mirror (-theta, -zeta) is missing.
+- `nest/force.py`: `ForceResidual(..., sym=True)` uses those points, with dV times the multiplicities: sums of symmetric scalars equal the whole-grid sums. DESC quantities are computed on the whole grid and then selected (`_desc`; surface and volume averages need the whole surfaces). `nest/fields.py`: `Fields` sets it from the bases (current and pressure must agree); the D_B cache key includes dV.
+- sym=False is unchanged: fit coefficients, points, dV, B_ext, D_B, x_0, residual and Jacobian identical to the previous commit (4, 4, 3, h = a/4).
+- Symmetric vs full (4, 4, 3, h = a/4): unknowns 190 vs 371, points 585 vs 1105, D_B 1.9 vs 7.1 MB; fitted J 1.8e-13, p identical. With the symmetric field B_DESC - BS_h(J_DESC): field and force terms of a symmetric state on the half grid vs the whole grid 2e-10 and 1e-10 (relative), Gauss-Newton end-state J 4.2e-10. The precise_QA coil set is symmetric only to 1.4e-4 of max |B| (mirror test at the collocation points), so with the coils the half grid sees the symmetrized problem: field term 6e-4 lower than on the whole grid, end-state J 1.9e-3 from the full solve's.
+- Tests: `test_symmetry` (new), `test_boundary_potential`, `test_smooth_edge`, `test_fields`, `test_optimize`, `test_pressure`, `test_force` pass.
+
 ## 2026-10-09: Solve driver, memory in the progress lines
 - `nest/run_solve.py`: the combined objective FieldDistance + lambda^-1 ForceBalance by lambda continuation (lambda_ref = ||r_F(x_0)||^2 / dtol^2, nlam values over the given decades, from field-distance dominated down, warm-started) from the fitted current and the force-optimal pressure; every end state is checked on an independent grid QuadratureGrid(f L, f M, f N) by `ForceResidual.evaluate` of its series (one Biot-Savart application, no D_B). Writes run_solve.json and x_<k>.npy after each lambda. Runs with the existing job scripts: `sbatch run.sbatch nest/run_solve.py ARGS`.
 - `nest/grid.py`: `device_memory()` (XLA peak / in use on the GPU, the host's peak resident size); in the D_B progress lines and, through the driver's callback, in every GN line.

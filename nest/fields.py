@@ -95,15 +95,22 @@ class Fields(ForceResidual):
     cache_dir : str or None
         Save / resume D_B column blocks there (opt-in).
     verbose : bool
+
+    With stellarator-symmetric bases (sym="cos", ``BoundaryPotential.fit(sym=True)``,
+    ``Pressure.fit(sym=True)``) the points are the half theta in [0, pi] of the grid
+    (``ForceResidual(sym=True)``): half the rows and half the columns.
     """
 
     def __init__(self, inp, current, pressure, box, grid=None, kernel="vico_greengard",
                  bs_kw=None, build_D_B=True, col_chunk=4, cache_dir=None, chunk=20000,
                  verbose=True):
         b = current.basis
+        sym = b.sym == "cos"
+        if (pressure.basis.sym == "cos") != sym:
+            raise ValueError("current and pressure bases must both be symmetric or both not")
         grid = grid or QuadratureGrid(L=2 * b.L, M=2 * b.M, N=2 * b.N, NFP=inp.eq.NFP)
         super().__init__(inp, box, grid, eval_chunk=chunk, kernel=kernel, dtype=np.float64,
-                         bs_kw=bs_kw)
+                         bs_kw=bs_kw, sym=sym)
         self.current, self.pressure = current, pressure
         self.chunk, self.verbose = chunk, verbose
         geo = inp.basis_vectors(self.rtz)
@@ -170,7 +177,7 @@ class Fields(ForceResidual):
         eq, b, box = self.inp.eq, self.current.basis, self.box
         h = hashlib.sha256()
         for a in (eq.R_lmn, eq.Z_lmn, np.asarray(box.axes[0]), np.asarray(box.axes[1]),
-                  np.asarray(box.axes[2]), box.inside, self.rtz, b.modes,
+                  np.asarray(box.axes[2]), box.inside, self.rtz, self.dV, b.modes,
                   self.current.chi_modes):
             h.update(np.ascontiguousarray(np.asarray(a)).tobytes())
         h.update(json.dumps([self.current.edge_power, b.NFP, sorted(
