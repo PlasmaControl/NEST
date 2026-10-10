@@ -17,6 +17,9 @@
 3. On the smooth-current precise_QA box (h = a / frac): hockney equals the box
    route at the force-residual points; vico_greengard against hockney, which
    measures the second-order error of the discrete sum.
+4. The Vico-Greengard octant storage, even and odd boxes: the octant unfolds to the
+   rfft layout exactly, ``BiotSavart`` stores the octant, and B from it equals B
+   from the rfft-layout kernel bit for bit.
 
 run: pytest tests/test_biot_savart.py -s     or     python tests/test_biot_savart.py [frac]
 """
@@ -51,7 +54,8 @@ from cartesian_grid import cylindrical_to_cartesian, evaluate_chunked  # noqa: E
 from desc_input import DESCInput  # noqa: E402
 from fourier import fft_J  # noqa: E402
 from grid import CartesianGrid  # noqa: E402
-from magnetic_field import BiotSavart, b_plasma_free, interpolate  # noqa: E402
+from magnetic_field import (BiotSavart, b_plasma_free, interpolate, unfold_octant,  # noqa: E402
+                            vico_greengard_kernel_hat)
 
 EQ = os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_smooth_J",
                   "precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5")
@@ -137,6 +141,24 @@ def check_linear(seed=1):
         assert e32 < 1e-4
 
 
+def check_octant(seed=2):
+    rng = np.random.default_rng(seed)
+    for shape in ((40, 36, 30), (41, 35, 31)):
+        box, _ = blob_box(shape, 0.05, 0.05, cut=9)
+        G = vico_greengard_kernel_hat(box.axes)
+        Go = vico_greengard_kernel_hat(box.axes, octant=True)
+        bs = BiotSavart(box, rng.uniform(-0.3, 0.3, (2000, 3)), chunk=1000)
+        J = jnp.asarray(rng.standard_normal((bs.n_inside, 3)))
+        B_oct = np.asarray(bs.apply(J))
+        C = dict(bs.consts(), K_hat=G)
+        same = np.array_equal(B_oct, np.asarray(bs.apply(J, C)))
+        print(f"box {shape}: kernel {G.shape} -> octant {Go.shape} ({G.nbytes / Go.nbytes:.1f}x "
+              f"smaller); unfolds exactly: {np.array_equal(unfold_octant(Go, shape), G)}; "
+              f"B from the octant identical: {same}")
+        assert bs.consts()["K_hat"].shape == Go.shape
+        assert np.array_equal(unfold_octant(Go, shape), G) and same
+
+
 def check_equilibrium(frac=10):
     inp = DESCInput.load(EQ)
     eq = inp.eq
@@ -169,6 +191,9 @@ try:
     def test_linear():
         check_linear()
 
+    def test_octant():
+        check_octant()
+
     def test_equilibrium():
         check_equilibrium()
 except NameError:
@@ -178,5 +203,6 @@ except NameError:
 if __name__ == "__main__":
     check_blob()
     check_linear()
+    check_octant()
     for frac in [int(f) for f in sys.argv[1:]] or [10]:
         check_equilibrium(frac)

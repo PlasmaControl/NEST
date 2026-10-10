@@ -2,6 +2,15 @@
 
 One entry per commit, newest first.
 
+## 2026-10-10: Vico-Greengard kernel stored as its octant; TODO.md
+- `nest/magnetic_field.py`: G is even in k_x and k_y, so `vico_greengard_kernel_hat(..., octant=True)` returns only the k_x, k_y >= 0 octant, (Nx // 2 + 1, Ny // 2 + 1, Nz // 2 + 1). The default rfft layout is the octant unfolded (`unfold_octant`, index folds min(i, n - i), `octant_folds`). `b_hat_free` takes either layout and unfolds the octant inside jit, where XLA fuses the gather into the product. `BiotSavart` stores the octant. The kernel cache holds the octant (new file name, so old cache files are not read).
+- Equivalence with the previous commit (even 48x40x36 and odd 49x41x35 boxes, random J; precise_QA box at h = a/10, 315x315x96, 4000 targets, random J):
+  - Kernel: 2.2e-17 and 2.1e-17 (relative to max G); `b_plasma_free` 4.8e-16 and 5.6e-16; `BiotSavart` 3.3e-13.
+  - The only change is that G(-k) is now exactly G(k): before, the rfftn left the two sides different by 5.7e-17 of max G. The previous code with the mirrored kernel gives B identical to the new code.
+- Memory on the precise_QA box at h = a/10: the kernel goes from 38.9 to 9.8 MB, and XLA's argument size from 42.3 to 13.2 MB; temp is 1380.1 MB both ways (no full-size copy); one application takes 1.3 s vs 1.0-1.4 s.
+- `TODO.md` (new, linked from the README): open validation, studies, optional features (carried net current, inverse-map failure reporting, a `locate_plasma` cache, field-line tracing, the Hessian check) and memory items.
+- Tests: `test_biot_savart` (+ `test_octant`), `test_magnetic_field`, `test_fourier`, `test_fields`, `test_optimize`, `test_force`, `test_symmetry`, `test_reconstruction::test_manufactured` pass. The manufactured bump converges at rates 5.02 and 5.27, `test_force` iteration 0 gives 4.66e-4, and the precise_QA Hockney vs Vico-Greengard difference is 4.1e-2, all as before.
+
 ## 2026-10-10: Stellarator-symmetry option
 - `nest/boundary_potential.py`: `BoundaryPotential.fit(..., sym=True)`: a, b in a sym="cos" basis and chi with odd parity only ((m < 0) xor (n < 0)); `_Structure.chi_allowed`, `chi_index`; `split` scatters u_chi into the (m, n) table. In `_fit_blocks` an even chi_mn (not in the basis) is dropped from its block, whose a, b modes are then fitted without it (they are even only at m = 0 or n = 0). `save`/`load` keep `sym` (files without it load as before).
 - `nest/pressure.py`: `Pressure.fit(..., sym=True)` (sym="cos" basis); `save`/`load` keep `sym`.

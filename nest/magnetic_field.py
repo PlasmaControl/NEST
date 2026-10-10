@@ -140,8 +140,26 @@ def precompute_shape(axes, R_cut, factor=4):
     return tuple(out)
 
 
-def vico_greengard_kernel_hat(axes, R_cut=None, factor=4, cache_dir=None, dtype=jnp.float64):
-    """G(k) of the truncated Green's function on the rfft modes, real, (Nx, Ny, Nz // 2 + 1).
+def octant_folds(shape):
+    """Per axis, the octant index |m| of each fft position (min(i, n - i)), (x, y)."""
+    return tuple(np.minimum(np.arange(n), n - np.arange(n)) for n in shape[:2])
+
+
+def unfold_octant(G, shape):
+    """The rfft-layout kernel (Nx, Ny, Nz // 2 + 1) from its octant
+    (Nx // 2 + 1, Ny // 2 + 1, Nz // 2 + 1): G(k_x, k_y, k_z) = G(|k_x|, |k_y|, k_z)
+    for a kernel even in k_x and k_y. A gather, fused by XLA into its consumer under
+    jit (no full-size copy); NumPy in, NumPy out."""
+    fx, fy = octant_folds(shape)
+    if isinstance(G, np.ndarray):
+        return G[np.ix_(fx, fy, np.arange(G.shape[2]))]
+    return G[jnp.asarray(fx)[:, None], jnp.asarray(fy)[None, :], :]
+
+
+def vico_greengard_kernel_hat(axes, R_cut=None, factor=4, cache_dir=None, dtype=jnp.float64,
+                              octant=False):
+    """G(k) of the truncated Green's function on the rfft modes, real, (Nx, Ny, Nz // 2 + 1),
+    or with ``octant`` only its k_x, k_y >= 0 octant, (Nx // 2 + 1, Ny // 2 + 1, Nz // 2 + 1).
 
     1. G_R(k) = mu0 (1 - cos k R) / k^2 (k = 0: mu0 R^2 / 2) on the non-negative
        octant of the precompute grid (``precompute_shape``); G_R is even.
@@ -151,8 +169,11 @@ def vico_greengard_kernel_hat(axes, R_cut=None, factor=4, cache_dir=None, dtype=
        of an even axis.
     4. G = h^3 rfft(g), real since g is even, zero on the Nyquist plane of k of an
        even axis (B_hat = i G k x J_hat: a first derivative, not real there).
-    On the host (scipy.fft); cached as .npy in ``cache_dir`` keyed by the box and
-    R_cut.
+    5. G is even in k_x and k_y, so only the octant is kept; the full rfft layout is
+       its unfolding (``unfold_octant``), 4x the memory. ``b_hat_free`` takes
+       either.
+    On the host (scipy.fft); the octant is cached as .npy in ``cache_dir`` keyed by
+    the box and R_cut.
     """
     import scipy.fft as sfft
 
@@ -165,9 +186,10 @@ def vico_greengard_kernel_hat(axes, R_cut=None, factor=4, cache_dir=None, dtype=
         key = hashlib.sha256(repr((shape, np.round(h, 12).tolist(), round(R_cut, 12),
                                    int(factor))).encode()).hexdigest()[:16]
         os.makedirs(cache_dir, exist_ok=True)
-        path = os.path.join(cache_dir, f"vg_kernel_hat_{key}_v2.npy")
+        path = os.path.join(cache_dir, f"vg_kernel_hat_{key}_octant.npy")
         if os.path.exists(path):
-            return jnp.asarray(np.load(path), dtype)
+            G = np.load(path)
+            return jnp.asarray(G if octant else unfold_octant(G, shape), dtype)
     # 1. octant of G_R, modes 0 .. M / 2
     ks = [2 * np.pi * np.arange(m // 2 + 1) / (m * hi) for m, hi in zip(Mp, h)]
     k2 = ks[0][:, None, None] ** 2 + ks[1][None, :, None] ** 2 + ks[2][None, None, :] ** 2
@@ -189,15 +211,17 @@ def vico_greengard_kernel_hat(axes, R_cut=None, factor=4, cache_dir=None, dtype=
     # 4. back to the box modes
     G = sfft.rfftn(gb, workers=-1).real * float(np.prod(h))
     nyq = _broadcast([_not_nyquist(n, half=i == 2) for i, n in enumerate(shape)])
-    G = np.ascontiguousarray(G * nyq[0] * nyq[1] * nyq[2])
+    G = np.ascontiguousarray((G * nyq[0] * nyq[1] * nyq[2])[: shape[0] // 2 + 1,
+                                                              : shape[1] // 2 + 1])
     if path is not None:
         np.save(path, G)
-    return jnp.asarray(G, dtype)
+    return jnp.asarray(G if octant else unfold_octant(G, shape), dtype)
 
 
 def kernel_hat(axes, kernel="vico_greengard", dtype=jnp.float64, **kw):
     """The free-space kernel on the rfft modes: ``vico_greengard_kernel_hat`` (real,
-    (Nx, Ny, Nz // 2 + 1)) or ``biot_savart_kernel_hat`` (complex, (..., 3))."""
+    (Nx, Ny, Nz // 2 + 1), or its octant with ``octant=True``) or
+    ``biot_savart_kernel_hat`` (complex, (..., 3))."""
     if kernel == "vico_greengard":
         return vico_greengard_kernel_hat(axes, dtype=dtype, **kw)
     if kernel == "hockney":
@@ -209,12 +233,14 @@ def b_hat_free(J_hat, K_hat, k, i):
     """Component i of the free-space B_hat on the rfft modes.
 
     ``K_hat`` from ``kernel_hat``: complex (..., 3) is Hockney's, B_hat = mu0 J_hat x
-    K_hat; real (Nx, Ny, Nz // 2 + 1) is the Vico-Greengard G, B_hat = i G k x J_hat,
-    with ``k`` the broadcast rfft wavevectors.
+    K_hat; real (Nx, Ny, Nz // 2 + 1) or its octant is the Vico-Greengard G,
+    B_hat = i G k x J_hat, with ``k`` the broadcast rfft wavevectors.
     """
     j, l = (i + 1) % 3, (i + 2) % 3
     if K_hat.ndim == 4:
         return mu_0 * (J_hat[..., j] * K_hat[..., l] - J_hat[..., l] * K_hat[..., j])
+    if K_hat.shape[:2] != J_hat.shape[:2]:
+        K_hat = unfold_octant(K_hat, J_hat.shape)
     c = k[j] * J_hat[..., l] - k[l] * J_hat[..., j]
     return jax.lax.complex(-K_hat * c.imag, K_hat * c.real)  # i G c; G is real
 
@@ -343,7 +369,8 @@ class BiotSavart:
     units of one complex field on the box: J on the box (real, 3 components: 1.5),
     its half spectrum (1.5), one component of B_hat (0.5), the full spectrum handed
     to the NUFFT (1, or 0.5 with ``half``) and the NUFFT's upsampled grid (about 2,
-    or 1 with ``half``, at upsampfac 1.25).
+    or 1 with ``half``, at upsampfac 1.25). The Vico-Greengard G is stored as its
+    octant (1 / 16 of a complex field; the rfft layout would be 1 / 4).
 
     Parameters
     ----------
@@ -370,7 +397,7 @@ class BiotSavart:
         self.eps, self.upsampfac, self.half = eps, upsampfac, bool(half)
         self.n_targets = len(targets)
         self.chunk = int(min(chunk, max(self.n_targets, 1)))
-        kw = kernel_kw if kernel == "vico_greengard" else {}
+        kw = dict(kernel_kw, octant=True) if kernel == "vico_greengard" else {}
         self._C = {"inside": jnp.asarray(box.inside, dtype=jnp.int32),
                    "t": jnp.asarray(nufft_angles(box.axes, targets), dtype=self.dtype),
                    "k": tuple(jnp.asarray(ki, self.dtype) for ki in wavevectors(box.axes)),

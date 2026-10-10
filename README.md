@@ -19,6 +19,8 @@ free-boundary equilibrium.
 - [x] Jacobian construction (`nest/fields.py`: affine J, B, p; `nest/objectives.py`)
 - [x] Optimization loop over the J coefficients (`nest/optimize.py`: Gauss-Newton trust region, lambda continuation; driver `nest/run_solve.py`)
 
+Open items (validation, studies, optional features, memory): [TODO.md](TODO.md).
+
 # Questions?
 - [ ] Should we raise s in (1-rho^2)^s to 3 or 4?
 - [ ] How do we do the reconstruction of the potential current T (not simply a FZ series anymore) with .fit from DESC?
