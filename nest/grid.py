@@ -48,6 +48,26 @@ def progress(stage, k, n, done, total, t0, extra="", unit="points"):
           f"{dt:.0f}s elapsed, ETA {eta:.0f}s", flush=True)
 
 
+def device_memory():
+    """Memory in GB: XLA's peak and in-use bytes on the first device (GPU; None where JAX
+    does not report them, as on the CPU) and the process's peak resident size on the
+    host. For the progress lines of long builds and solves."""
+    import resource
+    import sys
+
+    out = {}
+    try:
+        st = jax.devices()[0].memory_stats()
+    except Exception:  # noqa: BLE001 (backends without memory statistics)
+        st = None
+    if st:
+        out["xla_peak_GB"] = round(st.get("peak_bytes_in_use", 0) / 1e9, 3)
+        out["xla_in_use_GB"] = round(st.get("bytes_in_use", 0) / 1e9, 3)
+    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss  # bytes on macOS, kB on Linux
+    out["host_peak_GB"] = round(rss / (1e9 if sys.platform == "darwin" else 1e6), 3)
+    return out
+
+
 # ----------------------------------------------------------------------- G1
 class FluxGrid:
     """A DESC grid over one field period and its NFP copies around the torus.

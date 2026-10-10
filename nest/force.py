@@ -102,7 +102,7 @@ class ForceResidual:
     def average(self, q, mask=None):
         """Volume average of q over the collocation points (or a subset)."""
         w = self.dV if mask is None else self.dV * mask
-        return float(np.sum(q * w) / np.sum(w))
+        return float(np.sum(q * w) / np.sum(w)) if np.any(w) else float("nan")  # empty bin
 
     def metrics(self, F, rho_bins=(0.0, 0.5, 0.8, 0.9, 0.95, 1.0)):
         """<|F|>_vol / norm over the plasma and in radial bins; rms and max too."""

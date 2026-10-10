@@ -52,7 +52,7 @@ from desc.grid import QuadratureGrid
 from cartesian_grid import evaluate_chunked
 from desc_input import current_from_sqrtg
 from force import ForceResidual
-from grid import progress
+from grid import device_memory, progress
 
 
 @functools.partial(jax.jit, donate_argnums=0)
@@ -212,7 +212,8 @@ class Fields(ForceResidual):
             if self.verbose and (k == 0 or now - t_last > 30 or k + 1 == len(todo)):
                 progress("D_B", k + 1, len(todo), n_done, sum(min(i + col_chunk, self.n_u) - i
                                                               for i in todo), t0,
-                         f"{(now - t0) / n_done:.2f} s/column", unit="columns")
+                         f"{(now - t0) / n_done:.2f} s/column, memory {device_memory()}",
+                         unit="columns")
                 t_last = now
         return D_B
 

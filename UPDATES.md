@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-09: Solve driver, memory in the progress lines
+- `nest/run_solve.py`: the combined objective FieldDistance + lambda^-1 ForceBalance by lambda continuation (lambda_ref = ||r_F(x_0)||^2 / dtol^2, nlam values over the given decades, from field-distance dominated down, warm-started) from the fitted current and the force-optimal pressure; every end state is checked on an independent grid QuadratureGrid(f L, f M, f N) by `ForceResidual.evaluate` of its series (one Biot-Savart application, no D_B). Writes run_solve.json and x_<k>.npy after each lambda. Runs with the existing job scripts: `sbatch run.sbatch nest/run_solve.py ARGS`.
+- `nest/grid.py`: `device_memory()` (XLA peak / in use on the GPU, the host's peak resident size); in the D_B progress lines and, through the driver's callback, in every GN line.
+- `nest/force.py`: `ForceResidual.average` of an empty radial bin is NaN without a warning (low resolutions).
+- Local check (bases 4, 4, 3, h = a/4, 2 lambdas, evaluation grid 3x): 55 s on the laptop; lambda/ref 10 and 0.1 stop at the rounding level, <|F|>/F_0 1.54e-3 and 5.84e-4 on the solve grid, 1.57e-3 and 6.17e-4 on the evaluation grid; field distance 1.65e-3 and 1.97e-3.
+
 ## 2026-10-09: Pressure: one edge grouping, force-optimal fit
 - `nest/pressure.py`: `_edge_groups` (the (m, n) groups and their lowest-l modes) shared by `impose_zero_edge` and `free_coefficients`; `Pressure.fit_force(rtz, dV, F, G=None)`, the force-optimal pressure for F = J x B (linear least squares on `p_columns`), next to `fit` (DESC's p(rho)).
 - `nest/fields.py`: `fit_pressure` calls `Pressure.fit_force`.
