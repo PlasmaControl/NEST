@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-09: Pressure: one edge grouping, force-optimal fit
+- `nest/pressure.py`: `_edge_groups` (the (m, n) groups and their lowest-l modes) shared by `impose_zero_edge` and `free_coefficients`; `Pressure.fit_force(rtz, dV, F, G=None)`, the force-optimal pressure for F = J x B (linear least squares on `p_columns`), next to `fit` (DESC's p(rho)).
+- `nest/fields.py`: `fit_pressure` calls `Pressure.fit_force`.
+- Equivalence with the previous commit: `impose_zero_edge` and `free_coefficients` identical (random coefficients, basis 6, 6, 4); `fit_pressure` 8.1e-15.
+- Tests: `test_pressure`, `test_fields`, `test_optimize` pass.
+
 ## 2026-10-09: Fields built on ForceResidual; structured term Jacobians; one copy of the D's
 - `nest/fields.py`: `Fields` is now a `ForceResidual` (its points, weights dV, B_ext, normalization, `metrics`, `decompose`, `desc_fields` and Biot-Savart map), plus the affine maps. The D's are stored once, as JAX arrays (`data()` returns them, no copies); D_B is filled in place (donated `dynamic_update_slice`). `state(x, data)` (was `evaluate`, which is `ForceResidual`'s), `objects(x)` (the `BoundaryPotential` and `Pressure` of a state), `report(x)` (`metrics` at a state).
 - `nest/objectives.py`: the Jacobian of a term is d r_p / d f_p (one jvp per field component, all points at once) contracted with the D's: O(m n), as fftq's structured force Jacobian, instead of forward-mode products through D_B u (O(m n^2)); terms declare the fields they use (`uses`). `ForceBalance` is normalized by `ForceResidual.norm` (DESC's <|grad(|B|^2)| / 2 mu0>_vol; before, its rms, 1.10x larger on the test case); targets from `desc_fields`; `summary` adds DESC's measure <|F|>_vol / F_0.

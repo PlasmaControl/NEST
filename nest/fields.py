@@ -262,16 +262,10 @@ class Fields(ForceResidual):
 
     # ---------------------------------------------------------- pressure fit
     def fit_pressure(self, x):
-        """x with the pressure part replaced by the force-optimal one at the current of x:
-        min over x_p of sum dV |J x B - grad p(x_p)|^2 (linear least squares), the
-        pressure block of the Gauss-Newton problem."""
+        """x with the pressure part replaced by the force-optimal one at the current of x
+        (``Pressure.fit_force`` with J x B of x at the collocation points)."""
         u = jnp.asarray(x[: self.n_u])
         J = self.J_0 + self.D_J @ u
         B = (self.B_0 + self.D_B @ u) if self.D_B is not None else jnp.asarray(self.B_direct(u))
-        w = jnp.sqrt(jnp.asarray(self.dV))[:, None]
-        A = (w[:, :, None] * self.D_gp).reshape(-1, self.n_p)
-        y = (w * jnp.cross(J, B)).ravel()
-        s = jnp.linalg.norm(A, axis=0)
-        s = jnp.where(s > 0, s, 1.0)
-        xp = jnp.linalg.lstsq(A / s, y)[0] / s
-        return np.concatenate([np.asarray(u), np.asarray(xp)])
+        p = self.pressure.fit_force(self.rtz, self.dV, jnp.cross(J, B), self.G)
+        return np.concatenate([np.asarray(u), p.free_values()])

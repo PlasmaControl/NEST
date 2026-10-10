@@ -64,6 +64,15 @@ def _p_and_grad(P, RZ, k, rho, theta, zeta, C=None):
     return jnp.concatenate([p[:, None], grad], axis=-1)
 
 
+def _edge_groups(modes):
+    """(group, first) of the p = 0 edge constraint: the (m, n) group of every mode, and
+    the index of the lowest-l mode of each group (``impose_zero_edge``)."""
+    _, g = np.unique(modes[:, 1:], axis=0, return_inverse=True)
+    g = g.ravel()
+    order = np.lexsort((modes[:, 0], g))  # by group, then by l
+    return g, order[np.r_[0, np.flatnonzero(np.diff(g[order])) + 1]]  # lowest l
+
+
 def _p_columns(k, l, m, n, l0, NFP, rho, theta, zeta):
     """(p, d_rho p, d_theta p, d_zeta p) of single free coefficients, (n_points, n_cols, 4).
 
@@ -147,16 +156,14 @@ class Pressure:
         fixes the lowest-l coefficient of each (m, n) group (``impose_zero_edge``):
         those are not free, and each free coefficient c_lmn carries -c_lmn into it.
         """
-        modes = self.basis.modes
+        n = self.basis.num_modes
         if self.edge_order is not None:
-            return np.arange(len(modes)), np.full(len(modes), -1)
-        _, g = np.unique(modes[:, 1:], axis=0, return_inverse=True)
-        g = g.ravel()
-        order = np.lexsort((modes[:, 0], g))
-        first = order[np.r_[0, np.flatnonzero(np.diff(g[order])) + 1]]
-        lowest = {gi: fi for gi, fi in zip(g[first], first)}
-        free = np.array([i for i in range(len(modes)) if lowest[g[i]] != i], dtype=int)
-        return free, np.array([lowest[g[i]] for i in free], dtype=int)
+            return np.arange(n), np.full(n, -1)
+        g, first = _edge_groups(self.basis.modes)
+        lowest = np.empty(g.max() + 1, dtype=int)
+        lowest[g[first]] = first
+        free = np.flatnonzero(lowest[g] != np.arange(n))
+        return free, lowest[g[free]]
 
     def to_coefficients(self, x):
         """All coefficients c from the free ones x (``free_coefficients`` order)."""
@@ -179,6 +186,31 @@ class Pressure:
         return _p_columns_jit(self.edge_order, l, m, n, jnp.asarray(l0), self.basis.NFP,
                               rho, theta, zeta)
 
+    def fit_force(self, rtz, dV, F, G=None):
+        """Copy with the coefficients of the force-optimal pressure for a given J x B:
+
+            min over the free coefficients of sum dV |F - grad p|^2
+
+        at the points ``rtz`` with volume weights ``dV``, F = J x B (n, 3) in Cartesian
+        components (linear least squares on ``p_columns``, columns scaled to unit
+        norm); the pressure block of the Gauss-Newton problem. ``G``: the dual basis
+        at the points (``DESCInput.basis_vectors``), computed if not given.
+        """
+        rtz = np.asarray(rtz, dtype=float)
+        if G is None:
+            from desc_input import DESCInput
+            G = DESCInput(self.eq, check=False).basis_vectors(rtz)["G"]
+        c = self.p_columns(np.arange(len(self.free_coefficients()[0])),
+                           *(jnp.asarray(rtz[:, j]) for j in range(3)))  # (n, k, 4)
+        w = jnp.sqrt(jnp.asarray(dV))[:, None]
+        A = (w[:, :, None] * jnp.einsum("nki,nia->nak", c[..., 1:], jnp.asarray(G)))
+        A = A.reshape(-1, c.shape[1])
+        y = (w * jnp.asarray(F)).ravel()
+        s = jnp.linalg.norm(A, axis=0)
+        s = jnp.where(s > 0, s, 1.0)
+        x = jnp.linalg.lstsq(A / s, y)[0] / s
+        return Pressure(self.basis, np.asarray(self.to_coefficients(x)), self.eq, self.edge_order)
+
     def impose_zero_edge(self):
         """Copy with p = 0 on rho = 1: sum_l c_lmn = 0 for each (m, n).
 
@@ -190,12 +222,8 @@ class Pressure:
         """
         if self.edge_order is not None:
             return self
-        modes = self.basis.modes
-        _, g = np.unique(modes[:, 1:], axis=0, return_inverse=True)
-        g = g.ravel()
+        g, first = _edge_groups(self.basis.modes)
         edge = np.bincount(g, self.c)
-        order = np.lexsort((modes[:, 0], g))  # by group, then by l
-        first = order[np.r_[0, np.flatnonzero(np.diff(g[order])) + 1]]  # lowest l
         c = self.c.copy()
         c[first] -= edge[g[first]]
         return Pressure(self.basis, c, self.eq)
