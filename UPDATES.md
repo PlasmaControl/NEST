@@ -2,6 +2,13 @@
 
 One entry per commit, newest first.
 
+## 2026-10-09: Fields built on ForceResidual; structured term Jacobians; one copy of the D's
+- `nest/fields.py`: `Fields` is now a `ForceResidual` (its points, weights dV, B_ext, normalization, `metrics`, `decompose`, `desc_fields` and Biot-Savart map), plus the affine maps. The D's are stored once, as JAX arrays (`data()` returns them, no copies); D_B is filled in place (donated `dynamic_update_slice`). `state(x, data)` (was `evaluate`, which is `ForceResidual`'s), `objects(x)` (the `BoundaryPotential` and `Pressure` of a state), `report(x)` (`metrics` at a state).
+- `nest/objectives.py`: the Jacobian of a term is d r_p / d f_p (one jvp per field component, all points at once) contracted with the D's: O(m n), as fftq's structured force Jacobian, instead of forward-mode products through D_B u (O(m n^2)); terms declare the fields they use (`uses`). `ForceBalance` is normalized by `ForceResidual.norm` (DESC's <|grad(|B|^2)| / 2 mu0>_vol; before, its rms, 1.10x larger on the test case); targets from `desc_fields`; `summary` adds DESC's measure <|F|>_vol / F_0.
+- `nest/desc_input.py`: `B_ext(x, rtz=)` (a field defined through flux coordinates, `DESCExternalField.at_flux`, needs no inverse map); `nest/force.py`: `ForceResidual` uses it, and `desc_fields(names)` takes any DESC quantities.
+- Equivalence with the previous commit (4, 4, 3 precise_QA, terms field, force, pressure 0.5, current 0.3 with the previous normalizations): residual 5.1e-14, Jacobian 9.5e-16; points, dV, B_ext 7e-16 to 1.3e-15; `fit_pressure` 8.1e-15. Synthetic D's, float64: structured vs forward-mode Jacobian 2.5e-16 to 2.9e-16, 1.47 s -> 0.06 s at 30,000 x 1,800 and 16.5 s -> 0.48 s at 60,000 x 3,500.
+- Tests: `test_fields`, `test_optimize`, `test_force` pass (`test_force` iteration 0 still 4.66e-4).
+
 ## 2026-10-09: One geometry for every series; evaluate_chunked with per-point arrays
 - `nest/desc_input.py`: `covariant_basis` (e_rho, e_theta, e_zeta and sqrt(g) of the geometry series, JAX), `dual_basis`, `current_from_sqrtg` (J = sum_i sqrt(g) J^i e_i / sqrt(g)); `DESCInput.basis_vectors(rtz)` (tangent and dual basis, sqrt(g), positions, in Cartesian components).
 - `boundary_potential._current`, `current_potential._J_from_T` and `pressure._p_and_grad` use them instead of their own copies of the geometry; `fields.py` uses `basis_vectors` and `current_from_sqrtg` instead of its own geometry and assembly.

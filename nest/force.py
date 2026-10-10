@@ -76,7 +76,7 @@ class ForceResidual:
         self.dV = np.abs(d["sqrt(g)"]) * np.asarray(self.grid.weights)  # volume weights
         self.norm = float(np.ravel(d["<|grad(|B|^2)|/2mu0>_vol"])[0])
         self.F_desc_vol = float(np.ravel(d["<|F|>_vol"])[0])  # DESC's own <|F|>
-        self.B_ext = inp.B_ext(self.x)
+        self.B_ext = inp.B_ext(self.x, rtz=self.rtz)
         self.bs = BiotSavart(box, self.x, kernel=kernel, dtype=dtype, **(bs_kw or {}))
 
     def _series(self, evaluator, rtz):
@@ -113,10 +113,11 @@ class ForceResidual:
         return {"mean": self.average(f), "rms": float(np.sqrt(self.average(f**2))),
                 "max": float(f.max()), "bins": bins}
 
-    def desc_fields(self):
-        """DESC's J, B and grad p at the collocation points (Cartesian components)."""
-        d = self.inp.compute(["J", "B", "grad(p)"], self.grid)
-        return {k: cylindrical_to_cartesian(d[k], self.phi) for k in ("J", "B", "grad(p)")}
+    def desc_fields(self, names=("J", "B", "grad(p)")):
+        """DESC quantities at the collocation points; vectors in Cartesian components."""
+        d = self.inp.compute(list(names), self.grid)
+        return {k: cylindrical_to_cartesian(d[k], self.phi) if d[k].ndim == 2 else d[k]
+                for k in names}
 
     def decompose(self, out, desc=None):
         """F = F_desc + (J - J_desc) x B_desc + J x (B - B_desc) - (grad p - grad p_desc)."""

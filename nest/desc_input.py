@@ -245,10 +245,16 @@ class DESCInput:
         return {k: np.concatenate(v) for k, v in out.items()}
 
     # --------------------------------------------------------- external field
-    def B_ext(self, x, source_grid=None, chunk_size=None):
-        """External field at Cartesian points x, shape (n, 3), in (B_x, B_y, B_z) [T]."""
+    def B_ext(self, x, source_grid=None, chunk_size=None, rtz=None):
+        """External field at Cartesian points x, shape (n, 3), in (B_x, B_y, B_z) [T].
+
+        ``rtz``: the flux coordinates of the points, if known; a field defined
+        through them (``DESCExternalField.at_flux``) then needs no inverse map.
+        """
         if self.field is None:
             raise ValueError(f"{self.name}: no external field was given")
+        if rtz is not None and hasattr(self.field, "at_flux"):
+            return np.asarray(self.field.at_flux(rtz, x))
         return np.asarray(self.field.compute_magnetic_field(
             np.asarray(x, dtype=float), basis="xyz", source_grid=source_grid,
             chunk_size=chunk_size))

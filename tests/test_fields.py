@@ -65,7 +65,7 @@ def setup(frac):
 
 
 def force(F, x):
-    d = F.evaluate(jnp.asarray(x), F.data())
+    d = F.state(jnp.asarray(x), F.data())
     f = np.cross(d["J"], d["B"]) - np.asarray(d["grad_p"])
     return float(np.sqrt(np.sum(F.dV[:, None] * f**2) / np.sum(F.dV[:, None] * d["grad_p"]**2)))
 
@@ -82,7 +82,7 @@ def check_fields(frac=4):
               f"identical: {np.array_equal(F.D_B, F2.D_B)}")
         assert np.array_equal(F.D_B, F2.D_B)
     x = F.initial_state()
-    d = F.evaluate(jnp.asarray(x), F.data())
+    d = F.state(jnp.asarray(x), F.data())
     J_ref = cylindrical_to_cartesian(evaluate_chunked(current.point_evaluator(), F.rtz), F.phi)
     pg = evaluate_chunked(pressure.point_evaluator(), F.rtz)
     errs = {"J": rel(d["J"], J_ref), "p": rel(d["p"], pg[:, 0]),
