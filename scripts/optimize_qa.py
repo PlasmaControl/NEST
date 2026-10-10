@@ -36,7 +36,7 @@ from desc_input import DESCInput  # noqa: E402
 from force import ForceResidual  # noqa: E402
 from grid import CartesianGrid  # noqa: E402
 from objective import (CurrentError, FieldError, Fields, ForceBalance,  # noqa: E402
-                       ObjectiveFunction, PressureError)
+                       ObjectiveFunction, PressureEnergy, PressureError)
 from optimize import levenberg_marquardt  # noqa: E402
 from precondition import BlockPreconditioner, mode_groups, mode_labels  # noqa: E402
 from pressure import Pressure  # noqa: E402
@@ -69,9 +69,10 @@ def main():
     ap.add_argument("--check", type=float, default=3,
                     help="independent check grid resolution / resolution of F")
     ap.add_argument("--check-frac", type=int, default=None,
-                    help="box of the independent check, h = a / check-frac (default 2 frac)")
+                    help="box of the independent check, h = a / check-frac (default 2 frac, "
+                         "at most a/20 unless frac is finer)")
     ap.add_argument("--check-kernel", default="truncated", choices=["hockney", "truncated"])
-    for k in ("force", "B", "J", "p"):
+    for k in ("force", "B", "J", "p", "W"):
         ap.add_argument(f"--w-{k}", type=float, default=1.0 if k == "force" else 0.0)
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "opt"))
     a = ap.parse_args()
@@ -89,8 +90,9 @@ def main():
     res = lambda f: tuple(int(round(f * (u + v))) for u, v in ((b.L, eq.L), (b.M, eq.M), (b.N, eq.N)))
     fr = ForceResidual(inp, box, resolution=res(a.colloc))
     fields = Fields(fr, cur, pre, kernel=a.kernel)
-    weights = {"force": a.w_force, "B": a.w_B, "J": a.w_J, "p": a.w_p}
-    classes = {"force": ForceBalance, "B": FieldError, "J": CurrentError, "p": PressureError}
+    weights = {"force": a.w_force, "B": a.w_B, "J": a.w_J, "p": a.w_p, "W": a.w_W}
+    classes = {"force": ForceBalance, "B": FieldError, "J": CurrentError, "p": PressureError,
+               "W": PressureEnergy}
     obj = ObjectiveFunction([classes[k](w) for k, w in weights.items() if w > 0], fields).build()
     free = np.ones(obj.dim_x, bool) if a.free == "all" else np.arange(obj.dim_x) < fields.n_u
     print(f"{inp}\nbox {box.shape}, collocation {fr.tgrid.shape}, unknowns {obj.dim_x:,} "
@@ -126,7 +128,7 @@ def main():
     del obj, fields, P
     jax.clear_caches()
     gc.collect()
-    cf = a.check_frac or 2 * a.frac
+    cf = a.check_frac or min(2 * a.frac, max(a.frac, 20))  # a/30 is beyond one A100
     cbox = CartesianGrid.periodic_box(inp, inp.a / cf, odd=sym).locate_plasma(inp)
     chk = ForceResidual(inp, cbox, resolution=res(a.check))
     fc = Fields(chk, cur, pre, kernel=a.check_kernel)

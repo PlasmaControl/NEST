@@ -18,7 +18,7 @@ free-boundary equilibrium.
 - [x] B = B_ext + B_plasma and force residual J x B - grad p inside the plasma (`nest/force.py`)
 - [x] Jacobian construction: matrix-free J v and J^T w, explicit columns (`nest/objective.py`, `nest/jacobian.py`)
 - [x] Optimization loop over the J coefficients: Levenberg-Marquardt with a block preconditioner (`nest/optimize.py`, `nest/precondition.py`, `scripts/optimize_qa.py`)
-- [ ] Force balance below DESC's own (now 1.09e-4 against 4.24e-5; see `OPTIMIZATION_STATUS.md`)
+- [x] Force balance below DESC's own: 2.75e-5 (checked on a finer box) against 4.24e-5, with the pressure free and the stored energy held (`OPTIMIZATION_STATUS.md`)
 
 # Questions?
 - [ ] Should we raise s in (1-rho^2)^s to 3 or 4?

@@ -159,3 +159,36 @@ Production setup: a/10 box, 2× collocation (1.65M points, 5M residuals), 90,408
 - Edge band ρ > 0.95: 6.4e-4 → 7.4e-5.
 - DESC's own value: 4.24e-5.
 - The Jacobi preconditioner had stalled at 1.8e-4.
+
+## Update (2026-10-10): below DESC's force error
+
+### Why the force error stalled around 1e-4
+At the fixed-pressure optimum (1.09e-4), F splits along b = B/|B| into two parts:
+- F_par = −b·∇p, which no current can change, is 8.5e-5: most of the total.
+- F_perp, the part J balances, is 4.8e-5, already at DESC's level.
+
+The pressure was frozen to DESC's profile, so its isosurfaces were DESC's flux surfaces. DESC's own field lies on them exactly (b_DESC·∇p ≈ 1e-17). The self-consistent coil-plus-plasma field differs from DESC's B by about 2e-3, and its field lines cross those surfaces, mostly in the core (`scripts/decompose_opt.py`).
+
+A finer box (a/20) and the truncated kernel do not lower this floor; a larger potential basis (205k unknowns) lowers it only to 9.5e-5.
+
+### Solution
+Free the pressure together with the current, and hold its volume average (the stored energy) with a `PressureEnergy` objective. That objective is one residual with weight 10; without it, F also drops by deflating the pressure.
+
+Run: `optimize_qa.py --free all --w-W 10`, started from the fixed-pressure optimum, a/10 box, truncated kernel, 100 iterations, 29 min.
+
+| | ⟨\|F\|⟩/norm on its own a/10 grid | Independent check: a/20 box, truncated kernel, 3× grid |
+|---|---|---|
+| Start (fits) | 4.68e-4 | 4.67e-4 |
+| Fixed pressure, optimized | 1.09e-4 | ~1.8e-4 |
+| **Free pressure + energy held** | **1.69e-5** | **2.75e-5** |
+| DESC (its own field) | 4.24e-5 | |
+
+On the check, every radial band is below DESC, from 2.0e-5 to 3.2e-5.
+
+What changed in the free-pressure solution:
+- F_par: 8.5e-5 → 9.6e-6.
+- F_perp: 4.8e-5 → 1.2e-5.
+- Pressure: rms change 2.7% (max 3.6%), ⟨p⟩ conserved exactly, axis pressure × 0.9993.
+- p is no longer constant on DESC's surfaces (b_DESC·∇p = 1.3e-4): it follows the field lines of the self-consistent field.
+
+Running: the same optimization continued on the a/20 box, to bring down the error it shows on the a/20 check.

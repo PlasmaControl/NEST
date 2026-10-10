@@ -30,6 +30,7 @@ so |scaled error|^2 = weight^2 <|compute - target|^2>_vol / normalization^2.
     FieldError     B                   target B_desc    normalization rms |B_desc|
     CurrentError   J                   target J_desc    normalization rms |J_desc|
     PressureError  p                   target p_desc    normalization rms p_desc
+    PressureEnergy <p>_vol (one value)  target at x0     normalization the target
 
 ``ObjectiveFunction`` concatenates the scaled errors (``compute_scaled_error``),
 gives the scalar |f|^2 / 2 (``compute_scalar``), J v and J^T w without forming
@@ -436,6 +437,31 @@ class PressureError(_Objective):
 
     def _default_normalization(self, fields):
         return fields.rms["p"]
+
+
+class PressureEnergy(_Objective):
+    """The volume average of p (the stored energy, 3/2 of it) held at its start:
+    one residual, weight (<p>_vol - target) / target. With the pressure free,
+    lets its surfaces move but not the plasma deflate (F -> 0 with p -> 0)."""
+
+    name, quantity = "W", "p"
+
+    def build(self, fields):
+        if self.target is None:
+            p0 = fields.compute(fields.x0)["p"]
+            self.target = jnp.sum(fields.sw**2 * p0)
+        if self.normalization is None:
+            self.normalization = float(self.target)
+        self.target = jnp.asarray(self.target)
+        self.dim_f = 1
+        self._sw = fields.sw
+        return self
+
+    def compute(self, f):
+        return jnp.sum(self._sw**2 * f["p"])[None]
+
+    def compute_scaled_tangent(self, e):
+        return self.weight * e / self.normalization
 
 
 class ObjectiveFunction:

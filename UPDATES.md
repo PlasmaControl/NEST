@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-10: Free pressure with the stored energy held: force balance below DESC's
+- `nest/objective.py`: `PressureEnergy`, <p>_vol held at its start (one residual), so that the pressure can be freed without the plasma deflating; `SpectralInterpolator` one field component at a time (a third of the fine-grid memory; a/20 peak 12.9 -> 9.5 GB).
+- `nest/precondition.py`: block Gram matrices accumulated over radial slabs (bounded memory), blocks padded to a few sizes; fast path also with pressure-only objectives.
+- `scripts/optimize_qa.py`: truncated kernel by default; independent check on a finer box (2 x, at most a/20) and grid; `--w-W`, `--start`; device memory freed before the check. `scripts/decompose_opt.py`: F split along b (F_par = -b.grad p, which no current can change) and across, and the change of p.
+- Result (smooth-current precise_QA, a/10, truncated kernel): with p fixed to DESC's profile the force error stalls at 1.09e-4, mostly F_par (DESC's surfaces are not exactly flux surfaces of the coil + plasma field). With p free and the stored energy held: <|F|>/norm 1.69e-5, and 2.75e-5 on the a/20 check, against DESC's 4.24e-5; p changes by 2.7 % rms. See `OPTIMIZATION_STATUS.md`.
+
 ## 2026-10-10: Objective, Jacobian, optimizer and preconditioner; speed and memory
 - `nest/objective.py`: DESC-like `ObjectiveFunction` with ForceBalance, FieldError, CurrentError and PressureError (weights, targets, normalizations). `Fields` evaluates J, B, p and F at a tensor collocation grid: J and p by tensor evaluation, B_plasma from J on the box (cached flux-grid to box interpolation, as one gather), a Hockney-Eastwood or truncated kernel, and `SpectralInterpolator` (type-2 non-uniform FFT split so that the point-dependent part is cached; one component at a time). The derivative is explicit (dF = J_lin x B + J x B_lin - grad p): J v is one evaluation, J^T w its transpose; the linearization keeps only J and B at the points.
 - `nest/flux_interp.py` (tensor grids, factors, geometry, current, pressure, Lagrange interpolation), `nest/batching.py`, `nest/jacobian.py`.

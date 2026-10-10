@@ -66,6 +66,8 @@ def _columns(obj, x):
         # p_col(c) is affine only through the fixed edge order: linear here
         out = []
         for o in obj.objectives:
+            if o.dim_f == 1:  # a single scalar (PressureEnergy): rank one, left out
+                continue
             s = o.weight / o.normalization
             if o.quantity == "F":
                 out.append(s * sw * (jnp.cross(J, B) - gp))
@@ -220,7 +222,8 @@ class BlockPreconditioner:
         fields = obj.fields
         # blocks of the current potential: restricted tables (``_u_block_gram``)
         fast = {}
-        if structure is not None and all(o.quantity in ("F", "J") for o in obj.objectives):
+        # (objectives of p alone do not depend on u; FieldError, nonlocal, is dropped)
+        if structure is not None:
             ug = [gi for gi, g in enumerate(groups) if g.max() < fields.n_u]
             if ug:
                 arrays = _u_block_arrays(structure, [groups[i] for i in ug], fields.n_u)
