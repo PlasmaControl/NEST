@@ -2,6 +2,18 @@
 
 One entry per commit, newest first.
 
+## 2026-10-11: Finite-beta free-boundary benchmarks with net current and their coils
+- `desc_input/vmec_free_boundary/`: three published VMEC free-boundary runs with their coils, re-solved in DESC on the VMEC LCFS:
+  - NCSX c09r00: <beta> 4.1 %, I = -179 kA;
+  - QH: 5 %, bootstrap current -2.3 MA, coils from Wiedman et al. 2024;
+  - CTH-like: 0.19 %, 43 kA.
+- B.n/|B| in the coils is 2-4e-3 rms. The DESC force error is 2-7e-3.
+- `vmec_profiles.py` rebuilds p and I from the VMEC input definitions as even series in rho. The `VMECIO.load` spline of the current makes iota spike at the axis.
+- NCSX at L = M = 16, N = 12: the DESC force error is 5.8e-4. NEST (`optimize_qa.py --refine 20`) brings it to 5.2e-5, 11x below DESC.
+- Without a profile constraint NEST moves the current to the axis (iota0 0.35 -> 0.56). With `--w-J 1e-3`, iota stays within 0.02 of DESC and F reaches 6.2e-5. The 3/5, 3/6, 6/11, 3/7 and 2/3 island chains appear.
+- `poincare.py` and `poincare_flux.py`: Poincare sections of a NEST solution in DESC flux coordinates, with the iota of each traced line. Figures are in `figures/ncsx_*`.
+- `run_della.sbatch`: XLA_PYTHON_CLIENT_MEM_FRACTION is 0.90, as on Stellar. At the default 75 %, the NCSX coil field ran out of memory on a 40 GB A100.
+
 ## 2026-10-10: Free pressure with the stored energy held: force balance below DESC's
 - `nest/objective.py`: `PressureEnergy`, <p>_vol held at its start (one residual), so that the pressure can be freed without the plasma deflating; `SpectralInterpolator` one field component at a time (a third of the fine-grid memory; a/20 peak 12.9 -> 9.5 GB).
 - `nest/precondition.py`: block Gram matrices accumulated over radial slabs (bounded memory), blocks padded to a few sizes; fast path also with pressure-only objectives.

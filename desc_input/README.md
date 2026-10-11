@@ -34,6 +34,7 @@ to zero at the boundary.
 |---|---|
 | `precise_QA_free_boundary/` | how `precise_QA_free_boundary_L16N14.h5` was built: finite β by continuation, free boundary at L = M = N = 12, re-solve at 16/16/14 |
 | `precise_QA_free_boundary_smooth_J/` | the smooth-current versions and every test made on the way, with numbers and figures |
+| `vmec_free_boundary/` | published VMEC free-boundary runs at finite β with net current and their coils (NCSX 4.1 %, QH 5 % with bootstrap current, CTH-like), re-solved in DESC on the VMEC LCFS |
 
 ## How the free-boundary solves work
 
