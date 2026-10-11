@@ -2,6 +2,9 @@
 
 One entry per commit, newest first.
 
+## 2026-10-11: run_della.sbatch: compilation cache and platform allocator, as on Stellar
+- `run_della.sbatch` now matches `run.sbatch`: a persistent JAX compilation cache in `.cache/jax`, and the platform allocator (override with `--export=ALL,XLA_PYTHON_CLIENT_ALLOCATOR=default`).
+
 ## 2026-10-11: Default workflow: free pressure with p >= 0, --refine, --eq/--coils; validation and island scripts
 - `scripts/optimize_qa.py` defaults: pressure free, stored energy held (`--w-W 10`), p >= 0 (`--w-pos 10`), up to 100 iterations per box.
   - `--refine 20` continues on finer boxes.

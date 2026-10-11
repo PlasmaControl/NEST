@@ -17,6 +17,13 @@ set -euo pipefail
 cd "$SLURM_SUBMIT_DIR"
 ENV=/scratch/gpfs/EKOLEMEN/lk1158/conda-envs/nest-gpu
 export NEST_DEVICE=gpu JAX_ENABLE_X64=true XLA_PYTHON_CLIENT_PREALLOCATE=false
+# compiled programs reused across jobs and tests (results unchanged; the first run fills it)
+export JAX_COMPILATION_CACHE_DIR=${JAX_COMPILATION_CACHE_DIR:-$SLURM_SUBMIT_DIR/.cache/jax}
+export JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0 JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES=-1
+# the platform allocator (no pool): ~7% slower per iteration than the default pool,
+# but long runs and large boxes cannot fail on a fragmented pool; override with
+# --export=ALL,XLA_PYTHON_CLIENT_ALLOCATOR=default (e.g. for memory_stats)
+export XLA_PYTHON_CLIENT_ALLOCATOR=${XLA_PYTHON_CLIENT_ALLOCATOR:-platform}
 # JAX may use up to 90% of the GPU (default 75%: the NCSX coil field needs 17 GB more
 # than that leaves on a 40 GB A100); the rest for cuFFT plans and the like
 export XLA_PYTHON_CLIENT_MEM_FRACTION=${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.90}  # override: sbatch --export=ALL,XLA_PYTHON_CLIENT_MEM_FRACTION=...
