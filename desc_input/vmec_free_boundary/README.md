@@ -144,9 +144,6 @@ Figures:
 - `figures/ncsx_opt_L16M16N12_wJ1e-3_poincare_flux.png`
 - `figures/ncsx_opt_L16M16N12_wJ1e-2_poincare_flux.png`
 
-The NEST runs above used `optimize_qa.py` options that are not committed yet:
-`--eq`, `--coils`, `--refine`, and the free-pressure defaults (`--w-W 10`,
-`--w-pos 10`).
 
 Run on Della, in jobs of 59 min or less for the gpu-test QOS:
 

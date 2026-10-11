@@ -31,6 +31,7 @@ so |scaled error|^2 = weight^2 <|compute - target|^2>_vol / normalization^2.
     CurrentError   J                   target J_desc    normalization rms |J_desc|
     PressureError  p                   target p_desc    normalization rms p_desc
     PressureEnergy <p>_vol (one value)  target at x0     normalization the target
+    PressurePositivity min(p, 0)        target 0         normalization rms p_desc
 
 ``ObjectiveFunction`` concatenates the scaled errors (``compute_scaled_error``),
 gives the scalar |f|^2 / 2 (``compute_scalar``), J v and J^T w without forming
@@ -70,6 +71,9 @@ class Fields(_Pytree):
     pressure : Pressure
         Fixed basis and edge order; its coefficients are the start.
     kernel : "hockney" or "truncated"
+    share : Fields, optional
+        Another ``Fields`` on the same box (and current): its flux grid, box
+        interpolation and kernel are reused; only the collocation side is built.
     flux_grid : TensorGrid, optional
         Uniform flux grid for J at the box points; default (4 L, 6 M, 4 N) of
         the potential's basis (half the zeta range with symmetry).
@@ -86,7 +90,7 @@ class Fields(_Pytree):
                 "K_hat", "t", "to_points")
 
     def __init__(self, force, current, pressure, kernel="hockney", flux_grid=None, order=4,
-                 dtype=jnp.float32, chunk=65536):
+                 dtype=jnp.float32, chunk=65536, share=None):
         eq, box = force.inp.eq, force.box
         self.force, self.kernel, self.dtype, self.chunk = force, kernel, dtype, chunk
         self.sym = force.sym
@@ -109,6 +113,12 @@ class Fields(_Pytree):
         self._desc = {}  # DESC's fields at the points and their rms, on first use
         self.norm = force.norm
 
+        if share is not None:  # the box side of another Fields on the same box
+            for k in ("J_flux", "half", "half_rows", "to_box", "box_phi", "src", "shape", "axes",
+                      "K_hat", "_solve"):
+                setattr(self, k, getattr(share, k))
+            self._points(force, box, dtype, chunk)
+            return
         # J at the box points: uniform flux grid, cached interpolation
         b = current.basis
         fg = flux_grid or TensorGrid.uniform(4 * b.L, 2 * (3 * b.M), max(4 * b.N, 8), eq.NFP,
@@ -149,6 +159,10 @@ class Fields(_Pytree):
             self._solve = b_plasma_truncated
         else:
             raise ValueError(f"kernel {kernel!r}")
+        self._points(force, box, dtype, chunk)
+
+    def _points(self, force, box, dtype, chunk):
+        """The collocation points as angles of the box period, and their interpolator."""
         x0 = np.array([a[0] for a in box.axes])
         L = np.array([len(a) * (a[1] - a[0]) for a in box.axes])
         t = 2 * np.pi * (force.x - x0) / L
@@ -390,6 +404,11 @@ class _Objective:
     def compute_scaled_error(self, f):
         return self.compute_scaled_tangent(self.compute(f) - self.target)
 
+    def tangent(self, d, base):
+        """The derivative of ``compute`` from the derivative of the fields d (base:
+        J, B, p at x); ``compute`` is linear in the fields unless overridden."""
+        return self.compute(d)
+
     def compute_scaled_tangent(self, e):
         """The scaling of the error (weight sqrt(dV/V) / normalization) applied to e:
         the derivative of the scaled error from that of the quantity."""
@@ -446,10 +465,14 @@ class PressureEnergy(_Objective):
 
     name, quantity = "W", "p"
 
+    def __init__(self, weight=1.0, target=None, normalization=None, scale=1.0):
+        super().__init__(weight, target, normalization)
+        self.scale = float(scale)  # default target: scale x <p>_vol of the fits
+
     def build(self, fields):
         if self.target is None:
             p0 = fields.compute(fields.x0)["p"]
-            self.target = jnp.sum(fields.sw**2 * p0)
+            self.target = self.scale * jnp.sum(fields.sw**2 * p0)
         if self.normalization is None:
             self.normalization = float(self.target)
         self.target = jnp.asarray(self.target)
@@ -462,6 +485,26 @@ class PressureEnergy(_Objective):
 
     def compute_scaled_tangent(self, e):
         return self.weight * e / self.normalization
+
+
+class PressurePositivity(_Objective):
+    """min(p, 0) -> 0: a one-sided penalty, zero wherever p >= 0, normalized by
+    rms p_desc. Its derivative is dp where p < 0 at x (the active set)."""
+
+    name, quantity = "p<0", "p"
+    local_columns = False  # its derivative depends on the active set (``precondition``)
+
+    def _default_normalization(self, fields):
+        return fields.rms["p"]
+
+    def _default_target(self, fields):
+        return 0.0
+
+    def compute(self, f):
+        return jnp.minimum(f["p"], 0.0)
+
+    def tangent(self, d, base):
+        return jnp.where(base["p"] < 0, d["p"], 0.0)
 
 
 class ObjectiveFunction:
@@ -517,13 +560,14 @@ class ObjectiveFunction:
         the collocation points at x, kept here. J v evaluates the linear map, J^T w
         is its transpose (``jax.linear_transpose``: a backward pass without a
         forward one). Nothing derived from the caches is stored."""
-        r, J0, B0 = _base(self, x, self.fields)
-        return (r, (lambda v: _lin(self, v, J0, B0, self.fields)),
-                (lambda w: _lin_T(self, w, J0, B0, self.fields)))
+        r, base = _base(self, x, self.fields)
+        return (r, (lambda v: _lin(self, v, base, self.fields)),
+                (lambda w: _lin_T(self, w, base, self.fields)))
 
-    def _lin_impl(self, v, J0, B0, fields):
-        d = fields._tangent(v, J0, B0)
-        return jnp.concatenate([o.compute_scaled_tangent(o.compute(d)) for o in self.objectives])
+    def _lin_impl(self, v, base, fields):
+        d = fields._tangent(v, base["J"], base["B"])
+        return jnp.concatenate([o.compute_scaled_tangent(o.tangent(d, base))
+                                for o in self.objectives])
 
     def jac_scaled_error(self, x, cols=None, batch=16):
         """Explicit Jacobian columns (all by default: small problems only)."""
@@ -574,15 +618,15 @@ def _scaled(objfun, x, fields):
 def _base(objfun, x, fields):
     f = fields._compute(x)
     r = jnp.concatenate([o.compute_scaled_error(f) for o in objfun.objectives])
-    return r, f["J"], f["B"]
+    return r, {"J": f["J"], "B": f["B"], "p": f["p"]}
 
 
 @functools.partial(jax.jit, static_argnums=0)
-def _lin(objfun, v, J0, B0, fields):
-    return objfun._lin_impl(v, J0, B0, fields)
+def _lin(objfun, v, base, fields):
+    return objfun._lin_impl(v, base, fields)
 
 
 @functools.partial(jax.jit, static_argnums=0)
-def _lin_T(objfun, w, J0, B0, fields):
+def _lin_T(objfun, w, base, fields):
     x = jax.ShapeDtypeStruct((objfun.dim_x,), w.dtype)
-    return jax.linear_transpose(lambda v: objfun._lin_impl(v, J0, B0, fields), x)(w)[0]
+    return jax.linear_transpose(lambda v: objfun._lin_impl(v, base, fields), x)(w)[0]

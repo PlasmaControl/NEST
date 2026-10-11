@@ -66,7 +66,7 @@ class ForceResidual:
     DESC's, on its QuadratureGrid(2 L, 2 M, 2 N).
     """
 
-    def __init__(self, inp, box, resolution=None, sym=None, eval_chunk=50000):
+    def __init__(self, inp, box, resolution=None, sym=None, eval_chunk=50000, rho_slice=None):
         if box.inside is None:
             raise RuntimeError("locate the plasma on the box first (box.locate_plasma)")
         eq = inp.eq
@@ -75,6 +75,8 @@ class ForceResidual:
         L, M, N = resolution or (2 * eq.L, 2 * eq.M, 2 * eq.N)
         x, w_r = np.polynomial.legendre.leggauss(L // 2 + 1)
         rho, w_r = (x + 1) / 2, w_r / 2
+        if rho_slice is not None:  # a part of the radii (e.g. to evaluate in pieces)
+            rho, w_r = rho[rho_slice], w_r[rho_slice]
         theta = 2 * np.pi * np.arange(2 * M + 1) / (2 * M + 1)
         if self.sym:
             n_z = N + 1

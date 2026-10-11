@@ -192,3 +192,81 @@ What changed in the free-pressure solution:
 - p is no longer constant on DESC's surfaces (b_DESC·∇p = 1.3e-4): it follows the field lines of the self-consistent field.
 
 Running: the same optimization continued on the a/20 box, to bring down the error it shows on the a/20 check.
+
+## Update (2026-10-11): continued on a/20, validation, tests
+
+### Continued on the a/20 box (free pressure, stored energy held)
+`--start results/freeP.npz --frac 20`, 100 iterations, 78 min.
+
+| | ⟨\|F\|⟩/norm |
+|---|---|
+| On its own a/20 box | 8.21e-6 |
+| On the 3× collocation check grid | 8.26e-6 |
+| Evaluated on an a/25 box (box convergence) | 8.81e-6 |
+| DESC | 4.24e-5 |
+
+Every radial band is below 1.1e-5.
+
+### Validation (`scripts/validate_opt.py`)
+- **Current:** the net toroidal current through two cross-sections equals I to 4e-15, and J = 0 on the LCFS.
+- **Exact J:** F with J evaluated exactly at the box points agrees with the objective's interpolated J to 0.2% (Hockney–Eastwood: 2.584e-5 vs 2.589e-5).
+- **Force split:** F_par = 5.9e-6 and F_perp = 4.6e-6, against 1.3e-4 and 4.5e-4 at the start.
+- **Field lines:** the Poincaré plot (`figures/freeP20_poincare.png`) shows nested surfaces lying on DESC's flux surfaces. The field of the start (fits) does not: its surfaces are shifted and the edge is partly chaotic.
+- **Pressure:** a ±2% change, lower on the inboard side and higher on the outboard side.
+- **Pressure sign:** p < 0 at 3,228 of 663k points, all at ρ ≥ 0.95, min −2.6e-4 of max p. Fixed for later runs by `PressurePositivity`, a one-sided penalty on min(p, 0) whose derivative uses the active set. The preconditioner leaves it out.
+
+### Default workflow (`optimize_qa.py`)
+- Defaults: pressure free, stored energy held (`--w-W 10`), p ≥ 0 (`--w-pos 10`), truncated kernel, block preconditioner, up to 100 iterations per box.
+- `--refine 20` continues on finer boxes in the same run.
+- Block preconditioner:
+  - pressure blocks also use restricted tables;
+  - Gram matrices are accumulated over sequential radial slabs, with an optimization barrier;
+  - each block's table columns are gathered outside the Gram program, so XLA keeps no copies of the full tables.
+
+### Test suite (`scripts/time_tests.py`, one A100)
+All 12 test files pass, in 29 min. `test_reconstruction` needs the platform allocator for its a/30 box; the runner now sets it.
+
+| Test | Time |
+|---|---|
+| test_smooth_edge | 322 s |
+| test_boundary_potential | 284 s |
+| test_reconstruction | 284 s |
+| test_magnetic_field | 180 s |
+| test_objective | 133 s |
+| test_pressure | 115 s |
+| test_cartesian_grid | 113 s |
+| test_force | 89 s |
+| test_fourier | 78 s |
+| test_current_potential | 74 s |
+| test_grid | 63 s |
+| test_desc_grid | 55 s |
+
+About 50 s of every test is fixed startup: importing DESC, loading the equilibrium, compiling. The slowest tests refit at full resolution, since the fit is what they test.
+
+## Update (2026-10-11): other equilibria, basis, robustness
+
+### Four equilibria in the same coils, all below DESC's own force error
+Default workflow from the fits: pressure free, stored energy held, p ≥ 0, a/10 then `--refine 20`. Each result is checked independently on the a/20 box with a 3× collocation grid; the checks agree with the optimization grid to the digits shown.
+
+| Equilibrium | DESC ⟨\|F\|⟩/norm | NEST (a/20 check) | Ratio |
+|---|---|---|---|
+| `smooth_J_edgeJ_r0.3` | 4.24e-5 | 8.26e-6 | 5.1× |
+| `smooth_J` | 8.32e-5 | 1.42e-5 | 5.9× |
+| `smooth_J_bdry_k5` | 3.73e-5 | 1.40e-5 | 2.7× |
+| `L16N14` (original; J ≠ 0 at the edge in DESC) | 6.14e-5 | 1.26e-5 | 4.9× |
+
+The first row was started from the fixed-pressure optimum. Its check box is the same a/20 box; on an a/25 box it gives 8.8e-6.
+
+Each run takes about 1.5 h on one A100:
+- about 4 min of preconditioner build per box;
+- 100 iterations at 11 s on a/10;
+- 100 iterations at 40 s on a/20.
+
+### Basis
+The factor-4 potential (205k unknowns, free pressure, a/10) reaches 1.78e-5 on its own box but 5.6e-5 on the a/20 check. The factor-3 basis at the same stage gives 1.69e-5 and 2.75e-5. A larger basis fits more of the box's discretization error, so it needs a finer box. Factor 3 stays the default.
+
+### Robustness
+- **Final check:** evaluated a few radii at a time, sharing the box side across chunks (`Fields(share=)`, `ForceResidual(rho_slice=)`). It is identical to the full-grid metrics to 2e-16, and x is saved before the check.
+- **Preconditioner build:** a scan over equal radial slabs, padded with zero weights, holds one slab's buffers at a time. Each block's table columns are gathered outside the Gram program. The factor-4 build, 6,110 blocks, now fits in memory.
+- **Allocator:** `run.sbatch` uses the platform allocator by default. It is about 7% slower per CG iteration (0.116 vs 0.108 s), but long runs cannot fail on a fragmented pool.
+- **Compilation:** `run.sbatch` keeps a persistent JAX compilation cache (`.cache/jax`). The test suite takes 17.5 min with a warm cache, against 29 min before.

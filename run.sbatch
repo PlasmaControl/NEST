@@ -20,7 +20,14 @@ ENV=/scratch/gpfs/lk1158/.conda/envs/desc-env
 export LD_PRELOAD=$ENV/lib/libstdc++.so.6
 export NEST_DEVICE=gpu JAX_ENABLE_X64=true XLA_PYTHON_CLIENT_PREALLOCATE=false
 # JAX may use up to 90% of the GPU (default 75%); the rest for cuFFT plans and the like
-export XLA_PYTHON_CLIENT_MEM_FRACTION=0.90
+# compiled programs reused across jobs and tests (results unchanged; the first run fills it)
+export JAX_COMPILATION_CACHE_DIR=${JAX_COMPILATION_CACHE_DIR:-$SLURM_SUBMIT_DIR/.cache/jax}
+export JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0 JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES=-1
+# the platform allocator (no pool): ~7% slower per iteration than the default pool,
+# but long runs and large boxes cannot fail on a fragmented pool; override with
+# --export=ALL,XLA_PYTHON_CLIENT_ALLOCATOR=default (e.g. for memory_stats)
+export XLA_PYTHON_CLIENT_ALLOCATOR=${XLA_PYTHON_CLIENT_ALLOCATOR:-platform}
+export XLA_PYTHON_CLIENT_MEM_FRACTION=${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.90}  # override: sbatch --export=ALL,XLA_PYTHON_CLIENT_MEM_FRACTION=...
 export PYTHONUNBUFFERED=1 MPLBACKEND=Agg OMP_NUM_THREADS=4
 nvidia-smi --query-gpu=name,memory.total --format=csv
 # stop if DESC/JAX do not get the GPU instead of running on the CPU

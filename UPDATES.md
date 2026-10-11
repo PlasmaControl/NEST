@@ -2,6 +2,19 @@
 
 One entry per commit, newest first.
 
+## 2026-10-11: Default workflow: free pressure with p >= 0, --refine, --eq/--coils; validation and island scripts
+- `scripts/optimize_qa.py` defaults: pressure free, stored energy held (`--w-W 10`), p >= 0 (`--w-pos 10`), up to 100 iterations per box.
+  - `--refine 20` continues on finer boxes.
+  - `--eq` and `--coils` take any equilibrium.
+  - The check is evaluated in radial pieces.
+- `nest/objective.py`: `PressurePositivity`, a one-sided penalty on min(p, 0). `nest/precondition.py`: Gram matrices accumulated over radial slabs, and table columns gathered outside the Gram program. `nest/force.py`: `rho_slice`.
+- `run.sbatch`: persistent JAX compilation cache and the platform allocator.
+- New scripts:
+  - `validate_opt.py`: pressure sign, net current, exact J, force split, Poincare;
+  - `islands.py`: resonant b^rho and island widths;
+  - `time_tests.py`: the test suite with timings.
+- `OPTIMIZATION_STATUS.md`: precise_QA continued on a/20 reaches 8.3e-6, against DESC's 4.2e-5. Four equilibria in the same coils all end below DESC's own force error.
+
 ## 2026-10-11: Self-contained Poincare scripts
 - `desc_input/vmec_free_boundary/poincare.py` has its own copy of the field-line tracer, so it no longer imports the uncommitted `scripts/validate_opt.py`. It saves only the crossings; `poincare_flux.py` draws the figure, and `--x start` traces the start alone.
 - The R-Z Poincare figures are removed (unreadable for NCSX's thin crescent). The figures kept are the flux-coordinate ones (`figures/ncsx_*_poincare_flux.png`).

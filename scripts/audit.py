@@ -11,7 +11,8 @@ potential and pressure, at box spacings h = a / frac:
   - run time of each component of f: J and p at the collocation points, J on
     the flux grid, interpolation to the box, FFT + kernel, non-uniform FFT
 
-run (GPU): sbatch --mem=64G run.sbatch scripts/audit.py [frac] [--kernel truncated] [--full]
+run (GPU): sbatch --export=ALL,XLA_PYTHON_CLIENT_ALLOCATOR=default --mem=64G run.sbatch \
+    scripts/audit.py [frac] [--kernel truncated] [--full]   (the pool allocator: memory_stats)
     [--colloc c (collocation c x the resolution of F; default the equilibrium's 2 L, 2 M, 2 N)]
     [--profile (cProfile of the setup stages)]
 One box per job: the arrays and FFT plans of a previous box stay on the GPU.
@@ -123,12 +124,12 @@ def memory(obj, x0, v, w):
     import re
     from objective import _base, _lin, _lin_T, _scaled
     nb = {"f32": 4, "f64": 8, "c64": 8, "c128": 16, "s32": 4, "s64": 8, "u32": 4, "pred": 1}
-    r, J0, B0 = _base(obj, x0, obj.fields)
+    r, base = _base(obj, x0, obj.fields)
     print("  compiled memory [GB]: arguments, outputs, temporaries; largest buffers")
     for name, low in (("f", _scaled.lower(obj, x0, obj.fields)),
                       ("linearize (f, J, B)", _base.lower(obj, x0, obj.fields)),
-                      ("J v", _lin.lower(obj, v, J0, B0, obj.fields)),
-                      ("J^T w", _lin_T.lower(obj, w, J0, B0, obj.fields))):
+                      ("J v", _lin.lower(obj, v, base, obj.fields)),
+                      ("J^T w", _lin_T.lower(obj, w, base, obj.fields))):
         c = low.compile()
         ma = c.memory_analysis()
         sizes = {}
@@ -138,9 +139,10 @@ def memory(obj, x0, v, w):
         print(f"    {name:26s} {ma.argument_size_in_bytes / 1e9:6.2f} {ma.output_size_in_bytes / 1e9:6.2f} "
               f"{ma.temp_size_in_bytes / 1e9:6.2f};  " + ", ".join(f"{k} {b / 1e9:.2f}" for k, b in big),
               flush=True)
-    print(f"    linearization keeps {(J0.nbytes + B0.nbytes + r.nbytes) / 1e9:.3f} GB (f, J and B "
-          f"at the collocation points)", flush=True)
-    del r, J0, B0
+    kept = r.nbytes + sum(v.nbytes for v in base.values())
+    print(f"    linearization keeps {kept / 1e9:.3f} GB (f, J, B and p at the collocation points)",
+          flush=True)
+    del r, base
 
 
 def audit(frac, kernel="hockney", sym=True, colloc=None):
