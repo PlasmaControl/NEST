@@ -2,6 +2,17 @@
 
 One entry per commit, newest first.
 
+## 2026-10-11: QH and CTH-like through NEST; island interiors in the Poincare sections
+- DESC re-solves: QH_5beta at 16/16/12 (force error 6.5e-4) and CTH_like at 12/12/8 (7.6e-4).
+- NEST with `--w-J`:
+  - QH reaches 4.3e-5 (15x below DESC) with iota held within 0.01.
+  - CTH-like reaches 1.5e-4 at 3e-3. Its core iota sits just above 5/4, so a second 5/4 chain still opens.
+- `poincare.py`:
+  - also records the half-period plane;
+  - `--islands` seeds each field's own chains (measured iota) across the chain at theta* = 0, pi/m, pi and pi + pi/m, so island interiors are traced.
+- `poincare_flux.py` draws both planes. New `poincare_rz.py`: the sections in (R, Z) over DESC's surfaces.
+- Figures: `figures/{ncsx,qh,cth}_*_islands_poincare_{flux,rz}.png`.
+
 ## 2026-10-11: run_della.sbatch: compilation cache and platform allocator, as on Stellar
 - `run_della.sbatch` now matches `run.sbatch`: a persistent JAX compilation cache in `.cache/jax`, and the platform allocator (override with `--export=ALL,XLA_PYTHON_CLIENT_ALLOCATOR=default`).
 

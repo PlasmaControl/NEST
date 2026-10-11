@@ -1,5 +1,8 @@
 """Poincare sections of ``poincare.py`` in DESC flux coordinates, and iota of each line.
 
+Both planes traced by ``poincare.py`` are drawn when present (phi = 0, and phi = pi /
+NFP mapped at zeta = pi / NFP), each over all rho and over rho > 0.5.
+
 The crossings (R, Z) at phi = 0 are mapped to the DESC (rho, theta) of the starting
 equilibrium (``Equilibrium.map_coordinates``). Island chains then show up as rows of
 m islands. The rotational transform of each traced line is its mean poloidal
@@ -63,6 +66,16 @@ def main(eq_path, sec_path):
         flux[k] = (rho, th, np.flatnonzero(ok))
         lines[k] = (rho.mean(0), np.abs(dth.mean(0)) * eq.NFP / (2 * np.pi))
         print(f"{k}: {ok.sum()} of {n_lines} lines mapped", flush=True)
+        if f"{k}_Rh" in d:  # the half-period plane phi = pi / NFP
+            Rh, Zh = d[f"{k}_Rh"][:, ok], d[f"{k}_Zh"][:, ok]
+            fin = np.isfinite(Rh)
+            c = np.column_stack([Rh[fin], np.full(fin.sum(), np.pi / eq.NFP), Zh[fin]])
+            rtz = np.asarray(eq.map_coordinates(c, inbasis=("R", "phi", "Z"),
+                                                outbasis=("rho", "theta", "zeta"),
+                                                maxiter=60, tol=1e-10))
+            rh, thh = np.full(Rh.shape, np.nan), np.full(Rh.shape, np.nan)
+            rh[fin], thh[fin] = rtz[:, 0], np.mod(rtz[:, 1], 2 * np.pi)
+            flux[k + "_h"] = (rh, thh, np.flatnonzero(ok))
 
     r = np.linspace(0.01, 1, 200)
     g = LinearGrid(rho=r, M=eq.M_grid, N=eq.N_grid, NFP=eq.NFP)
@@ -79,16 +92,19 @@ def main(eq_path, sec_path):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig = plt.figure(figsize=(7.5 * len(runs), 15), constrained_layout=True)
-    gs = fig.add_gridspec(3, len(runs), height_ratios=[1, 1.1, 0.8])
+    planes = [("", "phi = 0")] + ([("_h", "phi = pi / NFP")] if runs[0] + "_h" in flux else [])
+    rows = [(p, lo) for p in planes for lo in (0.0, 0.5)]
+    fig = plt.figure(figsize=(7.5 * len(runs), 6.5 * len(rows) + 5), constrained_layout=True)
+    gs = fig.add_gridspec(len(rows) + 1, len(runs),
+                          height_ratios=[1 if lo == 0 else 1.1 for _, lo in rows] + [0.8])
     cmap = plt.cm.turbo
     titles = {"start": "start (fits of DESC's J and p)", "optimized": "NEST optimized"}
     for j, k in enumerate(runs):
-        rho, th, idx = flux[k]
-        col = cmap((np.broadcast_to(idx, rho.shape).ravel() * 0.618) % 1)
-        for i, lo in enumerate((0.0, 0.5)):
+        for i, ((suffix, plane), lo) in enumerate(rows):
+            rho, th, idx = flux[k + suffix]
+            col = cmap((np.broadcast_to(idx, rho.shape).ravel() * 0.618) % 1)
             ax = fig.add_subplot(gs[i, j])
-            m = rho.ravel() >= lo
+            m = np.nan_to_num(rho.ravel(), nan=-1) >= lo
             ax.scatter(th.ravel()[m] / np.pi, rho.ravel()[m], s=0.4 if i == 0 else 0.8,
                        c=col[m], lw=0)
             for n, mm, x in res[k]:
@@ -99,9 +115,9 @@ def main(eq_path, sec_path):
             ax.set_ylim(lo, 1.0)
             ax.set_xlabel("DESC theta / pi")
             ax.set_ylabel("DESC rho")
-            ax.set_title(titles[k] + (", rho > 0.5" if lo else "")
+            ax.set_title(f"{titles[k]}, {plane}" + (", rho > 0.5" if lo else "")
                          + "\n(dotted: iota = n/m of this field)")
-    ax = fig.add_subplot(gs[2, :])
+    ax = fig.add_subplot(gs[len(rows), :])
     ax.plot(r, iota_desc, "k-", lw=1.2, label="DESC equilibrium")
     for k, mk in zip(runs, "os"):
         ax.plot(*lines[k], mk, ms=3.5, mfc="none", label=f"field lines, {titles[k]}")
@@ -113,13 +129,15 @@ def main(eq_path, sec_path):
     ax.set_ylabel("|iota|")
     ax.legend(loc="lower right", fontsize=9)
     ax.set_title("rotational transform: DESC, and NFP <dtheta> / 2 pi of each traced line")
-    fig.suptitle(f"{eq_path.split('/')[-1]}: Poincare sections at phi = 0 in DESC flux coordinates")
+    fig.suptitle(f"{eq_path.split('/')[-1]}: Poincare sections in DESC flux coordinates")
     base = sec_path[: -len(".npz")]
     fig.savefig(base + "_flux.png", dpi=130)
     np.savez(base + "_flux.npz", r_desc=r, iota_desc=iota_desc,
              **{f"{k}_rho": v[0] for k, v in flux.items()},
              **{f"{k}_theta": v[1] for k, v in flux.items()},
              **{f"{k}_line_rho": v[0] for k, v in lines.items()},
+             **{f"{k}_rho_h": flux[k + "_h"][0] for k in runs if k + "_h" in flux},
+             **{f"{k}_theta_h": flux[k + "_h"][1] for k in runs if k + "_h" in flux},
              **{f"{k}_line_iota": v[1] for k, v in lines.items()})
     print(f"saved {base}_flux.png/.npz")
 

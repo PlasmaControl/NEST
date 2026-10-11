@@ -6,13 +6,17 @@ the field lines are traced in phi with RK4 on cubic splines (the tracer of
 done for the start (the fits of DESC's J and p) and for the optimized x.
 
 On top of the uniform seeds along theta = 0, lines are seeded around each resonant
-surface iota = n/m (n a multiple of NFP, m <= 12) on theta = 0 and theta = pi:
-with stellarator symmetry the island O- and X-points of the phi = 0 section lie on
-that line.
+surface iota = n/m (n a multiple of NFP, m <= 12). By default these are DESC's
+resonances, on theta = 0 and pi. With ``--islands`` (the _poincare_flux.npz of a
+previous trace) each field is seeded at its own measured resonances, across the
+chain (rho_res +- 0.03) and at the straight-field-line angles theta* = 0, pi/m, pi,
+pi + pi/m. With stellarator symmetry the O-points of the phi = 0 section sit at one
+of these, so the field lines inside the islands are traced too.
 
-The crossings go to figures/<x name>_poincare.npz (prefixed with ncsx_ for the NCSX
+The crossings of phi = 0 (keys <run>_R, <run>_Z) and of phi = pi / NFP (<run>_Rh,
+<run>_Zh) go to figures/<x name>_poincare.npz (prefixed with ncsx_ for the NCSX
 runs). ``poincare_flux.py`` maps them to DESC (rho, theta), measures iota per line
-and draws the figure.
+and draws that figure; ``poincare_rz.py`` draws them in (R, Z) over DESC's surfaces.
 
 run (GPU): sbatch --mem=128G run.sbatch desc_input/vmec_free_boundary/poincare.py \
     --eq desc_input/vmec_free_boundary/NCSX/NCSX_L16M16N12.h5 \
@@ -75,7 +79,8 @@ def field_on_cylinder(fields, u, inp, nR=121, nphi=64, nZ=121, margin=0.25):
 
 
 def trace(Rs, phis, Zs, B, R0, Z0, NFP, n_periods=400, steps=64):
-    """Crossings of phi = 0 (mod one field period) of the lines from (R0, Z0)."""
+    """Crossings of phi = 0 and of phi = pi / NFP (mod one field period) of the lines
+    from (R0, Z0): (R, Z) at phi = 0 and (R, Z) at half a period."""
     from scipy.ndimage import map_coordinates, spline_filter
     # periodic in phi: pad 3 planes on each side for the cubic spline
     Bp = np.concatenate([B[:, -3:], B, B[:, :3]], axis=1)
@@ -92,7 +97,7 @@ def trace(Rs, phis, Zs, B, R0, Z0, NFP, n_periods=400, steps=64):
 
     R, Z = np.array(R0, float), np.array(Z0, float)
     h = period / steps
-    out_R, out_Z = [R.copy()], [Z.copy()]
+    out_R, out_Z, half_R, half_Z = [R.copy()], [Z.copy()], [], []
     alive = np.ones(len(R), bool)
     for k in range(n_periods):
         for i in range(steps):
@@ -103,10 +108,14 @@ def trace(Rs, phis, Zs, B, R0, Z0, NFP, n_periods=400, steps=64):
             k4 = rhs(R + h * k3[0], Z + h * k3[1], phi + h)
             R = R + h / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0])
             Z = Z + h / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1])
+            if i == steps // 2 - 1:  # phi = pi / NFP reached
+                ok = alive & (R > Rs[1]) & (R < Rs[-2]) & (Z > Zs[1]) & (Z < Zs[-2])
+                half_R.append(np.where(ok, R, np.nan))
+                half_Z.append(np.where(ok, Z, np.nan))
         alive &= (R > Rs[1]) & (R < Rs[-2]) & (Z > Zs[1]) & (Z < Zs[-2])
         out_R.append(np.where(alive, R, np.nan))
         out_Z.append(np.where(alive, Z, np.nan))
-    return np.array(out_R), np.array(out_Z)
+    return np.array(out_R), np.array(out_Z), np.array(half_R), np.array(half_Z)
 
 
 def resonances(inp, max_m=12):
@@ -128,6 +137,49 @@ def resonances(inp, max_m=12):
     return out
 
 
+def resonances_of_lines(rho, iota, NFP, max_m=12, merge=0.03):
+    """(n, m, rho) where the measured iota of the traced lines (mean rho, iota per
+    line) crosses n/m; crossings of the same n/m closer than ``merge`` are one."""
+    o = np.argsort(rho)
+    rho, iota = rho[o], iota[o]
+    keep = np.r_[True, np.diff(rho) > 5e-3]
+    rho, iota = rho[keep], iota[keep]
+    out, seen = [], set()
+    for m in range(1, max_m + 1):
+        for n in range(NFP, 4 * NFP + 1, NFP):
+            t = Fraction(n, m)
+            if t in seen:
+                continue
+            idx = np.nonzero(np.diff(np.sign(iota - float(t))))[0]
+            if len(idx):
+                seen.add(t)
+            last = -1.0
+            for i in idx:
+                r = rho[i] + (float(t) - iota[i]) * (rho[i + 1] - rho[i]) / (iota[i + 1] - iota[i])
+                if r - last > merge:
+                    out.append((n, m, float(r)))
+                    last = r
+    return out
+
+
+def island_seeds(eq, res, width=0.03, n_rho=9):
+    """(rho, theta) seeds across each chain n/m at rho_res: rho_res +- width and the
+    straight-field-line angles theta* = 0, pi/m, pi, pi + pi/m at phi = 0. With
+    stellarator symmetry the O-points of the phi = 0 section sit at one of these."""
+    pts = []
+    for _, m, r in res:
+        for d in np.linspace(-width, width, n_rho):
+            for ts in (0.0, np.pi / m, np.pi, np.pi + np.pi / m):
+                pts.append((min(max(r + d, 0.02), 0.995), ts, 0.0))
+    if not pts:
+        return np.zeros((0, 2))
+    out = np.asarray(eq.map_coordinates(np.array(pts), inbasis=("rho", "theta_PEST", "zeta"),
+                                        outbasis=("rho", "theta", "zeta"), maxiter=60,
+                                        tol=1e-10))
+    ok = np.isfinite(out).all(1)
+    return out[ok, :2]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--eq", required=True)
@@ -139,6 +191,10 @@ def main():
     ap.add_argument("--periods", type=int, default=400)
     ap.add_argument("--lines", type=int, default=32, help="uniform seeds on theta = 0")
     ap.add_argument("--out", default=None, help="npz (default figures/<x name>_poincare.npz)")
+    ap.add_argument("--islands", default=None,
+                    help="_poincare_flux.npz of a previous trace (poincare_flux.py): seed the "
+                         "chains of each field at its own measured resonances, across the "
+                         "chain and at the O-point angles (else around DESC's resonances)")
     a = ap.parse_args()
     t0 = time.time()
     inp = DESCInput.load(a.eq, field=a.coils)
@@ -155,21 +211,30 @@ def main():
           + ", ".join(f"{n}/{m} at {r:.3f}" for n, m, r in res), flush=True)
 
     RZ = Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP)
-    seeds = [(r, 0.0) for r in np.linspace(0.04, 1.0, a.lines)]
-    for _, _, r in res:
-        seeds += [(min(r + d, 0.995), th) for d in (-0.02, -0.01, 0.0, 0.01, 0.02)
-                  for th in (0.0, np.pi)]
-    seeds = np.array([s for s in seeds if s[0] > 0.02])
-    st = np.asarray(RZ.evaluate(jnp.asarray(seeds[:, 0]), jnp.asarray(seeds[:, 1]),
-                                jnp.zeros(len(seeds))))
-    sections = {}
+    uniform = np.column_stack([np.linspace(0.04, 1.0, a.lines), np.zeros(a.lines)])
+    prev = np.load(a.islands) if a.islands else None
+    sections, seeds, run_res = {}, {}, {}
     for name, u in us.items():
+        if prev is not None and f"{name}_line_rho" in prev:
+            run_res[name] = resonances_of_lines(prev[f"{name}_line_rho"],
+                                                prev[f"{name}_line_iota"], eq.NFP)
+            extra = island_seeds(eq, run_res[name])
+        else:
+            run_res[name] = res
+            extra = np.array([(min(r + d, 0.995), th) for _, _, r in res
+                              for d in (-0.02, -0.01, 0.0, 0.01, 0.02) for th in (0.0, np.pi)])
+        s = np.concatenate([uniform, extra.reshape(-1, 2)])
+        seeds[name] = s[s[:, 0] > 0.02]
+        st = np.asarray(RZ.evaluate(jnp.asarray(seeds[name][:, 0]), jnp.asarray(seeds[name][:, 1]),
+                                    jnp.zeros(len(seeds[name]))))
         t1 = time.time()
         Rs, phis, Zs, Bcyl = field_on_cylinder(fields, u, inp)
         sections[name] = trace(Rs, phis, Zs, Bcyl, st[:, 0], st[:, 1], eq.NFP, a.periods)
         lost = np.isnan(sections[name][0][-1]).sum()
-        print(f"{name}: {len(seeds)} lines x {a.periods} field periods, {lost} left the grid; "
-              f"{time.time() - t1:.0f} s", flush=True)
+        print(f"{name}: chains seeded at " + ", ".join(f"{n}/{m} at {r:.3f}"
+                                                      for n, m, r in run_res[name])
+              + f"; {len(seeds[name])} lines x {a.periods} field periods, {lost} left the "
+              f"grid; {time.time() - t1:.0f} s", flush=True)
 
     out = a.out
     if out is None:
@@ -178,9 +243,13 @@ def main():
             name = "ncsx_" + name
         out = os.path.join(ROOT, "figures", f"{name}_poincare.npz")
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
-    np.savez(out, seeds=seeds, resonances=np.array(res),
+    np.savez(out, resonances=np.array(res),
+             **{f"{k}_seeds": v for k, v in seeds.items()},
+             **{f"{k}_resonances": np.array(v) for k, v in run_res.items()},
              **{f"{k}_R": v[0] for k, v in sections.items()},
-             **{f"{k}_Z": v[1] for k, v in sections.items()})
+             **{f"{k}_Z": v[1] for k, v in sections.items()},
+             **{f"{k}_Rh": v[2] for k, v in sections.items()},
+             **{f"{k}_Zh": v[3] for k, v in sections.items()})
     print(f"saved {out}; total {time.time() - t0:.0f} s")
 
 

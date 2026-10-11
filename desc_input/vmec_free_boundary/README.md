@@ -36,7 +36,12 @@ metrics as for precise_QA, where B·n/|B| rms = 2.45e-3.
 | NCSX | 12 12 8 | 3.1e-3 | 4.4e-3 (1.7e-2) | 8.3e-3 (5.4e-2) | −0.370 → −0.667 | 3/6 at 0.59, 3/5 at 0.80, 3/7 at 0.35, 6/11 at 0.70 |
 | **NCSX** | **16 16 12** | **5.8e-4** | 3.5e-3 (2.1e-2) | 4.9e-3 (2.0e-2) | −0.352 → −0.654 | 3/6 at 0.59, 3/5 at 0.80, 3/7 at 0.39, 6/11 at 0.69 |
 | QH_5beta | 12 12 10 | 2.0e-3 | 2.1e-3 (6.1e-3) | 3.2e-3 (1.9e-2) | 1.282 → 1.048 | 8/7 at 0.56, 12/11 at 0.71 |
+| **QH_5beta** | **16 16 12** | **6.5e-4** | 1.9e-3 (7.6e-3) | 1.9e-3 (7.6e-3) | 1.284 → 1.057 | 8/7 at 0.56, 12/10 at 0.33, 12/11 at 0.72 |
 | CTH_like | 8 8 6 | 7.0e-3 | 3.3e-3 (8.8e-3) | 1.7e-3 (1.1e-2) | −1.252 → −0.863 | 5/4 at 0.71, 5/5 at 0.91 |
+| **CTH_like** | **12 12 8** | **7.6e-4** | 2.5e-3 (8.3e-3) | 2.2e-3 (1.1e-2) | −1.255 → −0.875 | 5/4 at 0.72, 5/5 at 0.90 |
+
+The bold rows are the NEST inputs. They were re-solved on an A100 with
+`solve_desc.py CASE --LMN L M N --device gpu --jac-chunk-size 200`.
 
 The wout fitted directly by DESC (`<case>_vmec.h5`) gives force errors of 0.4–0.9
 and pressure jumps of 6–12 %. The fit puts spikes in |B| on the LCFS: 3.7 T against
@@ -128,21 +133,58 @@ fixes this:
 **Use `--w-J 1e-3`.** At 1e-2 the pointwise penalty also damps the resonant
 currents and pins the edge, where NEST's fit cannot match DESC's J.
 
-Poincare sections, with only `nest/` needed:
-- `poincare.py` traces the field lines of the start and of the optimized x and saves
-  the crossings of phi = 0 (GPU, a few minutes; `--x start` traces the start only).
-- `poincare_flux.py` maps them to DESC (rho, theta), measures iota per line and
-  draws the figure (CPU, two minutes).
+## Poincare sections
+
+Only `nest/` is needed.
+- `poincare.py` traces the field lines of the start and of the optimized x. It saves
+  the crossings of phi = 0 and of the half period phi = pi / NFP (GPU, a few minutes;
+  `--x start` traces the start only).
+  - `--islands PREV_poincare_flux.npz` seeds each field's own chains, at the resonances
+    of its measured iota. The seeds go across each chain (rho_res +- 0.03) at the
+    straight-field-line angles theta* = 0, pi/m, pi and pi + pi/m, so the lines inside
+    the islands are traced too.
+  - `--island-lines` adds seeds on theta = pi / m around DESC's resonances.
+- `poincare_flux.py` maps the crossings to DESC (rho, theta) at both planes and
+  measures iota per line (CPU, a few minutes).
+- `poincare_rz.py` draws them in (R, Z) over DESC's flux surfaces (CPU, seconds).
 
 ```bash
 sbatch --mem=128G run.sbatch desc_input/vmec_free_boundary/poincare.py $E --x results/ncsx/wJ.npz --frac 20
 python desc_input/vmec_free_boundary/poincare_flux.py desc_input/vmec_free_boundary/NCSX/NCSX_L16M16N12.h5 figures/ncsx_wJ_poincare.npz
+sbatch --mem=128G run.sbatch desc_input/vmec_free_boundary/poincare.py $E --x results/ncsx/wJ.npz --frac 20 --islands figures/ncsx_wJ_poincare_flux.npz --out figures/ncsx_wJ_islands_poincare.npz
+python desc_input/vmec_free_boundary/poincare_rz.py desc_input/vmec_free_boundary/NCSX/NCSX_L16M16N12.h5 figures/ncsx_wJ_islands_poincare.npz
 ```
 
-Figures:
+NCSX figures:
 - `figures/ncsx_opt_L16M16N12_poincare_flux.png`: no penalty.
-- `figures/ncsx_opt_L16M16N12_wJ1e-3_poincare_flux.png`
 - `figures/ncsx_opt_L16M16N12_wJ1e-2_poincare_flux.png`
+- `figures/ncsx_opt_L16M16N12_wJ1e-3_islands_poincare_{flux,rz}.png`: `--w-J 1e-3`, with
+  the island interiors.
+
+## NEST on QH and CTH-like
+
+Same workflow as NCSX:
+1. the DESC re-solve (bold rows above);
+2. `optimize_qa.py`, h = a/10 then a/20 in two Della jobs;
+3. the Poincare sections with `--islands`.
+
+| | DESC | NEST (check) | `--w-J` | iota vs DESC |
+|---|---|---|---|---|
+| QH_5beta 16/16/12 | 6.48e-4 | **4.30e-5** (15x) | 1e-3 | within 0.01 for rho > 0.15; 1.32 against 1.28 at the axis |
+| CTH_like 12/12/8 | 7.60e-4 | 1.27e-4 | 1e-3 | core 1.16 against 1.25 |
+| CTH_like 12/12/8 | 7.60e-4 | **1.46e-4** (5x) | 3e-3 | core 1.22 against 1.25 |
+
+- **QH:** the optimized field lies on DESC's surfaces out to the LCFS, where the start
+  does not (rho swings 0.75–0.95 beyond rho 0.75). The 7-island 8/7 chain at rho 0.55
+  shrinks to a thin chain; 12/10 at rho 0.33 and 12/11 at 0.72 are thin in both
+  (`figures/qh_opt_L16M16N12_wJ1e-3_islands_poincare_{flux,rz}.png`).
+- **CTH-like is a stress test.** DESC's iota sits just above 5/4 = 1.25 across the
+  whole core with almost no shear, so a drop of 0.03 crosses the resonance. Even at
+  `--w-J 3e-3` a second, wide 4-island 5/4 chain opens at rho 0.39, next to the one at
+  0.71 that DESC's own iota has. The edge beyond rho 0.8 is chaotic in both fields,
+  with 5/5 and 10/9 chains (`figures/cth_opt_L12M12N8_wJ3e-3_islands_poincare_{flux,rz}.png`).
+  The pointwise J penalty cannot hold iota this close to a rational. A constraint on
+  the flux-surface averaged current I(rho) would.
 
 
 Run on Della, in jobs of 59 min or less for the gpu-test QOS:
