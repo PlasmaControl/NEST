@@ -72,12 +72,6 @@ def _broadcast(v):
     return [v[0][:, None, None], v[1][None, :, None], v[2][None, None, :]]
 
 
-def _displacements(axes, dtype=np.float64):
-    """Minimum-image displacements h * (0, 1, ..., -1) of each axis, broadcast."""
-    return _broadcast([np.asarray(a[1] - a[0], dtype) * np.round(np.fft.fftfreq(len(a)) * len(a))
-                       for a in axes])
-
-
 def b_plasma_periodic(J_hat, axes):
     """B_hat = i mu0 k x J_hat / |k|^2, back to real space.
 

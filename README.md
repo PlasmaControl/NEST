@@ -21,6 +21,33 @@ free-boundary equilibrium.
 
 Open items (validation, studies, optional features, memory): [TODO.md](TODO.md).
 
+# Solve path
+
+The modules in `nest/`, run from there (as the tests do):
+
+```python
+from boundary_potential import BoundaryPotential
+from desc_input import DESCInput
+from fields import Fields
+from grid import CartesianGrid
+from objectives import FieldDistance, ForceBalance, ObjectiveFunction
+from optimize import gauss_newton
+from pressure import Pressure
+
+inp = DESCInput.load(eq_file, field=coils_file)
+current = BoundaryPotential.fit(inp.eq, L, M, N)          # J = curl T; sym=True: stellarator symmetric
+pressure = Pressure.fit(inp.eq, L, M, N, edge_order=2)
+box = CartesianGrid.periodic_box(inp, inp.a / frac).locate_plasma(inp)
+F = Fields(inp, current, pressure, box)                     # J, B, p, grad p affine in x; D_B costs one
+                                                            # Biot-Savart per current coefficient
+obj = ObjectiveFunction(F, [FieldDistance(F), ForceBalance(F, weight=1 / lam)])
+res = gauss_newton(obj, F.fit_pressure(F.initial_state()))  # res["x"]; F.objects(res["x"]) -> series
+```
+
+On a cluster: `sbatch run.sbatch nest/run_solve.py --frac 10 --cache-dir DIR` (lambda
+continuation, every end state checked on an independent grid; see the docstring of
+`nest/run_solve.py`). Each change is recorded in [UPDATES.md](UPDATES.md).
+
 # Questions?
 - [ ] Should we raise s in (1-rho^2)^s to 3 or 4?
 - [ ] How do we do the reconstruction of the potential current T (not simply a FZ series anymore) with .fit from DESC?

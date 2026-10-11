@@ -35,7 +35,7 @@ import numpy as np
 from desc.basis import FourierZernikeBasis, fourier, zernike_radial
 from desc.grid import LinearGrid
 
-from desc_input import covariant_basis, dual_basis
+from desc_input import DESCInput, covariant_basis, dual_basis
 from separable import Separable
 
 
@@ -47,15 +47,12 @@ def window(rho, k, dr=0):
 
 
 @functools.partial(jax.jit, static_argnums=(0, 1, 2))
-def _p_and_grad(P, RZ, k, rho, theta, zeta, C=None):
-    """(p, dp/dR, dp/(R dphi), dp/dZ) at the points, shape (n_points, 4).
-
-    ``C`` (``Separable.scatter``) replaces the stored coefficients; linear in C.
-    """
-    p = P.evaluate(rho, theta, zeta, C=C)[:, 0]
-    pr = P.evaluate(rho, theta, zeta, dr=1, C=C)[:, 0]
-    pt = P.evaluate(rho, theta, zeta, dt=1, C=C)[:, 0]
-    pz = P.evaluate(rho, theta, zeta, dz=1, C=C)[:, 0]
+def _p_and_grad(P, RZ, k, rho, theta, zeta):
+    """(p, dp/dR, dp/(R dphi), dp/dZ) at the points, shape (n_points, 4)."""
+    p = P.evaluate(rho, theta, zeta)[:, 0]
+    pr = P.evaluate(rho, theta, zeta, dr=1)[:, 0]
+    pt = P.evaluate(rho, theta, zeta, dt=1)[:, 0]
+    pz = P.evaluate(rho, theta, zeta, dz=1)[:, 0]
     if k is not None:  # p = w Q
         w = window(rho, k)
         p, pr, pt, pz = w * p, window(rho, k, dr=1) * p + w * pr, w * pt, w * pz
@@ -200,7 +197,6 @@ class Pressure:
         """
         rtz = np.asarray(rtz, dtype=float)
         if G is None:
-            from desc_input import DESCInput
             G = DESCInput(self.eq, check=False).basis_vectors(rtz)["G"]
         c = self.p_columns(np.arange(len(self.free_coefficients()[0])),
                            *(jnp.asarray(rtz[:, j]) for j in range(3)))  # (n, k, 4)
@@ -230,29 +226,12 @@ class Pressure:
         c[first] -= edge[g[first]]
         return Pressure(self.basis, c, self.eq)
 
-    @functools.cached_property
-    def _separable(self):
-        """(P, RZ): the series of p and of the geometry, built once (jit static args)."""
-        eq = self.eq
-        return (Separable([self.basis], [self.c], self.basis.NFP),
-                Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP))
-
     def point_evaluator(self, eq=None):
         """Jitted f(rho, theta, zeta) -> (p, grad p in (R, phi, Z) components)."""
-        P, RZ = self._separable
-        if eq is not None and eq is not self.eq:  # another geometry
-            RZ = Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP)
+        eq = self.eq if eq is None else eq
+        P = Separable([self.basis], [self.c], self.basis.NFP)
+        RZ = Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP)
         return functools.partial(_p_and_grad, P, RZ, self.edge_order)
-
-    def pressure_function(self):
-        """Jitted f(c, rho, theta, zeta) -> (p, grad p), linear in the coefficients c
-        (shape (basis.num_modes,)), for JAX differentiation; c replaces ``self.c``.
-
-        Without ``edge_order`` p = 0 on the edge only if c satisfies the constraint of
-        ``impose_zero_edge``; with it, for every c."""
-        P, RZ = self._separable
-        k = self.edge_order
-        return lambda c, rho, theta, zeta: _p_and_grad(P, RZ, k, rho, theta, zeta, P.scatter([c]))
 
     def evaluate(self, grid, chunk=50000):
         """(p, grad p) at the nodes of ``grid``, shape (num_nodes, 4)."""

@@ -1,4 +1,4 @@
-"""Step 7: J, B, p and grad p at the collocation points as affine maps of the state.
+"""Step 7 of NEST: J, B, p and grad p at the collocation points as affine maps of the state.
 
 The state is x = (u, x_p): u the free coefficients of the current potential
 (``BoundaryPotential``, net toroidal current I fixed) and x_p the free coefficients of
@@ -10,7 +10,7 @@ geometry of the fixed equilibrium,
     p(x)      = D_p x_p
     grad p(x) = D_gp x_p
 
-exactly: J is linear in u, BS_h (``biot_savart.BiotSavart``) is linear, p is linear in
+exactly: J is linear in u, BS_h (``magnetic_field.BiotSavart``) is linear, p is linear in
 x_p. The D's are constant, so once they are built an objective made of these fields
 needs no Biot-Savart call: the force residual J x B - grad p is quadratic in x and its
 Jacobian is D_J x B + J x D_B - D_gp at any x.
@@ -53,6 +53,7 @@ from cartesian_grid import evaluate_chunked
 from desc_input import current_from_sqrtg
 from force import ForceResidual
 from grid import device_memory, progress
+from pressure import Pressure
 
 
 @functools.partial(jax.jit, donate_argnums=0)
@@ -62,8 +63,9 @@ def _put_columns(D, block, i0):
 
 
 def _columns(f, rtz, extra, n_cols, budget):
-    """f(rho, theta, zeta, *extra) -> (n, ..., n_cols) on the points, chunked so that a
-    chunk holds about ``budget`` values per column set (memory)."""
+    """f(rho, theta, zeta, *extra) -> (n, ..., n_cols) on the points, in chunks of about
+    ``budget / n_cols`` points: about ``budget`` values per component per chunk,
+    whatever the number of columns."""
     return evaluate_chunked(f, rtz, max(1, budget // max(n_cols, 1)), extra=extra)
 
 
@@ -94,7 +96,11 @@ class Fields(ForceResidual):
         D_B columns per batch (memory of the batched Biot-Savart).
     cache_dir : str or None
         Save / resume D_B column blocks there (opt-in).
+    chunk : int
+        Points per call of the series evaluators (the column builds use chunks of
+        8 chunk / n_columns points).
     verbose : bool
+        Progress lines.
 
     With stellarator-symmetric bases (sym="cos", ``BoundaryPotential.fit(sym=True)``,
     ``Pressure.fit(sym=True)``) the points are the half theta in [0, pi] of the grid
@@ -116,16 +122,15 @@ class Fields(ForceResidual):
         geo = inp.basis_vectors(self.rtz)
         self.E, self.G, self.sqrt_g = geo["E"], geo["G"], geo["sqrt_g"]
         self.n_u = current.n_free
-        self.free_p, _ = pressure.free_coefficients()
-        self.n_p = len(self.free_p)
+        self.n_p = len(pressure.free_coefficients()[0])
         self.n = self.n_u + self.n_p
         self.bs_kw = dict(kernel=kernel, **(bs_kw or {}))
         self._log(f"collocation: {len(self.x):,} points, {self.n_u} current + {self.n_p} pressure "
                   f"coefficients; box {box.shape}, {len(box.inside):,} inside points, "
                   f"kernel {kernel}")
         t0 = time.time()
-        self.D_J = self._current_columns(self.rtz, self.E, self.sqrt_g)
-        self.J_0 = jnp.asarray(self._net_current(self.rtz, self.E, self.sqrt_g))
+        self.D_J = self._current_columns()
+        self.J_0 = jnp.asarray(self._J(self.rtz, self.E, self.sqrt_g))
         self.D_p, self.D_gp = self._pressure_columns()
         self._log(f"D_J, D_p, D_gp built ({time.time() - t0:.1f} s): "
                   f"{(self.D_J.nbytes + self.D_p.nbytes + self.D_gp.nbytes) / 1e9:.2f} GB")
@@ -134,7 +139,7 @@ class Fields(ForceResidual):
         bg = inp.basis_vectors(box.rtz)
         self.E_box, self.sqrt_g_box = jnp.asarray(bg["E"]), jnp.asarray(bg["sqrt_g"])
         self._log(f"box geometry at {len(box.inside):,} points ({time.time() - t0:.1f} s)")
-        J0_box = self._net_current(box.rtz, self.E_box, self.sqrt_g_box)
+        J0_box = self._J(box.rtz, self.E_box, self.sqrt_g_box)
         self.B_0 = jnp.asarray(self.B_ext) + self.bs.apply(J0_box)
         self.D_B = self._build_D_B(col_chunk, cache_dir) if build_D_B else None
 
@@ -143,19 +148,22 @@ class Fields(ForceResidual):
             print(f"Fields: {msg}", flush=True)
 
     # ----------------------------------------------------------- columns
-    def _current_columns(self, rtz, E, sqrt_g, cols=None):
-        """D_J at the points ``rtz``, (n, 3, len(cols)): closed-form columns, then
-        J = sum_i sqrt(g) J^i e_i / sqrt(g) with the precomputed geometry."""
-        cols = np.arange(self.n_u) if cols is None else np.asarray(cols)
+    def _J_columns(self, cols, rho, theta, zeta, E, sqrt_g):
+        """Cartesian J of the unit coefficients ``cols`` at points with tangent basis E
+        and Jacobian sqrt_g, (n, 3, len(cols)): the closed-form sqrt(g) J^i
+        (``BoundaryPotential.sqrtg_J_columns``), then J = sum_i sqrt(g) J^i e_i / sqrt(g)."""
+        sJ = self.current.sqrtg_J_columns(cols, rho, theta, zeta)    # (n, k, 3)
+        return jnp.swapaxes(current_from_sqrtg(sJ, E, sqrt_g), 1, 2)
 
-        def f(rho, theta, zeta, E, sqrt_g):
-            sJ = self.current.sqrtg_J_columns(cols, rho, theta, zeta)    # (n, k, 3)
-            return jnp.swapaxes(current_from_sqrtg(sJ, E, sqrt_g), 1, 2)
-        return jnp.asarray(_columns(f, rtz, (jnp.asarray(E), jnp.asarray(sqrt_g)), len(cols),
-                                    self.chunk * 8))
+    def _current_columns(self):
+        """D_J at the collocation points, (n, 3, n_u)."""
+        cols = np.arange(self.n_u)
+        f = functools.partial(self._J_columns, cols)
+        return jnp.asarray(_columns(f, self.rtz, (jnp.asarray(self.E), jnp.asarray(self.sqrt_g)),
+                                    self.n_u, self.chunk * 8))
 
-    def _net_current(self, rtz, E, sqrt_g, u=None):
-        """J(u) (default u = 0: the net-current term J_0) at the points, (n, 3)."""
+    def _J(self, rtz, E, sqrt_g, u=None):
+        """Cartesian J(u) at the points, (n, 3); default u = 0, the net-current term J_0."""
         u = jnp.zeros(self.n_u) if u is None else jnp.asarray(u)
 
         def f(rho, theta, zeta, E, sqrt_g):
@@ -203,13 +211,13 @@ class Fields(ForceResidual):
         C = self.bs.consts()
         apply = jax.jit(jax.vmap(lambda J, C: self.bs.apply(J, C), in_axes=(2, None),
                                  out_axes=2))
-        rho, theta, zeta = (jnp.asarray(self.box.rtz[:, j]) for j in range(3))
+        rtz_box = [jnp.asarray(self.box.rtz[:, j]) for j in range(3)]
         todo = [i for i in range(0, self.n_u, col_chunk) if not done[i:i + col_chunk].all()]
+        n_todo = sum(min(i + col_chunk, self.n_u) - i for i in todo)
         t0, t_last, n_done = time.time(), time.time(), 0
         for k, i0 in enumerate(todo):
             i1 = min(i0 + col_chunk, self.n_u)
-            sJ = self.current.sqrtg_J_columns(np.arange(i0, i1), rho, theta, zeta)
-            J = jnp.swapaxes(current_from_sqrtg(sJ, self.E_box, self.sqrt_g_box), 1, 2)
+            J = self._J_columns(np.arange(i0, i1), *rtz_box, self.E_box, self.sqrt_g_box)
             block = apply(J, C)
             D_B = _put_columns(D_B, block, i0)
             if path is not None:
@@ -217,8 +225,7 @@ class Fields(ForceResidual):
             n_done += i1 - i0
             now = time.time()
             if self.verbose and (k == 0 or now - t_last > 30 or k + 1 == len(todo)):
-                progress("D_B", k + 1, len(todo), n_done, sum(min(i + col_chunk, self.n_u) - i
-                                                              for i in todo), t0,
+                progress("D_B", k + 1, len(todo), n_done, n_todo, t0,
                          f"{(now - t0) / n_done:.2f} s/column, memory {device_memory()}",
                          unit="columns")
                 t_last = now
@@ -226,6 +233,7 @@ class Fields(ForceResidual):
 
     # ------------------------------------------------------------ fields
     def split(self, x):
+        """x -> (u, x_p): the current and the pressure coefficients."""
         return x[: self.n_u], x[self.n_u :]
 
     def data(self):
@@ -236,7 +244,7 @@ class Fields(ForceResidual):
 
     def state(self, x, data):
         """J, B, p, grad p at the points for state x: pure JAX, linear / affine in x."""
-        u, xp = x[: self.n_u], x[self.n_u :]
+        u, xp = self.split(x)
         if data["D_B"] is None:
             raise RuntimeError("no D_B: use B_direct, or build_D_B=True")
         return {"J": data["J_0"] + data["D_J"] @ u, "B": data["B_0"] + data["D_B"] @ u,
@@ -244,7 +252,7 @@ class Fields(ForceResidual):
 
     def J_box(self, u):
         """Cartesian J of coefficients u at the box points inside the plasma, (n_inside, 3)."""
-        return self._net_current(self.box.rtz, self.E_box, self.sqrt_g_box, u)
+        return self._J(self.box.rtz, self.E_box, self.sqrt_g_box, u)
 
     def B_direct(self, u):
         """B = B_ext + BS_h(J(u) on the box) at the points, without D_B, (n, 3)."""
@@ -257,8 +265,7 @@ class Fields(ForceResidual):
     def objects(self, x):
         """The ``BoundaryPotential`` and ``Pressure`` of state x (for ``ForceResidual``
         methods, saving, ...)."""
-        from pressure import Pressure
-        u, xp = np.asarray(x[: self.n_u]), np.asarray(x[self.n_u :])
+        u, xp = (np.asarray(v) for v in self.split(x))
         p = self.pressure
         return (self.current.with_u(u),
                 Pressure(p.basis, np.asarray(p.to_coefficients(xp)), p.eq, p.edge_order))
@@ -272,7 +279,7 @@ class Fields(ForceResidual):
     def fit_pressure(self, x):
         """x with the pressure part replaced by the force-optimal one at the current of x
         (``Pressure.fit_force`` with J x B of x at the collocation points)."""
-        u = jnp.asarray(x[: self.n_u])
+        u = jnp.asarray(self.split(x)[0])
         J = self.J_0 + self.D_J @ u
         B = (self.B_0 + self.D_B @ u) if self.D_B is not None else jnp.asarray(self.B_direct(u))
         p = self.pressure.fit_force(self.rtz, self.dV, jnp.cross(J, B), self.G)

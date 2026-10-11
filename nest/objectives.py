@@ -1,4 +1,4 @@
-"""Step 8: objectives built from the fields J, B, p, grad p of ``fields.Fields``.
+"""Step 8 of NEST: objectives built from the fields J, B, p, grad p of ``fields.Fields``.
 
 An objective is a list of terms; term i is a residual r_i(x) at the collocation
 points and a weight w_i, and the optimizer minimizes

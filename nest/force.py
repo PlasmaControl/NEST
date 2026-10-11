@@ -52,7 +52,9 @@ class ForceResidual:
     eval_chunk : int
         Points per call of the series evaluators.
     kernel : {"vico_greengard", "hockney"}
-        Free-space kernel of B_plasma (``magnetic_field``).
+        Free-space kernel of B_plasma (``magnetic_field``): Vico-Greengard
+        (spectrally accurate, default) or Hockney-Eastwood (the discrete
+        Biot-Savart sum, second order in h).
     dtype : np.float32 or np.float64
         Precision of J on the box and of the transforms.
     bs_kw : dict

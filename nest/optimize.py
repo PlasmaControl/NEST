@@ -1,4 +1,4 @@
-"""Step 9: Gauss-Newton trust-region minimization of an ``ObjectiveFunction``.
+"""Step 9 of NEST: Gauss-Newton trust-region minimization of an ``ObjectiveFunction``.
 
     min_x f(x) = ||r(x)||^2
 
@@ -104,16 +104,14 @@ def gauss_newton(obj, x0, maxiter=100, tr_method="cho", points_per_block=None, f
     T0, eps = time.time(), float(np.finfo(float).eps)
     x = jnp.asarray(x0, dtype=jnp.float64)
     n = int(x.size)
-    logf = open(log_path, "a") if log_path else None
-
     def emit(rec):
         rec["t"] = round(time.time() - T0, 2)
         line = json.dumps(rec)
         if verbose:
             print("GN " + line, flush=True)
-        if logf:
-            logf.write(line + "\n")
-            logf.flush()
+        if log_path:
+            with open(log_path, "a") as fh:
+                fh.write(line + "\n")
 
     def factor(x, prev_inv):
         meth = "qr" if tr_method == "qr" else "cho"
@@ -174,7 +172,7 @@ def gauss_newton(obj, x0, maxiter=100, tr_method="cho", points_per_block=None, f
                    "method": fac[0], "kappa_J_h": kappa, "jac_s": round(t_jac, 2)}
             t_jac = 0.0
             if rho > 0.1:
-                accepted, x_old_f = True, rn**2
+                accepted, f_old = True, rn**2
                 x, r = x + d, r_new
             if callback is not None:
                 rec.update(callback(k, x, accepted) or {})
@@ -184,7 +182,7 @@ def gauss_newton(obj, x0, maxiter=100, tr_method="cho", points_per_block=None, f
                 reason = "reduction_at_rounding"
                 break
             if accepted:
-                if ftol is not None and act / x_old_f < ftol:
+                if ftol is not None and act / f_old < ftol:
                     reason = "ftol"
                 break
         else:
@@ -196,8 +194,6 @@ def gauss_newton(obj, x0, maxiter=100, tr_method="cho", points_per_block=None, f
             t = time.time()
             r, fac, scale, inv, kappa = factor(x, inv)
             t_jac = time.time() - t
-    if logf:
-        logf.close()
     return {"x": x, "history": hist, "stop_reason": reason or "maxiter",
             "wall_s": time.time() - T0}
 

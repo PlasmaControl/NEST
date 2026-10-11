@@ -2,6 +2,16 @@
 
 One entry per commit, newest first.
 
+## 2026-10-11: Review cleanup: dead code, docstrings, README solve path
+- Removed code nothing used: `magnetic_field._displacements`; `Pressure.pressure_function` (superseded by the closed-form `p_columns`), with the `C` argument of `pressure._p_and_grad` it needed (signature as on main again); the cached `Pressure._separable` (`point_evaluator` is main's again).
+- `nest/fields.py`: one `_J_columns` for the current columns at the collocation points and on the box (was two copies, in `_current_columns` and `_build_D_B`); `_net_current` renamed `_J`; `split` used by `state`, `objects`, `fit_pressure`; the unused `free_p` attribute dropped; the D_B progress total computed once; `chunk` and `verbose` documented; `Pressure` imported at the top.
+- `nest/optimize.py`: the JSON log is appended line by line (no file handle left open if a step raises); `x_old_f` renamed `f_old`.
+- `nest/desc_external_field.py`: imports at the top; `chunk` documented, and that `at_flux` builds a Biot-Savart map per call. `nest/pressure.py`: `DESCInput` imported at the top.
+- Docstrings: `biot_savart.BiotSavart` -> `magnetic_field.BiotSavart` (`fields.py`, `desc_external_field.py`); "Step N of NEST" headers as in the other modules; the `ForceResidual` kernel option states both kernels' accuracy.
+- `README.md`: a "Solve path" section (the calls from an equilibrium to a Gauss-Newton solve, checked by running it at 4, 4, 3, h = a/4; the cluster driver).
+- Equivalence with the previous commit (4, 4, 3, h = a/4; terms field, force 0.1, pressure 0.5): D_J, J_0, D_p, D_gp, B_0, D_B, x_0, residual, Jacobian, `B_direct`, `J_box`, Gauss-Newton end states (cho dense; qr with row blocks), `objects` and `DESCExternalField.at_flux` all identical.
+- Tests: `test_fields`, `test_optimize`, `test_symmetry`, `test_pressure` (both equilibria), `test_biot_savart`, `test_force`, `test_smooth_edge` (both) pass (14). The full suite at the previous commit: 38 passed (`test_reconstruction::test_qa` not run, too large for 8 GB).
+
 ## 2026-10-10: Vico-Greengard kernel stored as its octant; TODO.md
 - `nest/magnetic_field.py`: G is even in k_x and k_y, so `vico_greengard_kernel_hat(..., octant=True)` returns only the k_x, k_y >= 0 octant, (Nx // 2 + 1, Ny // 2 + 1, Nz // 2 + 1). The default rfft layout is the octant unfolded (`unfold_octant`, index folds min(i, n - i), `octant_folds`). `b_hat_free` takes either layout and unfolds the octant inside jit, where XLA fuses the gather into the product. `BiotSavart` stores the octant. The kernel cache holds the octant (new file name, so old cache files are not read).
 - Equivalence with the previous commit (even 48x40x36 and odd 49x41x35 boxes, random J; precise_QA box at h = a/10, 315x315x96, 4000 targets, random J):

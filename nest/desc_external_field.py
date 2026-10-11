@@ -3,7 +3,7 @@
     B_ext = B_DESC - BS_h(J_DESC)
 
 B_DESC is DESC's total field, J_DESC its current density sampled on the box and
-BS_h the box Biot-Savart operator (``biot_savart.BiotSavart``) with the same box
+BS_h the box Biot-Savart operator (``magnetic_field.BiotSavart``) with the same box
 and kernel as the solve. With this B_ext, B = B_ext + BS_h(J) equals B_DESC exactly
 for J = J_DESC at every box resolution, so the discretization of B_plasma acts only
 on J - J_DESC: a verification setting (e.g. fixed-boundary equilibria, or checking
@@ -20,9 +20,9 @@ of a ``DESCInput``:
 
 import numpy as np
 
-from magnetic_field import BiotSavart
-from cartesian_grid import cartesian_to_cylindrical, cylindrical_to_cartesian
+from cartesian_grid import cartesian_to_cylindrical, cylindrical_to_cartesian, evaluate_chunked
 from grid import map_to_flux
+from magnetic_field import BiotSavart
 
 
 class DESCExternalField:
@@ -37,6 +37,11 @@ class DESCExternalField:
     current : object with ``point_evaluator()`` or None
         J sampled on the box; None for DESC's own J (``DESCInput.compute_points``).
     kernel, dtype, eps, upsampfac, cache_dir : passed to ``BiotSavart``.
+    chunk : int
+        Points per call when J is evaluated on the box.
+
+    ``at_flux`` builds a ``BiotSavart`` for its points on every call (the points
+    differ between calls); ``ForceResidual`` calls it once.
     """
 
     def __init__(self, inp, box, current=None, kernel="vico_greengard", dtype=np.float64,
@@ -47,7 +52,6 @@ class DESCExternalField:
         if current is None:
             J = inp.compute_points(["J"], box.rtz, chunk=chunk)["J"]
         else:
-            from cartesian_grid import evaluate_chunked
             J = evaluate_chunked(current.point_evaluator(inp.eq), box.rtz, chunk)
         self.J_box = cylindrical_to_cartesian(J, box.phi_inside)  # (n_inside, 3)
 
