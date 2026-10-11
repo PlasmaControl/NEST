@@ -10,7 +10,8 @@ labeled from that field's own iota.
 Runs on a CPU in about two minutes.
 
 usage: python poincare_flux.py EQ.h5 SECTIONS_poincare.npz
-Writes SECTIONS_flux.png and SECTIONS_flux.npz next to the sections.
+Writes SECTIONS_flux.png and SECTIONS_flux.npz next to the sections (one column per
+traced field: the start and, unless poincare.py ran with --x start, the optimized x).
 """
 
 import sys
@@ -48,7 +49,8 @@ def main(eq_path, sec_path):
     d = np.load(sec_path)
     n_lines = d["start_R"].shape[1]
     flux, lines = {}, {}
-    for k in ("start", "optimized"):
+    runs = [k for k in ("start", "optimized") if f"{k}_R" in d]
+    for k in runs:
         R, Z = d[f"{k}_R"][1:], d[f"{k}_Z"][1:]
         ok = np.isfinite(R).all(0)  # lines that stayed on the grid
         c = np.column_stack([R[:, ok].ravel(), np.zeros(R[:, ok].size), Z[:, ok].ravel()])
@@ -77,11 +79,11 @@ def main(eq_path, sec_path):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig = plt.figure(figsize=(15, 15), constrained_layout=True)
-    gs = fig.add_gridspec(3, 2, height_ratios=[1, 1.1, 0.8])
+    fig = plt.figure(figsize=(7.5 * len(runs), 15), constrained_layout=True)
+    gs = fig.add_gridspec(3, len(runs), height_ratios=[1, 1.1, 0.8])
     cmap = plt.cm.turbo
     titles = {"start": "start (fits of DESC's J and p)", "optimized": "NEST optimized"}
-    for j, k in enumerate(("start", "optimized")):
+    for j, k in enumerate(runs):
         rho, th, idx = flux[k]
         col = cmap((np.broadcast_to(idx, rho.shape).ravel() * 0.618) % 1)
         for i, lo in enumerate((0.0, 0.5)):
@@ -101,7 +103,7 @@ def main(eq_path, sec_path):
                          + "\n(dotted: iota = n/m of this field)")
     ax = fig.add_subplot(gs[2, :])
     ax.plot(r, iota_desc, "k-", lw=1.2, label="DESC equilibrium")
-    for k, mk in (("start", "o"), ("optimized", "s")):
+    for k, mk in zip(runs, "os"):
         ax.plot(*lines[k], mk, ms=3.5, mfc="none", label=f"field lines, {titles[k]}")
     for n, mm in sorted({(n, m) for v in res.values() for n, m, _ in v}):
         ax.axhline(n / mm, color="0.6", lw=0.5, ls=":")

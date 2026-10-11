@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-10-11: Self-contained Poincare scripts
+- `desc_input/vmec_free_boundary/poincare.py` has its own copy of the field-line tracer, so it no longer imports the uncommitted `scripts/validate_opt.py`. It saves only the crossings; `poincare_flux.py` draws the figure, and `--x start` traces the start alone.
+- The R-Z Poincare figures are removed (unreadable for NCSX's thin crescent). The figures kept are the flux-coordinate ones (`figures/ncsx_*_poincare_flux.png`).
+
 ## 2026-10-11: Finite-beta free-boundary benchmarks with net current and their coils
 - `desc_input/vmec_free_boundary/`: three published VMEC free-boundary runs with their coils, re-solved in DESC on the VMEC LCFS:
   - NCSX c09r00: <beta> 4.1 %, I = -179 kA;

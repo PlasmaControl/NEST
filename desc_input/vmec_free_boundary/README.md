@@ -128,10 +128,25 @@ fixes this:
 **Use `--w-J 1e-3`.** At 1e-2 the pointwise penalty also damps the resonant
 currents and pins the edge, where NEST's fit cannot match DESC's J.
 
-Poincare sections: `poincare.py` traces the field lines (GPU, a few minutes, uses
-`scripts/validate_opt.py`). `poincare_flux.py` maps them to DESC (rho, theta) and
-measures iota per line (CPU, two minutes). The figures are
-`figures/ncsx_opt_L16M16N12*_poincare_flux.png`.
+Poincare sections, with only `nest/` needed:
+- `poincare.py` traces the field lines of the start and of the optimized x and saves
+  the crossings of phi = 0 (GPU, a few minutes; `--x start` traces the start only).
+- `poincare_flux.py` maps them to DESC (rho, theta), measures iota per line and
+  draws the figure (CPU, two minutes).
+
+```bash
+sbatch --mem=128G run.sbatch desc_input/vmec_free_boundary/poincare.py $E --x results/ncsx/wJ.npz --frac 20
+python desc_input/vmec_free_boundary/poincare_flux.py desc_input/vmec_free_boundary/NCSX/NCSX_L16M16N12.h5 figures/ncsx_wJ_poincare.npz
+```
+
+Figures:
+- `figures/ncsx_opt_L16M16N12_poincare_flux.png`: no penalty.
+- `figures/ncsx_opt_L16M16N12_wJ1e-3_poincare_flux.png`
+- `figures/ncsx_opt_L16M16N12_wJ1e-2_poincare_flux.png`
+
+The NEST runs above used `optimize_qa.py` options that are not committed yet:
+`--eq`, `--coils`, `--refine`, and the free-pressure defaults (`--w-W 10`,
+`--w-pos 10`).
 
 Run on Della, in jobs of 59 min or less for the gpu-test QOS:
 
