@@ -1,6 +1,6 @@
 """Solve driver: the combined objective ||r_D||^2 + lambda^-1 ||r_F||^2 by lambda continuation.
 
-usage: python run_solve.py [EQ.h5] [--coils COILS.h5] [--basis L M N] [--frac 10]
+usage: python run_solve.py [EQ.h5] [--coils COILS.h5 [MORE.h5 ...]] [--basis L M N] [--frac 10]
            [--kernel vico_greengard] [--decades -2 2] [--nlam 5] [--dtol 1e-3]
            [--maxiter 100] [--points-per-block P] [--cache-dir DIR] [--eval-factor 4]
            [--out DIR]
@@ -52,8 +52,9 @@ FB = os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_smooth_J")
 p = argparse.ArgumentParser()
 p.add_argument("eq", nargs="?", default=os.path.join(
     FB, "precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5"))
-p.add_argument("--coils", default=os.path.join(ROOT, "desc_input", "precise_QA_free_boundary",
-                                               "precise_QA_helical_coils.h5"))
+p.add_argument("--coils", nargs="+", default=[os.path.join(
+    ROOT, "desc_input", "precise_QA_free_boundary", "precise_QA_helical_coils.h5")],
+    help="external field file(s); several are summed (e.g. DSHAPE's TF and PF parts)")
 p.add_argument("--basis", type=int, nargs=3, default=None, help="L M N of J and p")
 p.add_argument("--frac", type=float, default=10, help="box spacing h = a / frac")
 p.add_argument("--kernel", default="vico_greengard")
@@ -72,7 +73,7 @@ t0 = time.time()
 log = lambda msg: print(f"[{time.time() - t0:7.1f}s] {msg}", flush=True)
 os.makedirs(args.out, exist_ok=True)
 
-inp = DESCInput.load(args.eq, field=args.coils)
+inp = DESCInput.load(args.eq, field=args.coils if len(args.coils) > 1 else args.coils[0])
 L, M, N = args.basis or inp.resolution
 log(f"{inp}; solve basis {L}, {M}, {N}; device memory {device_memory()}")
 current = BoundaryPotential.fit(inp.eq, L, M, N)

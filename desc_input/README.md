@@ -6,17 +6,24 @@ Each subfolder has its own README with the details.
 
 ## Equilibria
 
-All are the finite-β (⟨β⟩ ≈ 1 %) `precise_QA` stellarator (NFP = 2) in the field of
-the 16 helical coils `precise_QA_free_boundary/precise_QA_helical_coils.h5`, with
-ι = 1/2 (m/n = 4/2), the surface where NEST should open islands, near ρ = 0.55.
+The `precise_QA` files are the finite-β (⟨β⟩ ≈ 1 %) `precise_QA` stellarator (NFP = 2)
+in the field of the 16 helical coils `precise_QA_free_boundary/precise_QA_helical_coils.h5`,
+with ι = 1/2 (m/n = 4/2), the surface where NEST should open islands, near ρ = 0.55.
+`DSHAPE_free_boundary_smooth/` is an axisymmetric companion: a smooth-edge, current-
+prescribed D-shaped tokamak (DESC's `DSHAPE_CURRENT` at ⟨β⟩ = 2.9 %) at free boundary in
+a 1/R toroidal field and 24 PF rings.
 
 | file | current density at the LCFS | B·n/\|B\| rms in the coils | force error | ι = 1/2 at ρ |
 |---|---|---|---|---|
 | `precise_QA_free_boundary_L16N14.h5` | finite: ι prescribed, so dI/dρ ≠ 0 at the edge | 2.2e-3 | 6.1e-5 | 0.550 |
 | `precise_QA_free_boundary_smooth_J/precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5` | **≈ 0 net; residual rms 6 % of the peak** | 2.45e-3 | 4.2e-5 | 0.550 |
+| `DSHAPE_free_boundary_smooth/DSHAPE_free_boundary_smooth.h5` (L, M, N = 26, 13, 0) | **→ 0 with zero slope**; rms 29 A/m² at ρ = 1 (8.1e4 at ρ = 0.5) | 4.8e-6 | 4.1e-7 | n/a (axisymmetric; ι from −1.00 to −0.31) |
+| `DSHAPE_free_boundary_smooth/DSHAPE_free_boundary_smooth_M20.h5` (40, 20, 0, same LCFS) | **→ 0**; rms 0.5 A/m² at ρ = 1 | 5.0e-6 | 9.2e-10 | n/a |
 | `W7-X_output.h5` | DESC example (fixed boundary), used in tests | n/a | n/a | n/a |
 
-The force error is ⟨|J×B − ∇p|⟩ / ⟨|∇B²/2μ₀|⟩. The resolution is L = M = 16, N = 14.
+The force error is ⟨|J×B − ∇p|⟩ / ⟨|∇B²/2μ₀|⟩. The `precise_QA` resolution is L = M = 16, N = 14.
+The DSHAPE field is in two files (TF and PF rings), loaded together with
+`DESCInput.load(eq_file, field=[tf_file, pf_file])`; see its README.
 
 **Use `..._smooth_J_edgeJ_r0.3.h5` as the initial configuration** when J should go
 to zero at the boundary.
@@ -34,6 +41,7 @@ to zero at the boundary.
 |---|---|
 | `precise_QA_free_boundary/` | how `precise_QA_free_boundary_L16N14.h5` was built: finite β by continuation, free boundary at L = M = N = 12, re-solve at 16/16/14 |
 | `precise_QA_free_boundary_smooth_J/` | the smooth-current versions and every test made on the way, with numbers and figures |
+| `DSHAPE_free_boundary_smooth/` | the axisymmetric smooth-edge DSHAPE, its coils, how they were made, and its diagnostics |
 
 ## How the free-boundary solves work
 

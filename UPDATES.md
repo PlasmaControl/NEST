@@ -2,6 +2,15 @@
 
 One entry per commit, newest first.
 
+## 2026-10-11: Smooth-edge DSHAPE free-boundary example; external field from several files
+- `desc_input/DSHAPE_free_boundary_smooth/`: an axisymmetric free-boundary equilibrium with J -> 0 at the LCFS. It is DESC's `DSHAPE_CURRENT` at the same <beta> (2.91 %), with p = p0 (1-s)^3 and I = c (s - s^3 + s^4/2), solved in a 1/R toroidal field plus 24 circular PF rings fitted by virtual casing. Built with fftq's `tools/make_dshape_smooth.py` on 2026-10-07; its steps are in the README.
+  - Equilibria: `DSHAPE_free_boundary_smooth.h5` (26, 13, 0) and `..._M20.h5` (40, 20, 0, same LCFS).
+  - External field: `DSHAPE_smooth_TF.h5` and `DSHAPE_smooth_PF_coils.h5`, rebuilt from `coil_parameters.json` by `make_coils.py`.
+  - Diagnostics: `check_dshape_smooth.py` -> `diagnostics.json`. Force error 4.1e-7 (M13) and 9.2e-10 (M20); rms |J| at rho = 1 is 29.2 and 0.51 A/m^2 (DSHAPE_CURRENT: 1374); B.n/|B| rms in the coils 4.84e-6 and 5.03e-6; NEST loads both files, passes `check`, and runs `ForceResidual` (iteration 0 at h = a/4: 1.05e-3).
+- DESC cannot save a `SumMagneticField`: its I/O list is named `_io_attrs` instead of `_io_attrs_`, so the file holds no fields (DESC 0.16 and 0.17). fftq's coil file for this case is empty for that reason. The two parts are saved separately here; the rebuilt field gives the build's final B.n/|B| (4.838e-6) to all printed digits.
+- `nest/desc_input.py`: `DESCInput.load(..., field=[file, file, ...])` loads each part and sums them (`SumMagneticField`); a single file or object loads as before. `nest/run_solve.py`: `--coils` takes one or more files.
+- Tests: `test_grid` and `test_fields` pass.
+
 ## 2026-10-11: Review cleanup: dead code, docstrings, README solve path
 - Removed code nothing used: `magnetic_field._displacements`; `Pressure.pressure_function` (superseded by the closed-form `p_columns`), with the `C` argument of `pressure._p_and_grad` it needed (signature as on main again); the cached `Pressure._separable` (`point_evaluator` is main's again).
 - `nest/fields.py`: one `_J_columns` for the current columns at the collocation points and on the box (was two copies, in `_current_columns` and `_build_D_B`); `_net_current` renamed `_J`; `split` used by `state`, `objects`, `fit_pressure`; the unused `free_p` attribute dropped; the D_B progress total computed once; `chunk` and `verbose` documented; `Pressure` imported at the top.

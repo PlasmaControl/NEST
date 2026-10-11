@@ -25,6 +25,7 @@ import numpy as np
 import desc.io
 from desc.equilibrium import Equilibrium
 from desc.grid import Grid, LinearGrid, QuadratureGrid
+from desc.magnetic_fields import SumMagneticField
 
 from separable import Separable
 
@@ -41,6 +42,15 @@ def _load_equilibrium(path):
     if not isinstance(eq, Equilibrium):
         raise TypeError(f"{path} holds a {type(eq).__name__}, not a DESC equilibrium")
     return eq
+
+
+def _load_field(field):
+    """A field object from a file, a field object, or a list of those (summed)."""
+    if isinstance(field, (list, tuple)):
+        return SumMagneticField([_load_field(f) for f in field])
+    if isinstance(field, (str, os.PathLike)):
+        return desc.io.load(field)
+    return field
 
 
 def covariant_basis(RZ, rho, theta, zeta):
@@ -109,11 +119,11 @@ class DESCInput:
 
     @classmethod
     def load(cls, path, field=None, name=None, check=True):
-        """From an equilibrium file; ``field`` is a file, a field object or None."""
+        """From an equilibrium file. ``field`` is a file, a field object, a list of those
+        (their sum, ``SumMagneticField``: DESC cannot save a ``SumMagneticField``, so a
+        field of several parts is kept as one file per part) or None."""
         eq = _load_equilibrium(path)
-        if isinstance(field, (str, os.PathLike)):
-            field = desc.io.load(field)
-        return cls(eq, field, name or os.path.basename(str(path)), check)
+        return cls(eq, _load_field(field), name or os.path.basename(str(path)), check)
 
     # ----------------------------------------------------------------- basics
     @property
