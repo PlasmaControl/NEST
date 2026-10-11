@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-11: precise_QA islands at iota = 1/2 with the current held (--w-J 1e-3)
+- `desc_input/vmec_free_boundary/poincare.py`: `--island-lines k` starts k more lines across each low-order chain on theta = pi / m. This fills chains whose X-points lie on both theta = 0 and pi.
+- precise_QA (`smooth_J_edgeJ_r0.3`), with `--w-J 1e-3` and refined to a/20: force error 2.13e-5, against DESC's 4.24e-5. iota stays within 0.015 of DESC's, and the 4-island iota = 1/2 chain is kept at rho 0.58-0.74.
+- Pressure scans (`--p-scale` 1.5-2.5, with or without `--fix-I` or `--w-J`) push iota above 1/2 at fixed coils.
+- Figures: `precise_QA_wJ1_a20_poincare_flux.png`, `wJ1_islands.png`, and the scans `pscale*_islands.png`. See `OPTIMIZATION_STATUS.md`.
+
 ## 2026-10-11: run_della.sbatch: compilation cache and platform allocator, as on Stellar
 - `run_della.sbatch` now matches `run.sbatch`: a persistent JAX compilation cache in `.cache/jax`, and the platform allocator (override with `--export=ALL,XLA_PYTHON_CLIENT_ALLOCATOR=default`).
 

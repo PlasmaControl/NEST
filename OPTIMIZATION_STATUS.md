@@ -270,3 +270,10 @@ The factor-4 potential (205k unknowns, free pressure, a/10) reaches 1.78e-5 on i
 - **Preconditioner build:** a scan over equal radial slabs, padded with zero weights, holds one slab's buffers at a time. Each block's table columns are gathered outside the Gram program. The factor-4 build, 6,110 blocks, now fits in memory.
 - **Allocator:** `run.sbatch` uses the platform allocator by default. It is about 7% slower per CG iteration (0.116 vs 0.108 s), but long runs cannot fail on a fragmented pool.
 - **Compilation:** `run.sbatch` keeps a persistent JAX compilation cache (`.cache/jax`). The test suite takes 17.5 min with a warm cache, against 29 min before.
+
+### Islands: ι = 1/2 in `smooth_J_edgeJ_r0.3`
+DESC's ι crosses 1/2 at ρ ≈ 0.6, so a 4-island (m, n) = (4, 2) chain is expected.
+- **Without a current constraint the chain disappears.** Force balance does not fix the current profile, and the optimizer lifts the ι minimum to 0.510, so ι never reaches 1/2.
+- **Scaling the pressure does not bring it back.** At fixed coils, 1.5–2.5× the pressure pushes ι up to 0.55–0.8. This happens with I(ρ) held (`--fix-I`) and with `--w-J 1e-3`. p and J stay on DESC's domain while the field shifts against it.
+- **`--w-J 1e-3` at the original pressure keeps it, as for NCSX.** ι stays within 0.015 of DESC's and the chain stays. On a/10 the force error is 2.35e-5 (3.31e-5 on the a/20 check); refined to a/20 it is 2.13e-5, against DESC's 4.24e-5. The current stays within 5 % of DESC's.
+- **Shape of the chain.** Islands at ρ ≈ 0.58–0.74 with a clean separatrix, centred at θ/π = 0.37, 0.82, 1.18, 1.63. Figure: `figures/precise_QA_wJ1_a20_poincare_flux.png`, with lines started inside the islands (`poincare.py --island-lines 12`).

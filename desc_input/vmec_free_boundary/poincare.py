@@ -8,7 +8,8 @@ done for the start (the fits of DESC's J and p) and for the optimized x.
 On top of the uniform seeds along theta = 0, lines are seeded around each resonant
 surface iota = n/m (n a multiple of NFP, m <= 12) on theta = 0 and theta = pi:
 with stellarator symmetry the island O- and X-points of the phi = 0 section lie on
-that line.
+that line. With ``--island-lines`` k, k more seeds cross each low-order chain
+(m <= 6) on theta = pi / m, for chains with X-points at both theta = 0 and pi.
 
 The crossings go to figures/<x name>_poincare.npz (prefixed with ncsx_ for the NCSX
 runs). ``poincare_flux.py`` maps them to DESC (rho, theta), measures iota per line
@@ -138,6 +139,10 @@ def main():
     ap.add_argument("--factors", type=float, nargs=3, default=(3, 3, 2.5))
     ap.add_argument("--periods", type=int, default=400)
     ap.add_argument("--lines", type=int, default=32, help="uniform seeds on theta = 0")
+    ap.add_argument("--island-lines", type=int, default=0,
+                    help="extra seeds across each low-order chain (m <= 6) on theta = pi / m")
+    ap.add_argument("--island-width", type=float, default=0.12,
+                    help="those seeds span the resonant rho +- this")
     ap.add_argument("--out", default=None, help="npz (default figures/<x name>_poincare.npz)")
     a = ap.parse_args()
     t0 = time.time()
@@ -159,6 +164,12 @@ def main():
     for _, _, r in res:
         seeds += [(min(r + d, 0.995), th) for d in (-0.02, -0.01, 0.0, 0.01, 0.02)
                   for th in (0.0, np.pi)]
+    # theta = 0, pi hold the O- or X-points (stellarator symmetry); theta = pi / m is
+    # half way to the next one, so it crosses the islands when 0 and pi are X-points
+    for _, m, r in res:
+        if m <= 6:
+            seeds += [(min(r + d, 0.995), np.pi / m)
+                      for d in np.linspace(-a.island_width, a.island_width, a.island_lines)]
     seeds = np.array([s for s in seeds if s[0] > 0.02])
     st = np.asarray(RZ.evaluate(jnp.asarray(seeds[:, 0]), jnp.asarray(seeds[:, 1]),
                                 jnp.zeros(len(seeds))))
