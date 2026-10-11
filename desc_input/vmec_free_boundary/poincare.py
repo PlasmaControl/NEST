@@ -7,11 +7,14 @@ done for the start (the fits of DESC's J and p) and for the optimized x.
 
 On top of the uniform seeds along theta = 0, lines are seeded around each resonant
 surface iota = n/m (n a multiple of NFP, m <= 12). By default these are DESC's
-resonances, on theta = 0 and pi. With ``--islands`` (the _poincare_flux.npz of a
-previous trace) each field is seeded at its own measured resonances, across the
-chain (rho_res +- 0.03) and at the straight-field-line angles theta* = 0, pi/m, pi,
-pi + pi/m. With stellarator symmetry the O-points of the phi = 0 section sit at one
-of these, so the field lines inside the islands are traced too.
+resonances, on theta = 0 and pi; with stellarator symmetry the island O- and X-points
+of the phi = 0 section lie on that line. ``--island-lines`` k adds k seeds across each
+low-order chain (m <= 6) on theta = pi / m, for chains with X-points at both theta = 0
+and pi. With ``--islands`` (the _poincare_flux.npz of a previous trace) each field is
+instead seeded at its own measured resonances, across the chain (rho_res +- 0.03) and
+at the straight-field-line angles theta* = 0, pi/m, pi, pi + pi/m. The O-points of the
+phi = 0 section sit at one of these, so the field lines inside the islands are traced
+too.
 
 The crossings of phi = 0 (keys <run>_R, <run>_Z) and of phi = pi / NFP (<run>_Rh,
 <run>_Zh) go to figures/<x name>_poincare.npz (prefixed with ncsx_ for the NCSX
@@ -190,6 +193,10 @@ def main():
     ap.add_argument("--factors", type=float, nargs=3, default=(3, 3, 2.5))
     ap.add_argument("--periods", type=int, default=400)
     ap.add_argument("--lines", type=int, default=32, help="uniform seeds on theta = 0")
+    ap.add_argument("--island-lines", type=int, default=0,
+                    help="extra seeds across each low-order chain (m <= 6) on theta = pi / m")
+    ap.add_argument("--island-width", type=float, default=0.12,
+                    help="those seeds span the resonant rho +- this")
     ap.add_argument("--out", default=None, help="npz (default figures/<x name>_poincare.npz)")
     ap.add_argument("--islands", default=None,
                     help="_poincare_flux.npz of a previous trace (poincare_flux.py): seed the "
@@ -223,6 +230,13 @@ def main():
             run_res[name] = res
             extra = np.array([(min(r + d, 0.995), th) for _, _, r in res
                               for d in (-0.02, -0.01, 0.0, 0.01, 0.02) for th in (0.0, np.pi)])
+            # theta = 0, pi hold the O- or X-points (stellarator symmetry); theta = pi / m
+            # is half way to the next one, so it crosses the islands when 0 and pi are
+            # X-points
+            more = [(min(r + d, 0.995), np.pi / m) for _, m, r in res if m <= 6
+                    for d in np.linspace(-a.island_width, a.island_width, a.island_lines)]
+            if more:
+                extra = np.concatenate([extra, np.array(more)])
         s = np.concatenate([uniform, extra.reshape(-1, 2)])
         seeds[name] = s[s[:, 0] > 0.02]
         st = np.asarray(RZ.evaluate(jnp.asarray(seeds[name][:, 0]), jnp.asarray(seeds[name][:, 1]),
