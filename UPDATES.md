@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-11: First tutorial notebook
+- `docs/tutorials/basic_solve.ipynb`, in the style of DESC's `docs/notebooks/tutorials`: one solve from start to finish on the smooth-current precise_QA in its coils at a low resolution (bases 4, 4, 3, h = a/4; about 2 minutes on a laptop CPU), stored with its outputs.
+  - Covers `DESCInput` and its checks and summary; `BoundaryPotential` (J = curl T, its parameters, the fit against DESC's J on a cross-section); `Pressure`; `CartesianGrid` and `locate_plasma`; `ForceResidual` (kernels, metrics, `decompose`); `Fields`; the objective terms; `gauss_newton` and `continuation`; the check on an independent grid; saving and loading; stellarator symmetry; production runs.
+  - Numbers from the notebook: force error on the evaluation grid 1.12e-3 at the fitted start and 5.2e-4 after the continuation (solve grid 4.9e-4).
+- `docs/tutorials/README.md`: an index of the notebooks; `README.md` links it.
+
 ## 2026-10-11: Smooth-edge DSHAPE free-boundary example; external field from several files
 - `desc_input/DSHAPE_free_boundary_smooth/`: an axisymmetric free-boundary equilibrium with J -> 0 at the LCFS. It is DESC's `DSHAPE_CURRENT` at the same <beta> (2.91 %), with p = p0 (1-s)^3 and I = c (s - s^3 + s^4/2), solved in a 1/R toroidal field plus 24 circular PF rings fitted by virtual casing. Built with fftq's `tools/make_dshape_smooth.py` on 2026-10-07; its steps are in the README.
   - Equilibria: `DSHAPE_free_boundary_smooth.h5` (26, 13, 0) and `..._M20.h5` (40, 20, 0, same LCFS).

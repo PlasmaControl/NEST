@@ -21,6 +21,8 @@ free-boundary equilibrium.
 
 Open items (validation, studies, optional features, memory): [TODO.md](TODO.md).
 
+Tutorials: [docs/tutorials](docs/tutorials/README.md), starting with [basic_solve.ipynb](docs/tutorials/basic_solve.ipynb).
+
 # Solve path
 
 The modules in `nest/`, run from there (as the tests do):
