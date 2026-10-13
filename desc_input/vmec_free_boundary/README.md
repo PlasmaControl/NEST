@@ -200,3 +200,28 @@ Run on Stellar:
 ```bash
 sbatch --qos=gpu-stellar --time=03:30:00 run.sbatch scripts/optimize_qa.py --eq desc_input/vmec_free_boundary/NCSX/NCSX_L16M16N12.h5 --coils desc_input/vmec_free_boundary/NCSX/NCSX_coils.h5 --refine 20 --out results/ncsx/opt_L16M16N12
 ```
+
+## NCSX: resonant forcing against iota
+
+`resonant_field.py` (GPU) Fourier-analyses b^rho = B.grad rho / B.grad zeta on DESC's
+surfaces in (theta*, zeta). `resonant_widths.py` (CPU) compares b_mn of each chain, at
+the field's own resonance, with the island width measured in the Poincare sections.
+Since iota < 0, the resonant harmonic is (m, m iota), e.g. (5, -3) for 3/5. The
+"2/3" chain is 6/9, at the iota maximum, where there is no pendulum width.
+
+| field | 3/7: rho, b, w (pred / meas) | 3/6 | 3/5 |
+|---|---|---|---|
+| start | 0.365, 2.0e-5, 0.013 / 0.007 | 0.582, 1.1e-4, 0.028 / 0.024 | 0.796, 1.1e-3, 0.080 / 0.086-0.098 |
+| w_J = 0 | (not crossed) | 0.428, 3.9e-4, 0.043 / 0.051-0.064 | 0.785, 6.5e-4, 0.054 / 0.045-0.053 |
+| w_J = 1e-3 | 0.310, 2.6e-4, 0.046 / 0.044-0.052 | 0.569, 5.5e-5, 0.022 / 0.025-0.028 | 0.796, 5.9e-4, 0.056 / 0.047-0.073 |
+| w_J = 1e-2 | 0.402, 6.7e-5, 0.022 / 0.022-0.026 | 0.597, 2.9e-4, 0.043 / 0.044-0.046 | 0.796, 5.5e-4, 0.055 / 0.046-0.057 |
+
+The measured range is the raw extent of the locked lines, and that extent after
+removing the non-resonant wobble of the neighbouring surfaces. The coils alone give
+b_5,-3 = 2.0e-2 at rho 0.795: the plasma shields the vacuum 3/5 drive by about 20x.
+Figure: `figures/ncsx_resonant_field_widths.png`.
+
+```bash
+sbatch --mem=128G --time=00:40:00 run_della.sbatch desc_input/vmec_free_boundary/resonant_field.py $E --x wJ0=results/ncsx/opt_L16M16N12.npz wJ1e-3=results/ncsx/opt_L16M16N12_wJ1e-3.npz --out ncsx_resonant_field
+python desc_input/vmec_free_boundary/resonant_widths.py figures/ncsx_resonant_field.npz wJ1e-3=figures/ncsx_opt_L16M16N12_wJ1e-3_islands_poincare_flux.npz
+```

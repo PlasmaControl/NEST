@@ -2,6 +2,17 @@
 
 One entry per commit, newest first.
 
+## 2026-10-13: NCSX resonant b^rho_mn against island widths
+- `desc_input/vmec_free_boundary/resonant_field.py`: b^rho = B.grad rho / B.grad zeta on DESC's surfaces, Fourier analysed in (theta*, zeta) for m <= 12, |n| <= 4 NFP. It covers DESC (check: 7e-18), the coils alone, the start and any optimized x.
+- `resonant_widths.py`: for each chain, the field's own resonance and shear from the traced lines, b_mn there, the pendulum width, and the width measured from locked lines.
+- NCSX, low-order chains: predicted and measured widths agree to 20-30 %.
+  - 3/5 does not move (rho 0.796). Optimization halves b_5,-3 (1.1e-3 -> 5.5-6.5e-4 for every w_J), and the island narrows from about 0.09 to 0.05.
+  - 3/7 at w_J = 1e-3 grows: b is 7x the start's at the same rho, and the chain moves inward (0.365 -> 0.31) to where b is larger still.
+  - 3/6 at w_J = 0 follows iota: the chain moves to rho 0.43, where b is 4e-4.
+  - 6/9 ("2/3") sits at the iota maximum; it has no pendulum width.
+  - Core b_mn of 1e-4 differ by up to 4x between a/10 and a/20; 3/5 does not.
+- Figure: `figures/ncsx_resonant_field_widths.png`.
+
 ## 2026-10-11: QH and CTH-like through NEST; island interiors in the Poincare sections
 - DESC re-solves: QH_5beta at 16/16/12 (force error 6.5e-4) and CTH_like at 12/12/8 (7.6e-4).
 - NEST with `--w-J`:
