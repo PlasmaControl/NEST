@@ -2,6 +2,30 @@
 
 One entry per commit, newest first.
 
+## 2026-10-14: Axisymmetric tokamak: DESC-matched start, dense model, rank and drift of force balance
+- `desc_input/tokamak_free_boundary/`: a free-boundary tokamak (DSHAPE boundary, p ∝ (1-ρ²)³, I ∝ 1-(1-ρ²)³, ⟨β⟩ 2.4 %, q 1.18 → 7.5) at L = M = 12, 16, 24, 32.
+  - The external field is a REGCOIL `FourierCurrentPotentialField`, with B.n/|B| 5e-7.
+  - Releasing the LCFS in that field moves it by at most 2.5 mm (`free_boundary_tokamak.py`).
+- DESC-matched start, so that F_NEST(x0) = F_DESC on the collocation points:
+  - `optimize_qa.py --bext desc` sets B_ext = B_DESC - B_plasma(x0);
+  - `--fit force` (`nest/dense.py`) minimizes |(J - J_DESC) x B_DESC|² + eps²|J - J_DESC|². The difference drops to 2e-8 at L = 24, against DESC's 1.1e-7 (the fit of T gives 9e-7).
+- `nest/dense.py`, `--dense`: B_plasma(u) = G u, with G formed once (one box solve per unknown) and cached on disk. A force-only run of 100 iterations takes 2-5 min on one A100. Also `--dtype float64` (float32 stops at ~1e-8), `--no-check`, `--track`, `--keep-iterates`, `--dense-batch`.
+- `BoundaryPotential.fit`:
+  - with stellarator symmetry the b modes with m > 0, n = 0 were never fitted; they are now (precise_QA start 1.7x better);
+  - new options: `target="J"` and `edge_weight`.
+- `objective.PressureSquare` (`--w-p2`).
+- `ForceResidual` works without a box, and computes B_ext on first use. `DESCInput.B_ext` uses a fine, chunked source grid for surface currents.
+- Scripts:
+  - `gs_nullspace.py` (`--run`: exact Jacobian, QR + SVD);
+  - `gs_force_fit.py`, `gs_x0_force.py`, `gs_check_norms.py`, `gs_box_convergence.py`;
+  - `gs_check_end.py`: independent grid, a/30 box, DESC L32 as reference;
+  - `gs_poincare.py`, `gs_plot_drift.py`, `gs_plot_null64.py`, `gs_plot_J_fit.py`, `gs_plots.py`.
+- Findings (L = M = 24, float64):
+  - The force Jacobian has full rank with no gap; 10-12 % of its singular values lie below 1e-4. These directions are J along B and Grad-Shafranov neighbours δp(ψ), δF(ψ).
+  - Force-only optimization from the DESC-matched start reaches 2-6e-9 on its own grid. It does not deflate: ⟨p⟩, rms J and I are unchanged to ~1e-6, and the surfaces are within ~2e-5 of DESC's.
+  - On an independent grid and box, F is 2-3x below DESC, and the fields are no closer to DESC L32 than DESC L24 is.
+- Figures: `figures/gs_*.png` and `desc_input/tokamak_free_boundary/*.png`.
+
 ## 2026-10-13: NCSX resonant b^rho_mn against island widths
 - `desc_input/vmec_free_boundary/resonant_field.py`: b^rho = B.grad rho / B.grad zeta on DESC's surfaces, Fourier analysed in (theta*, zeta) for m <= 12, |n| <= 4 NFP. It covers DESC (check: 7e-18), the coils alone, the start and any optimized x.
 - `resonant_widths.py`: for each chain, the field's own resonance and shear from the traced lines, b_mn there, the pendulum width, and the width measured from locked lines.

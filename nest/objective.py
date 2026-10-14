@@ -487,6 +487,26 @@ class PressureEnergy(_Objective):
         return self.weight * e / self.normalization
 
 
+class PressureSquare(PressureEnergy):
+    """The volume average of p^2 held at its start: one residual, weight
+    (<p^2>_vol - target) / target. Unlike <p>, it is not linear in p, and it
+    cannot be met by a pressure that changes sign."""
+
+    name = "<p^2>"
+
+    def build(self, fields):
+        if self.target is None:
+            p0 = fields.compute(fields.x0)["p"]
+            self.target = self.scale**2 * jnp.sum(fields.sw**2 * p0**2)
+        return super().build(fields)
+
+    def compute(self, f):
+        return jnp.sum(self._sw**2 * f["p"] ** 2)[None]
+
+    def tangent(self, d, base):
+        return 2 * jnp.sum(self._sw**2 * base["p"] * d["p"])[None]
+
+
 class PressurePositivity(_Objective):
     """min(p, 0) -> 0: a one-sided penalty, zero wherever p >= 0, normalized by
     rms p_desc. Its derivative is dp where p < 0 at x (the active set)."""

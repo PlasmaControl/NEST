@@ -29,6 +29,8 @@ DESC's own force imbalance, the error of the fitted current, of the field (coils
 plus B_plasma against DESC's B) and of the pressure; the identity is exact.
 """
 
+import functools
+
 import numpy as np
 from desc.grid import QuadratureGrid
 
@@ -46,8 +48,9 @@ class ForceResidual:
     ----------
     inp : DESCInput
         The equilibrium and its external field (needed for B_ext).
-    box : CartesianGrid
-        The periodic box on which J is sampled for B_plasma (``locate_plasma`` done).
+    box : CartesianGrid or None
+        The periodic box on which J is sampled for B_plasma (``locate_plasma`` done);
+        None when B_plasma is not needed (``B_plasma`` and ``evaluate`` then fail).
     resolution : (L, M, N), optional
         Of the collocation tensor grid: L // 2 + 1 Gauss-Legendre points in rho,
         2 M + 1 uniform in theta and 2 N + 1 uniform in zeta per field period
@@ -67,7 +70,7 @@ class ForceResidual:
     """
 
     def __init__(self, inp, box, resolution=None, sym=None, eval_chunk=50000, rho_slice=None):
-        if box.inside is None:
+        if box is not None and box.inside is None:
             raise RuntimeError("locate the plasma on the box first (box.locate_plasma)")
         eq = inp.eq
         self.inp, self.box, self.eval_chunk = inp, box, eval_chunk
@@ -111,8 +114,13 @@ class ForceResidual:
         dq = inp.compute(["<|F|>_vol", "<|grad(|B|^2)|/2mu0>_vol"], q)
         self.norm = float(np.ravel(dq["<|grad(|B|^2)|/2mu0>_vol"])[0])
         self.F_desc_vol = float(np.ravel(dq["<|F|>_vol"])[0])  # DESC's own <|F|>
-        self.B_ext = inp.B_ext(self.x)
-        self.K_hat = biot_savart_kernel_hat(box.axes)
+        self.K_hat = None if box is None else biot_savart_kernel_hat(box.axes)
+
+    @functools.cached_property
+    def B_ext(self):
+        """The external field at the points (on first use: a coil or surface-current
+        Biot-Savart sum)."""
+        return self.inp.B_ext(self.x)
 
     def _series(self, evaluator, rtz):
         return evaluate_chunked(evaluator, rtz, self.eval_chunk)

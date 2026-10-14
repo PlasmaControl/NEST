@@ -210,6 +210,14 @@ class DESCInput:
         """External field at Cartesian points x, shape (n, 3), in (B_x, B_y, B_z) [T]."""
         if self.field is None:
             raise ValueError(f"{self.name}: no external field was given")
+        if source_grid is None and hasattr(self.field, "Phi_mn"):
+            # a surface current: DESC's default source grid follows its (M, N), too
+            # coarse in zeta for an axisymmetric (N = 0) winding surface
+            f = self.field
+            source_grid = LinearGrid(M=max(64, 4 * f.M_Phi, 4 * f.M),
+                                     N=max(128, 4 * f.N_Phi, 4 * f.N), NFP=f.NFP)
+            # ~33k source points: unchunked, 1e5 points need tens of GB
+            chunk_size = chunk_size or 2000
         return np.asarray(self.field.compute_magnetic_field(
             np.asarray(x, dtype=float), basis="xyz", source_grid=source_grid,
             chunk_size=chunk_size))

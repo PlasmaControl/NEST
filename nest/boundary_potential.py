@@ -258,8 +258,10 @@ class BoundaryPotential:
 
     @classmethod
     def fit(cls, eq, L=None, M=None, N=None, factors=(3, 3, 2.5), n_rho=None,
-            edge_power=2, I=None, sym=None):
-        """Fit the free coefficients to DESC's potential, T itself (not J).
+            edge_power=2, I=None, sym=None, target="T", t_weight=1e-3, edge_weight=1.0,
+            edge_rho=0.95):
+        """Fit the free coefficients to DESC's potential T (``target="T"``) or to
+        its current (``target="J"``).
 
         DESC's sqrt(g) J^zeta, sqrt(g) J^theta (Ampere's law from B_theta_r -
         B_rho_t, B_rho_z - B_zeta_r) are integrated from the axis on a tensor grid
@@ -270,6 +272,17 @@ class BoundaryPotential:
         theta, zeta and rho drho in rho) with the gauge alpha(zeta) of T_zeta
         free (the target is only defined up to it); alpha is then dropped. I is
         DESC's net toroidal current I(rho = 1) unless given.
+
+        ``target="J"``: the misfit of J instead, which enters F. The rows are
+        d_rho T = (sqrt(g) J^zeta, -sqrt(g) J^theta) against DESC's values at the
+        same nodes (the integrands of the T target), and sqrt(g) J^rho = d_theta
+        T_zeta - d_zeta T_theta against the target's (chi cancels there); d_rho T
+        leaves T free up to a function of (theta, zeta), which J^rho then
+        constrains. The T rows stay with weight ``t_weight`` for what neither
+        fixes (the m = 0 constant of T_zeta is the gauge alpha).
+
+        ``edge_weight``: every row at rho > ``edge_rho`` weighted by it (its
+        square in the misfit), e.g. to see how the edge misfit spreads inward.
 
         ``sym`` (default: the equilibrium's): stellarator symmetry. a, b are then
         cos-type series (basis sym="cos") and chi sin-type, about half the
@@ -294,15 +307,22 @@ class BoundaryPotential:
 
         # target potential in the radial gauge, then its real Fourier
         # coefficients C[rho, m, n, component] (uniform theta, zeta)
-        rho, theta, zeta, T = target_potential(eq, 2 * L if n_rho is None else n_rho,
-                                               4 * M + 1, 4 * N + 1)
+        if target not in ("T", "J"):
+            raise ValueError(f"target {target!r}: 'T' or 'J'")
+        rho, theta, zeta, T, dT = target_potential(eq, 2 * L if n_rho is None else n_rho,
+                                                   4 * M + 1, 4 * N + 1, deriv=True)
         ms, ns = np.arange(-M, M + 1), np.arange(-N, N + 1)
         Pt = np.linalg.pinv(np.asarray(fourier(theta[:, None], ms[None, :])))
         Pz = np.linalg.pinv(np.asarray(fourier(zeta[:, None], ns[None, :], NFP=eq.NFP)))
         C = np.einsum("aj,ijkc,bk->iabc", Pt, T, Pz, optimize=True)
+        D = np.einsum("aj,ijkc,bk->iabc", Pt, dT, Pz, optimize=True) if target == "J" else None
         x = 2 * rho - 1
         q = np.sqrt(np.sqrt(1 - x**2) * rho)  # sqrt of the weights of int . rho drho
-        u, alpha = _fit_blocks(S, I, rho, q, C, ms, ns)
+        # the J rows (sqrt(g) J ~ rho near the axis): int |J|^2 dV ~ int |sqrt(g) J|^2 drho / rho
+        qJ = np.sqrt(np.sqrt(1 - x**2) / rho)
+        edge = np.where(rho > edge_rho, edge_weight, 1.0)
+        q, qJ = q * edge, qJ * edge
+        u, alpha = _fit_blocks(S, I, rho, q, C, ms, ns, D, t_weight, qJ)
         pot = cls(basis, u, I, eq, edge_power, S)
         pot.fit_info = {"alpha": alpha, "alpha_n": ns}  # the dropped gauge, sum alpha_n F_n(zeta)
         return pot
@@ -331,14 +351,15 @@ class BoundaryPotential:
             return pot
 
 
-def target_potential(eq, n_rho, n_theta, n_zeta):
+def target_potential(eq, n_rho, n_theta, n_zeta, deriv=False):
     """DESC's potential in the radial gauge on a tensor grid.
 
     T_theta = int_0^rho sqrt(g) J^zeta, T_zeta = -int_0^rho sqrt(g) J^theta, with
     sqrt(g) J from Ampere's law (B_theta_r - B_rho_t, B_rho_z - B_zeta_r), at
     n_rho Chebyshev-Gauss points in rho and n_theta, n_zeta uniform points in
     theta and zeta (one field period). Returns rho, theta, zeta and T of shape
-    (n_rho, n_theta, n_zeta, 2).
+    (n_rho, n_theta, n_zeta, 2), and with ``deriv`` also d_rho T = (sqrt(g) J^zeta,
+    -sqrt(g) J^theta) at the same nodes.
     """
     rho, Q, _ = _radial_integral_matrix(n_rho)
     grid = LinearGrid(rho=rho, theta=n_theta, zeta=n_zeta, NFP=eq.NFP, sym=False)
@@ -349,27 +370,37 @@ def target_potential(eq, n_rho, n_theta, n_zeta):
     T = np.stack([np.einsum("ij,jtz->itz", Q, sJ_zeta[idx], optimize=True),
                   -np.einsum("ij,jtz->itz", Q, sJ_theta[idx], optimize=True)], axis=-1)
     nodes = np.asarray(grid.nodes)
-    return rho, nodes[idx[0, :, 0], 1], nodes[idx[0, 0, :], 2], T
+    out = rho, nodes[idx[0, :, 0], 1], nodes[idx[0, 0, :], 2], T
+    return out + (np.stack([sJ_zeta[idx], -sJ_theta[idx]], axis=-1),) if deriv else out
 
 
-def _fit_blocks(S, I, rho, q, C, ms, ns):
-    """Mode-by-mode least squares of T(u) against the target modes C (see ``fit``)."""
+def _fit_blocks(S, I, rho, q, C, ms, ns, D=None, t_weight=1e-3, qJ=None):
+    """Mode-by-mode least squares of T(u) against the target modes C (see ``fit``);
+    with D (the modes of d_rho T) the J misfit instead: rows d_rho T and sqrt(g)
+    J^rho with the radial weights qJ, and t_weight x T with q."""
     b, NFP = S.basis, S.NFP
-    f, _, _, g, _, _ = (np.asarray(v) for v in _window(S, jnp.asarray(rho)))
-    H = np.asarray(_h(S, jnp.asarray(rho), 0))  # h_|m|(rho), column |m|
+    r = jnp.asarray(rho)
+    f, f1, _, g, g1, _ = (np.asarray(v) for v in _window(S, r))
+    H, H1 = np.asarray(_h(S, r, 0)), np.asarray(_h(S, r, 1))  # h_|m|(rho), column |m|
     index = {tuple(mode): i for i, mode in enumerate(b.modes)}
     am, an = {m: i for i, m in enumerate(ms)}, {n: i for i, n in enumerate(ns)}
-    Z = {}  # radial columns per |m|: (l values, Z_l^|m|(rho))
+    Z = {}  # radial columns per |m|: (l values, Z_l^|m|(rho), d_rho Z_l^|m|)
     for m in np.unique(np.abs(b.modes[:, 1])):
         ls = np.unique(b.modes[np.abs(b.modes[:, 1]) == m, 0])
-        Z[m] = (ls, np.asarray(zernike_radial(rho[:, None], ls, np.full(len(ls), m))))
+        mm = np.full(len(ls), m)
+        Z[m] = (ls, np.asarray(zernike_radial(rho[:, None], ls, mm)),
+                np.asarray(zernike_radial(rho[:, None], ls, mm, dr=1)))
     a_c, b_c = np.zeros(S.K), np.zeros(S.K)
     chi = np.zeros((len(S.chi_m), len(S.chi_n)))
     nr = len(rho)
+    fit_J = D is not None
 
-    def solve(A, y):  # weighted least squares, rows in blocks of n_rho
-        w = np.tile(q, A.shape[0] // nr)
-        return np.linalg.lstsq(w[:, None] * A, w * y, rcond=None)[0]
+    def solve(blocks):
+        """Weighted least squares over row blocks (A, y, weight, radial weights),
+        n_rho rows each (or a multiple)."""
+        A = np.concatenate([w * np.tile(r, len(y) // nr)[:, None] * A for A, y, w, r in blocks])
+        y = np.concatenate([w * np.tile(r, len(y) // nr) * y for A, y, w, r in blocks])
+        return np.linalg.lstsq(A, y, rcond=None)[0]
 
     def put(coef, mode_m, mode_n, sol):
         ls = Z[abs(mode_m)][0]
@@ -377,31 +408,64 @@ def _fit_blocks(S, I, rho, q, C, ms, ns):
             if (l, mode_m, mode_n) in index:
                 coef[index[(l, mode_m, mode_n)]] = v
 
-    # chi_mn with the T_theta mode (-m, n) [a] and the T_zeta mode (m, -n) [b]
+    # chi_mn with the T_theta mode (-m, n) [a] and the T_zeta mode (m, -n) [b]; with
+    # symmetry some chi_mn are not in the representation (chi is sin-type) while
+    # their a or b partner is (e.g. b with m > 0, n = 0: cos(m theta) of T_zeta):
+    # those blocks are fitted without the chi column. Columns of modes outside the
+    # basis are left out.
     free = set(map(tuple, S.chi_modes))
     for i, m in enumerate(S.chi_m):
-        ls, Zm = Z[abs(m)]
+        ls, Zm, Zm1 = Z[abs(m)]
+        nl = len(ls)
         for j, n in enumerate(S.chi_n):
-            if (m, n) not in free:  # not in the symmetric mode set
+            keep = np.array([(m, n) in free]
+                            + [(l, -m, n) in index for l in ls] + [(l, m, -n) in index for l in ls])
+            if not keep.any():
                 continue
-            nl = len(ls)
             A = np.zeros((2 * nr, 1 + 2 * nl))
             A[:nr, 0] = -m * H[:, abs(m)]  # d_theta F_m = -m F_-m
             A[:nr, 1 : 1 + nl] = g[:, None] * Zm
             A[nr:, 0] = -n * NFP * H[:, abs(m)]  # d_zeta F_n = -n NFP F_-n
             A[nr:, 1 + nl :] = f[:, None] * Zm
             y = np.concatenate([C[:, am[-m], an[n], 0], C[:, am[m], an[-n], 1]])
-            sol = solve(A, y)
+            if not fit_J:
+                blocks = [(A[:, keep], y, 1.0, q)]
+            else:
+                Ad = np.zeros_like(A)  # d_rho of the same columns
+                Ad[:nr, 0] = -m * H1[:, abs(m)]
+                Ad[:nr, 1 : 1 + nl] = g1[:, None] * Zm + g[:, None] * Zm1
+                Ad[nr:, 0] = -n * NFP * H1[:, abs(m)]
+                Ad[nr:, 1 + nl :] = f1[:, None] * Zm + f[:, None] * Zm1
+                yd = np.concatenate([D[:, am[-m], an[n], 0], D[:, am[m], an[-n], 1]])
+                # sqrt(g) J^rho, mode (-m, -n): -m T_zeta(m, -n) + n NFP T_theta(-m, n)
+                Ar = -m * A[nr:] + n * NFP * A[:nr]
+                yr = -m * C[:, am[m], an[-n], 1] + n * NFP * C[:, am[-m], an[n], 0]
+                blocks = [(A[:, keep], y, t_weight, q), (Ad[:, keep], yd, 1.0, qJ),
+                          (Ar[:, keep], yr, 1.0, qJ)]
+            sol = np.zeros(1 + 2 * nl)
+            sol[keep] = solve(blocks)
             chi[i, j] = sol[0]
             put(a_c, -m, n, sol[1 : 1 + nl])
             put(b_c, m, -n, sol[1 + nl :])
     # m = 0: a alone (T_theta, minus the net-current term), b with the gauge alpha_n
-    ls, Z0 = Z[0]
+    ls, Z0, Z01 = Z[0]
     alpha = np.zeros(len(ns))
     for n in ns:
+        At, Atd = g[:, None] * Z0, g1[:, None] * Z0 + g[:, None] * Z01
         y = C[:, am[0], an[n], 0] - (I / (2 * np.pi) * H[:, 0] if n == 0 else 0)
-        put(a_c, 0, n, solve(g[:, None] * Z0, y))
-        sol = solve(np.column_stack([f[:, None] * Z0, np.ones(nr)]), C[:, am[0], an[n], 1])
+        Ab = np.column_stack([f[:, None] * Z0, np.ones(nr)])
+        if not fit_J:
+            put(a_c, 0, n, solve([(At, y, 1.0, q)]))
+            sol = solve([(Ab, C[:, am[0], an[n], 1], 1.0, q)])
+        else:
+            yd = D[:, am[0], an[n], 0] - (I / (2 * np.pi) * H1[:, 0] if n == 0 else 0)
+            blocks = [(At, y, t_weight, q), (Atd, yd, 1.0, qJ)]
+            if n != 0:  # sqrt(g) J^rho, mode (0, -n): n NFP T_theta(0, n)
+                blocks.append((n * NFP * At, n * NFP * y, 1.0, qJ))
+            put(a_c, 0, n, solve(blocks))
+            Abd = np.column_stack([f1[:, None] * Z0 + f[:, None] * Z01, np.zeros(nr)])
+            sol = solve([(Ab, C[:, am[0], an[n], 1], t_weight, q),
+                         (Abd, D[:, am[0], an[n], 1], 1.0, qJ)])
         put(b_c, 0, n, sol[:-1])
         alpha[an[n]] = sol[-1]
     return np.concatenate([chi[S.chi_idx], a_c, b_c]), alpha

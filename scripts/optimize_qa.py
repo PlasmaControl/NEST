@@ -12,8 +12,14 @@ finer box.
 run (GPU): sbatch --qos=gpu-stellar --time=03:00:00 run.sbatch scripts/optimize_qa.py \
     [--frac 10] [--refine 20] [--kernel hockney|truncated] [--free current|all] \
     [--maxiter 100] [--cg 100] [--precond jacobi|block] [--time-limit s] [--start x.npz] \
-    [--w-force 1] [--w-B 0] [--w-J 0] [--w-p 0] [--w-W 10] [--w-pos 10] [--factors 3 3 2.5] \
+    [--w-force 1] [--w-B 0] [--w-J 0] [--w-p 0] [--w-W 10] [--w-p2 0] [--w-pos 10] [--factors 3 3 2.5] \
     [--out results/opt]
+
+Force-only drift study from a start that matches DESC (axisymmetric tokamak, fast on CPU):
+    sbatch run_cpu.sbatch scripts/optimize_qa.py --eq T.h5 --coils T_field.h5 --bext desc \
+        --fit force --dense --no-check --w-W 0 --w-pos 0 --ftol 0 --track [--factors 2 2 1]
+--bext desc and --fit force make F_NEST(x0) equal DESC's residual on the points (up to
+the force-matched fit, dense.py); --dense precomputes B_plasma(u) as a matrix (cached).
 """
 
 import argparse
@@ -42,7 +48,8 @@ from force import ForceResidual  # noqa: E402
 from grid import CartesianGrid  # noqa: E402
 from objective import (CurrentError, FieldError, Fields, ForceBalance,  # noqa: E402
                        ObjectiveFunction, PressureEnergy, PressureError,
-                       PressurePositivity)
+                       PressurePositivity, PressureSquare, _cartesian)
+from dense import DenseFields, force_matched_u  # noqa: E402
 from optimize import levenberg_marquardt  # noqa: E402
 from precondition import BlockPreconditioner, mode_groups, mode_labels  # noqa: E402
 from pressure import Pressure  # noqa: E402
@@ -87,6 +94,47 @@ def check(inp, box, cur, pre, resolution, kernel, xs, n_rho=8):
     return out, (n_r,) + full.tgrid.shape[1:]
 
 
+def drift(fields, x, x0, ref=None):
+    """Where x has gone from x0: relative change of u and c_p, <p>, sqrt <p^2>, min p,
+    rms J, the net toroidal current (V <J_phi / R> / 2 pi), all relative to x0;
+    rms |B - B_DESC| / rms |B_DESC|, how far p is from a flux function
+    (<|B.grad p|> / <|B| |grad p|>), how far B crosses DESC's nested surfaces
+    (<|B.grad rho|> / <|B| |grad rho|>, also for rho > 0.9) and <|F|> / norm.
+    ``ref``: the fields at x0."""
+    f = {k: np.asarray(v) for k, v in fields.compute(x).items()}
+    ref = f if ref is None else ref
+    w = np.asarray(fields.sw) ** 2
+    avg = lambda q: float(np.sum(w * q))  # noqa: E731
+    R, ph = np.asarray(fields.force.geo.R).ravel(), np.asarray(fields.phi)
+    I = lambda J: avg((-J[:, 0] * np.sin(ph) + J[:, 1] * np.cos(ph)) / R)  # noqa: E731
+    rms = lambda v: np.sqrt(avg(np.sum(v * v, 1)))  # noqa: E731
+    x, x0, n_u = np.asarray(x), np.asarray(x0), fields.n_u
+    B2 = np.sum(f["B"] ** 2, 1)
+    gp = f["grad_p"]
+    # grad rho of DESC's surfaces ~ e_theta x e_zeta = (-R Z_t, Z_t R_z - R_t Z_z, R R_t)
+    g = fields.force.geo
+    Xt, Xz = (np.asarray(v).reshape(-1, 2) for v in (g.Xt, g.Xz))
+    gr = np.stack([-R * Xt[:, 1], Xt[:, 1] * Xz[:, 0] - Xt[:, 0] * Xz[:, 1], R * Xt[:, 0]], 1)
+    gr = np.asarray(_cartesian(gr, ph))
+    Bgr = np.abs(np.sum(f["B"] * gr, 1)) / np.sqrt(B2 * np.sum(gr * gr, 1))
+    rho = np.asarray(fields.force.rtz[:, 0])
+    return {
+        "du": float(np.linalg.norm(x[:n_u] - x0[:n_u]) / np.linalg.norm(x0[:n_u])),
+        "dc_p": float(np.linalg.norm(x[n_u:] - x0[n_u:]) / np.linalg.norm(x0[n_u:])),
+        "<p>": avg(f["p"]) / avg(ref["p"]),
+        "<p^2>^1/2": np.sqrt(avg(f["p"] ** 2) / avg(ref["p"] ** 2)),
+        "min p": float(f["p"].min() / ref["p"].max()),
+        "rms J": rms(f["J"]) / rms(ref["J"]),
+        "I_tor": I(f["J"]) / I(ref["J"]),
+        "B-B_DESC": rms(f["B"] - np.asarray(fields.desc["B"])) / fields.rms["B"],
+        "B.grad p": avg(np.abs(np.sum(f["B"] * gp, 1))) / avg(np.sqrt(B2 * np.sum(gp * gp, 1))),
+        # B across DESC's surfaces: |B.grad rho| / |B| |grad rho|, all and rho > 0.9
+        "B.grad rho": avg(Bgr),
+        "B.grad rho edge": float(np.sum(w * Bgr * (rho > 0.9)) / np.sum(w * (rho > 0.9))),
+        "<|F|>": avg(np.linalg.norm(f["F"], axis=1)) / fields.norm,
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--eq", default=EQ, help="DESC equilibrium file (default: smooth-current precise_QA)")
@@ -117,13 +165,36 @@ def main():
                     help="box of the independent check, h = a / check-frac (default 2 x the last "
                          "box, at most a/20 unless that is finer)")
     ap.add_argument("--check-kernel", default="truncated", choices=["hockney", "truncated"])
-    for k in ("force", "B", "J", "p", "W", "pos"):
+    for k in ("force", "B", "J", "p", "W", "p2", "pos"):
         ap.add_argument(f"--w-{k}", type=float, default=1.0 if k == "force" else None)
     ap.add_argument("--fix-I", action="store_true",
                     help="hold the enclosed toroidal current I(rho) (its zeta average) at the "
                          "start's: the a_l00 coefficients fixed")
     ap.add_argument("--p-scale", type=float, default=1.0,
                     help="pressure x this: the start's c_p and the stored-energy target (a beta scan)")
+    ap.add_argument("--bext", default="field", choices=["field", "desc"],
+                    help="B_ext at the collocation points: the given field, or B_DESC - "
+                         "B_plasma(x0) on this box (x0 then has no box error in B)")
+    ap.add_argument("--fit", default="T", choices=["T", "force"],
+                    help="start: the fit of T, or the force-matched fit of u (dense.py): "
+                         "F_NEST(x0) - F_DESC minimized on the collocation points (with "
+                         "--bext desc)")
+    ap.add_argument("--fit-eps", type=float, default=1e-3,
+                    help="weight of |J - J_DESC| in the force-matched fit")
+    ap.add_argument("--dense", action="store_true",
+                    help="B_plasma(u) as a precomputed matrix (dense.DenseFields): small "
+                         "problems only (axisymmetric); the same result, much faster")
+    ap.add_argument("--dtype", default="float32", choices=["float32", "float64"],
+                    help="precision of J and B on the box (and of the dense G): float32 limits "
+                         "<|F|> / norm to ~1e-8")
+    ap.add_argument("--dense-batch", type=int, default=8,
+                    help="box solves at a time when forming the dense B_plasma (GPU memory)")
+    ap.add_argument("--no-check", action="store_true",
+                    help="skip the independent check on a finer grid and box")
+    ap.add_argument("--track", action="store_true",
+                    help="drift of every iterate from the start (``drift``) in the history")
+    ap.add_argument("--keep-iterates", action="store_true",
+                    help="save every iterate x_k in the _iter.npz (xs), for small problems")
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "opt"))
     a = ap.parse_args()
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
@@ -132,7 +203,7 @@ def main():
     for k in ("W", "pos"):
         if getattr(a, f"w_{k}") is None:
             setattr(a, f"w_{k}", 10.0 if a.free == "all" else 0.0)
-    for k in ("B", "J", "p"):
+    for k in ("B", "J", "p", "p2"):
         if getattr(a, f"w_{k}") is None:
             setattr(a, f"w_{k}", 0.0)
 
@@ -146,9 +217,9 @@ def main():
     b = cur.basis
     res = lambda f: tuple(int(round(f * (u + v))) for u, v in ((b.L, eq.L), (b.M, eq.M), (b.N, eq.N)))
     weights = {"force": a.w_force, "B": a.w_B, "J": a.w_J, "p": a.w_p, "W": a.w_W,
-               "pos": a.w_pos}
+               "p2": a.w_p2, "pos": a.w_pos}
     classes = {"force": ForceBalance, "B": FieldError, "J": CurrentError, "p": PressureError,
-               "W": PressureEnergy, "pos": PressurePositivity}
+               "W": PressureEnergy, "p2": PressureSquare, "pos": PressurePositivity}
     x = None
     if a.start is not None:  # its pressure rescaled from the scale it was run at
         st = np.load(a.start)
@@ -156,12 +227,35 @@ def main():
         s0 = float(st["p_scale"]) if "p_scale" in st else 1.0
         if a.p_scale != s0:
             x = x.at[cur.n_free :].multiply(a.p_scale / s0)
-    hist, m0, m1 = [], None, None
+    hist, m0, m1, xs, u_force = [], None, None, [], None
     for stage, frac in enumerate([a.frac] + list(a.refine)):
         box = CartesianGrid.periodic_box(inp, inp.a / frac, odd=sym).locate_plasma(inp)
         fr = ForceResidual(inp, box, resolution=res(a.colloc))
-        fields = Fields(fr, cur, pre, kernel=a.kernel)
-        obj = ObjectiveFunction([(PressureEnergy(w, scale=a.p_scale) if k == "W" else classes[k](w))
+        fields = Fields(fr, cur, pre, kernel=a.kernel, dtype=getattr(jnp, a.dtype))
+        if a.dense:  # B_plasma = G u + B_I; checked against the box solve along a random u
+            v = jnp.asarray(np.random.default_rng(0).standard_normal(fields.n_u))
+            B_box = np.asarray(fields.B_plasma(v))
+            fields = DenseFields.from_fields(fields, cur, batch=a.dense_batch)
+            err = np.linalg.norm(np.asarray(fields.B_plasma(v)) - B_box) / np.linalg.norm(B_box)
+            print(f"  dense B_plasma against the box solve, random u: {err:.1e}", flush=True)
+        if a.fit == "force":  # x0 = (force-matched u, the pressure fit)
+            if u_force is None:
+                u_force, sc = force_matched_u(fr, cur, eps=a.fit_eps,
+                                              desc={k: np.asarray(v) for k, v in fields.desc.items()})
+                print("force-matched start: <|(J - J_DESC) x B_DESC|> / norm (= F_NEST - F_DESC "
+                      f"at x0 with --bext desc) {sc['given fit']['F - F_DESC']:.2e} (fit of T) -> "
+                      f"{sc['force fit']['F - F_DESC']:.2e}; rms J - J_DESC "
+                      f"{sc['given fit']['J - J_DESC']:.2e} -> {sc['force fit']['J - J_DESC']:.2e}",
+                      flush=True)
+            fields.x0 = jnp.concatenate([jnp.asarray(u_force), fields.x0[fields.n_u :]])
+        if a.bext == "desc":  # B(x0) = B_DESC at the points, in this box's discretization
+            B_err = np.asarray(fields.compute(fields.x0)["B"]) - np.asarray(fields.desc["B"])
+            fields.B_ext = fields.desc["B"] - fields.compute(fields.x0)["B_plasma"]
+            w = np.asarray(fields.sw) ** 2
+            print(f"B_ext = B_DESC - B_plasma(x0): replaces the field's, which missed B_DESC by "
+                  f"{np.sqrt(np.sum(w * np.sum(B_err**2, 1))) / fields.rms['B']:.2e} (rms)",
+                  flush=True)
+        obj = ObjectiveFunction([(classes[k](w, scale=a.p_scale) if k in ("W", "p2") else classes[k](w))
                                  for k, w in weights.items() if w > 0], fields).build()
         free = np.ones(obj.dim_x, bool) if a.free == "all" else np.arange(obj.dim_x) < fields.n_u
         if a.fix_I:  # 2pi <T_theta>_(theta, zeta) = I h_0 + 2pi rho^2 f <a>: only a_l00 enter
@@ -182,9 +276,18 @@ def main():
         if m0 is None:
             m0 = fr.metrics(np.asarray(fields.compute(x0)["F"]))
 
+        ref = {k: np.asarray(v) for k, v in fields.compute(x0).items()} if a.track else None
+        if a.track and not hist:
+            print("drift " + json.dumps(drift(fields, x, x0, ref)), flush=True)
+
         def save(x, h, frac=frac):  # every iteration, so that a time-out keeps the last x
+            if a.track:
+                h[-1]["drift"] = drift(fields, x, x0, ref)
+                print("drift " + json.dumps(h[-1]["drift"]), flush=True)
+            if a.keep_iterates:
+                xs.append(np.asarray(x))
             np.savez(a.out + "_iter.npz", x=np.asarray(x), x0=np.asarray(x0), free=free,
-                     p_scale=a.p_scale)
+                     p_scale=a.p_scale, **({"xs": np.array(xs)} if a.keep_iterates else {}))
             with open(a.out + "_iter.json", "w") as f:
                 json.dump({"args": vars(a), "box": frac, "history": hist + h}, f, indent=1)
 
@@ -210,22 +313,25 @@ def main():
         gc.collect()
     u, c_p = x[: cur.n_free], x[cur.n_free :]
     # independent check: F on a finer collocation grid and with B_plasma from a
-    # finer box (and the truncated kernel): the optimum can otherwise fit the
-    # discretization error of B on the optimization box (J on the box as in the
+    # finer box (and the truncated kernel; always with the given field as B_ext):
+    # the optimum can otherwise fit the discretization error of B on the
+    # optimization box (J on the box as in the
     # objective: the same as evaluating it exactly there, scripts/diagnose_opt.py)
-    last = ([a.frac] + list(a.refine))[-1]
-    cf = a.check_frac or min(2 * last, max(last, 20))  # a/30 is beyond one A100
-    cbox = CartesianGrid.periodic_box(inp, inp.a / cf, odd=sym).locate_plasma(inp)
     # saved first: the check is the most memory-hungry step
     np.savez(a.out + ".npz", x=np.asarray(x), x0=np.asarray(x0), u=np.asarray(u),
              c_p=np.asarray(c_p), free=free, p_scale=a.p_scale)
-    out, shape = check(inp, cbox, cur, pre, res(a.check), a.check_kernel,
-                       {"start": x0, "end": x})
-    print(f"check: grid {shape}, box h = a/{cf} {cbox.shape}, kernel {a.check_kernel}; "
-          f"<|F|> / norm by rho, start -> end:")
-    for k in out["start"]["bins"]:
-        print(f"   {k:10s} {out['start']['bins'][k]:.2e} -> {out['end']['bins'][k]:.2e}")
-    print(f"   all        {out['start']['mean']:.2e} -> {out['end']['mean']:.2e}")
+    out = None
+    if not a.no_check:
+        last = ([a.frac] + list(a.refine))[-1]
+        cf = a.check_frac or min(2 * last, max(last, 20))  # a/30 is beyond one A100
+        cbox = CartesianGrid.periodic_box(inp, inp.a / cf, odd=sym).locate_plasma(inp)
+        out, shape = check(inp, cbox, cur, pre, res(a.check), a.check_kernel,
+                           {"start": x0, "end": x})
+        print(f"check: grid {shape}, box h = a/{cf} {cbox.shape}, kernel {a.check_kernel}; "
+              f"<|F|> / norm by rho, start -> end:")
+        for k in out["start"]["bins"]:
+            print(f"   {k:10s} {out['start']['bins'][k]:.2e} -> {out['end']['bins'][k]:.2e}")
+        print(f"   all        {out['start']['mean']:.2e} -> {out['end']['mean']:.2e}")
     np.savez(a.out + ".npz", x=np.asarray(x), x0=np.asarray(x0), u=np.asarray(u),
              c_p=np.asarray(c_p), free=free, p_scale=a.p_scale, rho_bins=list(m0["bins"]),
              before=list(m0["bins"].values()), after=list(m1["bins"].values()))
