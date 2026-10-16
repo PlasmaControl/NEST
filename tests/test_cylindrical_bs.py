@@ -437,6 +437,92 @@ def test_B1_jax_vs_numpy():
     assert ez < 1e-13 and ec < 1e-13
 
 
+# ------------------------------------------------------------------ B2
+def _b2_case(n, N_phi, NFP=3):
+    _jax64()
+    import jax.numpy as jnp
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from cyl_manufactured import fields, wall_values
+    from cylindrical_bs import CylindricalSolver, field, potential
+    ra, za = ChebAxis(0.6, 1.4, n), ChebAxis(-0.45, 0.45, n)
+    t0 = time.time()
+    sol = CylindricalSolver(ra, za, NFP=NFP, N_phi=N_phi)
+    t_pre = time.time() - t0
+    ex = fields(sol.nodes(), NFP)
+    t0 = time.time()
+    B = np.asarray(field(sol, jnp.asarray(ex["J"])))
+    t_call = time.time() - t0
+    A = np.asarray(potential(sol, jnp.asarray(ex["J"])))
+    eB = np.abs(B - ex["B"]).max() / np.abs(ex["B"]).max()
+    eA = np.abs(A - ex["A"]).max() / np.abs(ex["A"]).max()
+    # interior only (rho of the support): where B matters for NEST
+    return dict(n=n, N_phi=N_phi, eB=eB, eA=eA, wall_J=wall_values(ex["J"]) / np.abs(ex["J"]).max(),
+                pre=t_pre, call=t_call), sol, ex, B
+
+
+def test_B2_manufactured():
+    """B from J = curl curl curl psi / mu0 against the exact curl curl psi, everywhere."""
+    rows = []
+    for n, N_phi in ((40, 31), (56, 45), (72, 61), (88, 75), (104, 91)):
+        r, *_ = _b2_case(n, N_phi)
+        rows.append(r)
+        print(f"  B2 n={n} N_phi={N_phi}: |B - B_exact|/max {r['eB']:.1e}, A {r['eA']:.1e}; "
+              f"J on walls / max {r['wall_J']:.0e}; precompute {r['pre']:.1f} s, first call {r['call']:.1f} s",
+              flush=True)
+    assert rows[-1]["wall_J"] < 1e-15
+    assert rows[0]["eB"] > 1e2 * rows[-1]["eB"]  # convergence exercised
+    assert rows[-1]["eB"] < 1e-9 and rows[-1]["eA"] < 1e-9
+
+
+# ------------------------------------------------------------------ B3
+def test_B3_identities():
+    """div B = 0; a gradient added to J leaves B unchanged and appears as
+    curl B - mu0 J' = -mu0 grad chi; curl B = mu0 J for the solenoidal J."""
+    import jax.numpy as jnp
+    from scipy.constants import mu_0
+    from cylindrical_bs import field
+    r, sol, ex, B = _b2_case(104, 91)  # B accurate to ~1e-12 here (gate B2)
+    J = ex["J"]
+    gc = ex["grad_chi"] * (0.3 * np.abs(J).max() / np.abs(ex["grad_chi"]).max())  # |grad chi| = 0.3 max|J|
+    Bs = np.abs(B).max()
+    # derivative scale: max |grad B| ~ max |mu0 J|
+    dscale = mu_0 * np.abs(J).max()
+    divB = np.abs(np.asarray(sol.div_grid(jnp.asarray(B)))).max() / dscale
+    curl_res = np.abs(np.asarray(sol.curl_grid(jnp.asarray(B))) - mu_0 * J).max() / dscale
+    J2 = J + gc
+    B2 = np.asarray(field(sol, jnp.asarray(J2)))
+    dB = np.abs(B2 - B).max() / Bs
+    res2 = np.asarray(sol.curl_grid(jnp.asarray(B2))) - mu_0 * J2
+    pred = np.abs(res2 + mu_0 * gc).max() / dscale
+    print(f"  B3 n=104 N_phi=91: div B {divB:.1e}; curl B - mu0 J {curl_res:.1e} (of mu0 max|J|); "
+          f"B(J + grad chi) - B(J) {dB:.1e} (|grad chi|/|J| = {np.abs(gc).max() / np.abs(J).max():.1e}); "
+          f"curl B - mu0 J' + mu0 grad chi {pred:.1e}")
+    assert divB < 1e-10 and curl_res < 1e-8 and dB < 1e-10 and pred < 1e-8
+
+
+def test_B3_adjoint_and_grads():
+    """Adjoint identity <L J, b> = <J, L^T b> (jax.vjp) and check_grads on a small grid."""
+    import jax
+    import jax.numpy as jnp
+    from jax.test_util import check_grads
+    from cylindrical_bs import CylindricalSolver, field
+    _jax64()
+    sol = CylindricalSolver(ChebAxis(0.6, 1.4, 16), ChebAxis(-0.45, 0.45, 18), NFP=2, N_phi=9, chunk=5)
+    rng = np.random.default_rng(11)
+    J = jnp.asarray(rng.standard_normal(sol.shape + (3,)))
+    b = jnp.asarray(rng.standard_normal(sol.shape + (3,)))
+    LJ, vjp = jax.vjp(lambda x: field(sol, x), J)
+    lhs, rhs = float(jnp.sum(LJ * b)), float(jnp.sum(J * vjp(b)[0]))
+    e = abs(lhs - rhs) / abs(lhs)
+    J2 = jnp.asarray(rng.standard_normal(sol.shape + (3,)))
+    lin = float(jnp.abs(field(sol, 2 * J - 3 * J2) - 2 * field(sol, J) + 3 * field(sol, J2)).max()
+                / jnp.abs(field(sol, J)).max())
+    print(f"  B3 adjoint: <LJ, b> {lhs:.12e} vs <J, L^T b> {rhs:.12e}, rel {e:.1e}; linearity {lin:.1e}")
+    assert e < 1e-12 and lin < 1e-13
+    check_grads(lambda x: field(sol, x), (J,), order=1, modes=("fwd", "rev"))
+    print("  B3 check_grads (fwd, rev): passed")
+
+
 if __name__ == "__main__":
     names = sys.argv[1:]
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]

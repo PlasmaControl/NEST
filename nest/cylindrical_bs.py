@@ -169,6 +169,26 @@ class CylindricalSolver(_Pytree):
         Bc = jnp.fft.ifft(Bp, axis=0)
         return jnp.stack([Bc.real, Bc.imag, jnp.fft.irfft(Bz, n=self.N_phi, axis=0)], axis=-1)
 
+    # ------------------------------------------------------------ diagnostics
+    def _dphi(self, f):
+        """d/dphi of a real field on the planes (spectral, N_phi odd)."""
+        k = 1j * self.NFP * jnp.asarray(np.fft.fftfreq(self.N_phi, 1.0 / self.N_phi))
+        return jnp.fft.ifft(k[:, None, None] * jnp.fft.fft(f, axis=0), axis=0).real
+
+    def div_grid(self, V):
+        """div V of cylindrical components V on the grid (spectral in all directions)."""
+        r = self.r[None, :, None]
+        return (_along(self.Dr, r * V[..., 0], 1) / r + self._dphi(V[..., 1]) / r
+                + _along(self.Dz, V[..., 2], 2))
+
+    def curl_grid(self, V):
+        """curl V of cylindrical components V on the grid."""
+        r = self.r[None, :, None]
+        Vr, Vp, Vz = V[..., 0], V[..., 1], V[..., 2]
+        return jnp.stack([self._dphi(Vz) / r - _along(self.Dz, Vp, 2),
+                          _along(self.Dz, Vr, 2) - _along(self.Dr, Vz, 1),
+                          (_along(self.Dr, r * Vp, 1) - self._dphi(Vr)) / r], axis=-1)
+
     # ------------------------------------------------------------ grid
     @property
     def phi(self):
