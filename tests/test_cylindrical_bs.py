@@ -223,6 +223,71 @@ def test_A3_bump_flux():
         assert fmax_wall < 1e-15 and d[-1] < 1e-10 and corner < 1e-12
 
 
+# ------------------------------------------------------------------ A4
+from toroidal_kernel import _Q_start, toroidal_kernel, toroidal_Q  # noqa: E402
+
+A4_M = (0, 1, 2, 5, 20, 100, 500, 1000)
+A4_X = (1e-12, 1e-8, 1e-4, 1e-2, 1.0, 10.0, 100.0)  # chi - 1
+
+
+def _mp_Q(m, x, dps=40):
+    import mpmath as mp
+    mp.mp.dps = dps
+    return mp.legenq(mp.mpf(m) - mp.mpf(1) / 2, 0, 1 + mp.mpf(x), type=3).real
+
+
+def test_A4_vs_mpmath():
+    """Q_{m-1/2}(chi) against mpmath on the plan's (m, chi - 1) grid, for m_max = 1000."""
+    x = np.array(A4_X)
+    Q = toroidal_Q(x, 1000)
+    worst = {}
+    for m in A4_M:
+        for j, xv in enumerate(A4_X):
+            ref = float(_mp_Q(m, xv))
+            if ref == 0.0 or abs(ref) < 1e-290:
+                continue  # underflow in double: both are 0 to double range
+            e = abs(Q[m, j] - ref) / abs(ref)
+            worst[(m, xv)] = e
+    for m in A4_M:
+        print(f"  A4 m={m:5d}: " + "  ".join(f"{worst.get((m, xv), np.nan):.0e}" for xv in A4_X))
+    bad = {k: v for k, v in worst.items() if v > (1e-10 if k[1] <= 1e-8 else 1e-12)}
+    assert not bad, bad
+    # elliptic starting values for m = 0, 1 on a dense chi range
+    xs = np.logspace(-14, 3, 40)
+    Q0, Q1 = _Q_start(xs)
+    e0 = max(abs(Q0[i] - float(_mp_Q(0, v))) / abs(float(_mp_Q(0, v))) for i, v in enumerate(xs))
+    e1 = max(abs(Q1[i] - float(_mp_Q(1, v))) / abs(float(_mp_Q(1, v)))
+             for i, v in enumerate(xs) if v < 1.13 - 1)  # the forward range (eta <= 1/2)
+    print(f"  A4 elliptic: Q_-1/2 {e0:.1e} (chi-1 1e-14..1e3); Q_1/2 {e1:.1e} (forward range)")
+    assert e0 < 1e-13 and e1 < 1e-13
+
+
+def test_A4_switch_and_kernel():
+    """Continuity across the forward/Miller switch, m_max independence, and k_m against
+    the direct t-integral (normalization)."""
+    import mpmath as mp
+    # forward/Miller switch at m_max eta = 2: compare the same chi computed both ways
+    m_max = 400
+    eta = np.array([1.9, 1.99, 2.01, 2.1]) / m_max
+    x = np.cosh(eta) - 1
+    Qa = toroidal_Q(x, m_max)          # straddles the switch
+    Qb = toroidal_Q(x, 2 * m_max)[: m_max + 1]  # all Miller-free / other branch
+    e = np.abs(Qa - Qb).max(axis=0) / np.abs(Qb).max(axis=0)
+    print(f"  A4 switch: max rel diff (m_max 400 vs 800) {e.max():.1e}")
+    assert e.max() < 1e-12
+    # k_m against (1 / 2 pi) int cos(m t) / |x - y(t)| dt, separated and close pairs
+    mp.mp.dps = 60  # k_60 of a separated pair is 1e-30 of the integrand: needs > 30 digits
+    for (r, z, rp, zp) in [(1.0, 0.1, 0.7, -0.3), (1.0, 0.0, 1.0 + 1e-3, 2e-3), (0.65, 0.4, 1.35, -0.4)]:
+        k = toroidal_kernel(r, z, rp, zp, 60)
+        for m in (0, 3, 17, 60):
+            f = lambda t: mp.cos(m * t) / mp.sqrt((r - rp) ** 2 + (z - zp) ** 2  # noqa: E731
+                                                  + 4 * r * rp * mp.sin(t / 2) ** 2)
+            ref = float(mp.quad(f, [0, mp.mpf("1e-3"), mp.mpf("1e-2"), 0.1, mp.pi]) / mp.pi)
+            e = abs(k[m] - ref) / abs(ref)
+            print(f"  A4 k_m ({r}, {z}; {rp}, {zp}) m={m:3d}: {k[m]: .6e} vs quad, rel {e:.1e}")
+            assert e < 1e-12
+
+
 if __name__ == "__main__":
     names = sys.argv[1:]
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
