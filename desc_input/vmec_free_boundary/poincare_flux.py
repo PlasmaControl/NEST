@@ -12,7 +12,9 @@ labeled from that field's own iota.
 
 Runs on a CPU in about two minutes.
 
-usage: python poincare_flux.py EQ.h5 SECTIONS_poincare.npz
+usage: python poincare_flux.py EQ.h5 SECTIONS_poincare.npz [IOTA_EQ.h5]
+(for a free-boundary run: EQ its moved geometry ``<out>_eq.h5``, IOTA_EQ the DESC
+equilibrium it started from)
 Writes SECTIONS_flux.png and SECTIONS_flux.npz next to the sections (one column per
 traced field: the start and, unless poincare.py ran with --x start, the optimized x).
 """
@@ -47,12 +49,12 @@ def resonances(rho, iota, NFP, max_m=16):
     return out
 
 
-def main(eq_path, sec_path):
+def main(eq_path, sec_path, iota_path=None):
     eq = desc.io.load(eq_path)
     d = np.load(sec_path)
-    n_lines = d["start_R"].shape[1]
     flux, lines = {}, {}
     runs = [k for k in ("start", "optimized") if f"{k}_R" in d]
+    n_lines = d[f"{runs[0]}_R"].shape[1]
     for k in runs:
         R, Z = d[f"{k}_R"][1:], d[f"{k}_Z"][1:]
         ok = np.isfinite(R).all(0)  # lines that stayed on the grid
@@ -78,8 +80,11 @@ def main(eq_path, sec_path):
             flux[k + "_h"] = (rh, thh, np.flatnonzero(ok))
 
     r = np.linspace(0.01, 1, 200)
-    g = LinearGrid(rho=r, M=eq.M_grid, N=eq.N_grid, NFP=eq.NFP)
-    iota_desc = np.abs(g.compress(eq.compute("iota", grid=g)["iota"]))
+    # DESC's iota: of ``iota_path`` if given (e.g. the equilibrium a free-boundary run
+    # started from: its moved geometry is not a DESC equilibrium)
+    eq_i = eq if iota_path is None else desc.io.load(iota_path)
+    g = LinearGrid(rho=r, M=eq_i.M_grid, N=eq_i.N_grid, NFP=eq_i.NFP)
+    iota_desc = np.abs(g.compress(eq_i.compute("iota", grid=g)["iota"]))
     res = {"DESC": resonances(r, iota_desc, eq.NFP)}
     for k, (rm, io) in lines.items():
         # the uniform seeds (theta = 0, the first ones) give a clean iota(rho)
@@ -143,4 +148,4 @@ def main(eq_path, sec_path):
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:3])
+    main(*sys.argv[1:4])

@@ -67,6 +67,45 @@ VMEC's 1.9 T for NCSX. The re-solve fixes this.
    ρ < 0.01. The NCSX and CTH profiles are exact. The QH bootstrap current
    (`cubic_spline_ip`) is fitted with ρ²…ρ²⁴, to a residual of 1.7e-4 of I(1).
 
+## Free boundary in the coils (`free_boundary_desc.py`)
+
+The inputs above keep the VMEC LCFS fixed. `free_boundary_desc.py CASE` solves for
+the LCFS in the fixed coils, as was done for precise_QA. It starts from the
+fixed-boundary input (bold row) and runs three steps:
+
+1. Drop to the free-boundary resolution (NCSX 12/12/8, QH 12/12/10, CTH 12/12/8)
+   and re-solve at fixed boundary.
+2. Minimize `BoundaryError` (B·n = 0 and [[B²/2μ0 + p]] = 0, virtual casing) with
+   `proximal-lsq-exact`. p, I(ρ) and Ψ are held fixed. LCFS modes
+   max(|m|, |n|) ≤ k are released for k = 2, 4, 6. Higher modes keep their VMEC
+   values, and k must stay below the resolution.
+3. Run a tight fixed-boundary solve on the new LCFS at the start's resolution, and
+   save it as `<case>_fb_L{L}M{M}N{N}.h5` with its diagnostics.
+
+To run it on Della, in jobs of under an hour:
+
+```bash
+F=desc_input/vmec_free_boundary/free_boundary_desc.py
+a=$(sbatch --parsable --time=00:59:00 run_della.sbatch $F NCSX --k-list 2 4 --no-final)
+b=$(sbatch --parsable --dependency=afterok:$a --time=00:59:00 run_della.sbatch $F NCSX --resume desc_input/vmec_free_boundary/NCSX/fb/free_boundary_last.h5 --k-list 6 --no-final)
+sbatch --dependency=afterok:$b --time=00:59:00 run_della.sbatch $F NCSX --resume desc_input/vmec_free_boundary/NCSX/fb/free_boundary_last.h5 --k-list
+```
+
+Then pass `--eq <case>/<case>_fb_L16M16N12.h5` to `optimize_qa.py` in place of
+the fixed-boundary file. The final solve chunks its Jacobian (`--final-jac-chunk-size`,
+default 200) so that 16/16/12 fits a 40 GB A100.
+
+NCSX (`NCSX/NCSX_fb_L16M16N12.h5`, one Stellar job, 26 min):
+
+| stage | force error | B·n/\|B\| rms | pressure jump rms |
+|---|---|---|---|
+| start, 12/12/8 | 3.5e-3 | 4.4e-3 | 8.3e-3 |
+| k = 2, 4, 6 | 3.5e-3, 3.3e-3, 7.6e-3 | 4.4e-3, 4.6e-3, 3.6e-3 | 7.6e-3, 5.4e-3, 2.8e-3 |
+| final, 16/16/12 | 8.8e-4 | 4.5e-3 | 2.6e-3 |
+
+The cost (B·n² + jump²) fell 10×, nearly all from the pressure jump: B·n stays near
+4e-3. NEST's own free boundary (below) brings B·n/|B| to 3e-4.
+
 ## What differs from precise_QA
 
 - **The current density does not vanish at the edge.** NCSX has a steep pressure
@@ -133,6 +172,148 @@ fixes this:
 **Use `--w-J 1e-3`.** At 1e-2 the pointwise penalty also damps the resonant
 currents and pins the edge, where NEST's fit cannot match DESC's J.
 
+## NEST with a free boundary (`scripts/optimize_fb.py`)
+
+In the runs above the boundary is DESC's LCFS, held fixed. In the coils, NEST's
+own field crosses it. On the LCFS of `NCSX_fb_L16M16N12.h5`, B·n/|B| is 2.8e-3
+rms, with peaks of 2.8e-2 on the flanks of the bean section; this is the same for
+the fits and for the fixed-boundary optima. Field lines that leave through the
+boundary carry p = 0 inward, and the optimizer can build edge currents against
+B·n. Both can open edge islands that the coils alone would not.
+`nest/free_boundary.py` makes the boundary an unknown, solved together with J and
+p.
+
+- **Conditions.** B is the total field everywhere (coils plus the Biot–Savart
+  field of the volume current), and J = 0, p = 0 on the boundary. So there is no
+  sheet current, B is continuous, and [[B²/2μ0 + p]] = 0 holds identically. The
+  condition left is **B·n = 0** on the moving boundary (`BoundaryNormalField`,
+  `--w-Bn`). The toroidal flux through φ = 0 is held (`ToroidalFlux`), as DESC
+  holds Ψ.
+- **Unknowns.** x = (u, c_p, ξ). ξ(θ, ζ) is the normal displacement of the
+  boundary in each φ plane (`--xi-M`, `--xi-N`, cos-type), extended inside as
+  ρ^|m|; the geometry stays a series in the equilibrium's bases. u and c_p move
+  with the coordinates (√g J^i and p(ρ, θ, ζ) carried along), so div J = 0, J = 0
+  at the edge and the net current hold for any ξ. `--w-J` compares J with DESC's
+  current carried the same way (`TransportedCurrentError`). `--fix-I` holds I(ρ).
+  The stored energy ∫p dV is held in the moving volume (`StoredEnergy`).
+- **B on the boundary by direct Biot–Savart** (`DirectField`, `--direct 32 4`).
+  The box's B_plasma there is off by ~1.5e-3 |B| in B·n at a/10 and ~5e-4 at a/20,
+  and it changes from one field period to the next: a Cartesian box is not
+  3-fold symmetric. The box converges to the direct value as it is refined (a/6,
+  a/10, a/14: 2.2e-3, 8.7e-4, 4.8e-4). A run on the box's B·n reached 1.3e-4 on
+  its half-period grid, but 1.4e-3 over the whole boundary: it had fitted the
+  box's error. The direct sum:
+  - Gauss points in ρ;
+  - sources q = 4 times the boundary grid in θ and ζ, offset so that none meets a
+    target, and copied by the symmetries;
+  - converged to ~4e-5 in B·n/|B|, exact in ξ.
+
+  Its derivative is the box's (`--direct-tangent` would be exact, but runs out of
+  memory at full size; see the docstring).
+- **Anchors.** Two parts are first order in the displacement:
+  - B_ext at the moved points (its gradient);
+  - J on the box: the box points' coordinates shift by −(∂X/∂s)⁻¹D, through
+    the derivative of the Lagrange interpolation (`BoxShift`).
+
+  After `--inner` iterations, or a motion of `--max-disp`, ξ is absorbed into the
+  geometry (`Displacement.apply`) and everything is rebuilt on the same box. This
+  repeats until an anchor moves the boundary by less than `--disp-tol` (a/3000).
+  The moved geometry is saved as a DESC file, `<out>_eq.h5`.
+- **Checks** (`tests/test_free_boundary.py`, NCSX at a/6 on a CPU):
+  - ξ = 0 reproduces `Fields` to 5e-15.
+  - J v matches central differences to 2e-13 (u), 2e-12 (c_p) and 5e-10 (ξ); the
+    adjoint identity holds to 6e-15; the direct field's derivative matches to
+    1.5e-12.
+  - Against the fields rebuilt on the displaced geometry, the box current
+    differs at second order in ξ.
+
+### NCSX: fixed against free boundary
+
+The DESC input is `NCSX/NCSX_fb_L16M16N12.h5` (`free_boundary_desc.py NCSX`,
+Stellar A100, 26 min). DESC's free-boundary stage cut the pressure jump from 8.3e-3
+to 2.6e-3 rms, but not B·n/|B| (DESC's metric 4.5e-3 against 4.4e-3). Its force
+error is 8.8e-4. The NEST fits miss its edge current (J ≠ 0 on its LCFS), as for
+the VMEC-LCFS input; the optimization takes the difference up.
+
+| | <\|F\|>/norm, check (a/20, grid (97, 385, 127)) | B·n/\|B\| rms (max), direct | ι |
+|---|---|---|---|
+| DESC | 8.78e-4 | | |
+| fixed, `--w-J 1e-3` | 6.80e-5 | 2.9e-3 (2.8e-2) | core 0.35 → 0.44: current moved to the axis |
+| fixed, `--w-J 1e-3 --fix-I` | 8.90e-5 | 2.8e-3 (2.8e-2) | DESC's |
+| **free**, `--w-J 1e-3 --fix-I` | **1.20e-4** | **3.0e-4 (2.7e-3)** | DESC's |
+
+- The free-boundary run continues the fixed `--fix-I` optimum and keeps W and Ψ
+  to 1e-8. B·n maps and the boundary's motion: `figures/ncsx_free_boundary_Bn.png`
+  (`scripts/fb_compare.py`).
+- **Moved boundary:** up to 9.0 mm, 3.3 mm rms, mostly (m, n) = (5, 1), (4, 1),
+  (5, 0), (2, 1) at 1.3–1.7 mm. The axis moved 1 mm.
+- **Force by ρ:** 5.4e-5, 9.6e-5, 1.7e-4, 2.1e-4, 2.3e-4 on the bins
+  0–0.5 … 0.95–1, against 2.4e-5 … 1.6e-4 with the fixed boundary.
+- **Current:** it differs from DESC's by 0.14 rms, against 0.12 fixed.
+
+Islands (`figures/ncsx_fixed_vs_free_poincare_periodized.png`, 800 periods with
+B_plasma periodized, see [Poincare sections](#poincare-sections); each run in its own
+coordinates). Resonant b_mn and the lines' thickness: `figures/ncsx_fb_resonant_overlap.png`
+(`resonant_field.py`, `resonant_overlap.py`).
+- **ρ 0.62–0.78:** nested surfaces in both fields, between thin 6/11, 9/16 and
+  higher-order chains; the free 6/11 chain is a little wider. Chirikov σ of
+  neighbouring chains is 0.26–0.71 (free) and 0.35–0.48 (fixed). The lines' thickness
+  (rms of ρ about a smooth ρ(θ)) is 6e-4 (free) and 4e-4 (fixed) in the median, none
+  above 6e-3, against 2e-2 in the chaotic layer of the 3/5 separatrix.
+- **3/6, ρ 0.58:** about three times wider with the free boundary (w from b_mn 0.083
+  against 0.029; ~0.10 against ~0.035 in the sections). The coils drive it alike
+  (2|c_mn| 8.6e-4 and 6.5e-4 on the two geometries); the fixed field shields that ~5×,
+  the free one not at all (9.8e-4 against 1.2e-4).
+- **3/5, ρ 0.80:** about the same width (~0.09) in both, with a thin chaotic layer
+  through the X-points. The plasma shields the coils' 1.5e-2 to 4.3e-4 (fixed) and
+  1.0e-3 (free).
+- **Edge:** surfaces by the thickness test (< 1e-2) in both; the free field has 9/14
+  and 6/9 chains at ρ 0.93 and 0.97.
+- **The a/10 stage** of the same run (`d3_fbD_L16`) is chaotic over the band even
+  periodized: 15 of 27 circulating lines are thicker than 1e-2 (median 1.3e-2). Its
+  high-order b_mn are 3–10× those at a/20 (σ 1–1.4; the islands would cover 0.89 of
+  the band). The a/20 stage removes them, so they are resolution error, of the size of
+  the a/10 box's error (1.5e-3 |B|). Judge islands at a/20, which has not itself been
+  checked against a finer box.
+- The sections drawn before the periodizing (`figures/ncsx_fixed_vs_free_poincare.png`)
+  showed a narrow 3/5 chain inside a stochastic band at ρ 0.62–0.78 with the free
+  boundary. Both came from the period seam: every line drifted outward (ρ 0.37 → 0.44
+  over 800 periods) and lines away from islands smeared over 2e-2.
+- Without `--fix-I`, ι drifts and moves the chains (3/6 to ρ 0.45; 3/7 and 3/8
+  gone), so islands can be compared only with I(ρ) held.
+
+Run (Stellar, after the fixed `--fix-I` run `fixedI_fbL16`). It was run in stages
+(a/10 then a/20, w_Bn 10 then 1); the settings that worked are:
+
+```bash
+E="--eq desc_input/vmec_free_boundary/NCSX/NCSX_fb_L16M16N12.h5 --coils desc_input/vmec_free_boundary/NCSX/NCSX_coils.h5"
+sbatch --qos=gpu-stellar --time=10:00:00 run.sbatch scripts/optimize_fb.py $E \
+    --start results/ncsx/fixedI_fbL16.npz --w-J 1e-3 --fix-I --w-Bn 1 --xi-M 16 --xi-N 12 \
+    --frac 10 --refine 20 --inner 12 --max-disp 3e-3 --max-step 1.5e-3 --direct 32 4 \
+    --out results/ncsx/fb
+sbatch --qos=gpu-stellar --mem=128G run.sbatch desc_input/vmec_free_boundary/poincare.py $E \
+    --eq results/ncsx/fb_eq.h5 --x results/ncsx/fb.npz --skip-start --frac 20 --island-lines 12
+python desc_input/vmec_free_boundary/poincare_flux.py results/ncsx/fb_eq.h5 \
+    figures/ncsx_fb_poincare.npz desc_input/vmec_free_boundary/NCSX/NCSX_fb_L16M16N12.h5
+```
+
+(The later `--eq` wins over the one in `$E` for `poincare.py`.)
+
+Lessons from the runs that led there:
+- **ξ needs the equilibrium's full boundary resolution (16, 12).** With (12, 8),
+  half of B·n (coil ripple at n = 9–11 per period) is out of reach. The optimizer
+  then cancels it with edge currents and loses force balance.
+- **Small anchors.** After a 3.3 mm move, re-anchoring shifts B·n by ~1.5e-4, and
+  the next anchor opens with a ~1.3 mm correction: the anchors cycle.
+- **w_Bn 1, not 10.** With the box derivative, the steps stop decreasing the true
+  residual once B·n/|B| is ~2e-4 at a/10 (inexact Newton). w_Bn = 1 lets force
+  balance lead, and a/20 lowers the derivative's error.
+- **Memory.**
+  - `release` frees each anchor's arrays; JAX's caches kept ~4 GB per anchor.
+  - The platform allocator (the `run.sbatch` default) is needed at a/20.
+- Neither 300 CG iterations nor the coupled preconditioner sped the convergence
+  up.
+
 ## Poincare sections
 
 Only `nest/` is needed.
@@ -144,6 +325,23 @@ Only `nest/` is needed.
     straight-field-line angles theta* = 0, pi/m, pi and pi + pi/m, so the lines inside
     the islands are traced too.
   - `--island-lines` adds seeds on theta = pi / m around DESC's resonances.
+  - B_plasma is averaged over the NFP rotations before tracing (`--no-periodize`
+    skips it). The box's field is not exactly periodic, because a Cartesian box is not
+    NFP-symmetric. Between periods it differs by 1e-4 |B| rms at a/20 (NCSX; 1.7e-3 at
+    most). Tabulated over one period and repeated, it jumps at the seam, and the jump
+    acts as a source of B. Every traced line then moves outward (NCSX free boundary:
+    ρ +0.07 over 800 periods, +0.013 fixed), and lines between the chains look
+    chaotic. Periodized, the drift is < 1e-3. `scripts/validate_opt.py` and
+    `scripts/islands.py` still trace the field unperiodized.
+- `resonant_overlap.py` checks a long trace, per line:
+  - the secular drift of ρ, which a divergence-free field cannot give all lines alike;
+  - the thickness: the rms of ρ about a Fourier fit ρ(θ). A surface stays at the
+    tracer's error (1e-4 in the core, < 6e-3 near small chains), while a chaotic line
+    reaches 1e-2 or more.
+
+  It also gives the Chirikov σ of the chains from `resonant_field.py`'s b_mn. With
+  this tracer, the weighted Birkhoff rotation number also stops converging on
+  surfaces (at 1e-4–1e-5), so it cannot flag chaos.
 - `poincare_flux.py` maps the crossings to DESC (rho, theta) at both planes and
   measures iota per line (CPU, a few minutes).
 - `poincare_rz.py` draws them in (R, Z) over DESC's flux surfaces (CPU, seconds).

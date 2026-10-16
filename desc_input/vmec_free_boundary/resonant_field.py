@@ -27,6 +27,11 @@ run (GPU): sbatch --mem=128G run_della.sbatch desc_input/vmec_free_boundary/reso
     --coils desc_input/vmec_free_boundary/NCSX/NCSX_coils.h5 \
     --x wJ0=results/ncsx/opt_L16M16N12.npz wJ1e-3=results/ncsx/opt_L16M16N12_wJ1e-3.npz \
     --out ncsx_resonant_field
+
+For a free-boundary run (``scripts/optimize_fb.py``): ``--eq <out>_eq.h5 --x
+label=<out>.npz --skip-start --iota-eq <the DESC equilibrium it started from>`` (the
+surfaces are those of the moved geometry, which is not a DESC equilibrium). ``--m-max``
+and ``--k-max`` widen the spectrum (9/16 needs m = 16).
 """
 
 import argparse
@@ -79,12 +84,12 @@ def b_rho(Bcyl, s):
     return np.sum(Bcyl * s["e^rho"], -1) / (Bcyl[..., 1] / s["R"])
 
 
-def spectrum(b, s, NFP):
-    """c_mn per surface, m = 0..M_MAX, n = k NFP (k = -K_MAX..K_MAX): the average of
+def spectrum(b, s, NFP, m_max=M_MAX, k_max=K_MAX):
+    """c_mn per surface, m = 0..m_max, n = k NFP (k = -k_max..k_max): the average of
     b e^{-i (m theta* - n zeta)} over theta* and zeta (d theta* = (1 + lambda_t) d theta)."""
     w = b * (1 + s["lambda_t"])
-    m = np.arange(M_MAX + 1)
-    n = NFP * np.arange(-K_MAX, K_MAX + 1)
+    m = np.arange(m_max + 1)
+    n = NFP * np.arange(-k_max, k_max + 1)
     Em = np.exp(-1j * m[:, None, None, None] * s["theta*"][None])  # (m, rho, t, z)
     En = np.exp(1j * n[:, None] * s["zeta"][0, 0][None, :])  # (n, z)
     return np.einsum("rtz,mrtz,nz->rmn", w, Em, En) / (b.shape[1] * b.shape[2])
@@ -104,6 +109,12 @@ def main():
     ap.add_argument("--nz", type=int, default=48, help="zeta points per field period")
     ap.add_argument("--chunk", type=int, default=4, help="surfaces per B_ext call")
     ap.add_argument("--out", default="resonant_field")
+    ap.add_argument("--m-max", type=int, default=M_MAX)
+    ap.add_argument("--k-max", type=int, default=K_MAX)
+    ap.add_argument("--skip-start", action="store_true",
+                    help="no start field (a free-boundary run: its fits are not a start)")
+    ap.add_argument("--iota-eq", default=None,
+                    help="DESC's iota from this equilibrium (default --eq)")
     a = ap.parse_args()
     t0 = time.time()
     inp = DESCInput.load(a.eq, field=a.coils)
@@ -112,7 +123,7 @@ def main():
     pre = fit_cache.fit(Pressure, inp, factors=tuple(a.factors), edge_order=2)
     box = CartesianGrid.periodic_box(inp, inp.a / a.frac, odd=bool(eq.sym)).locate_plasma(inp)
     fields = Fields(ForceResidual(inp, box), cur, pre, kernel=a.kernel)
-    us = {"start": cur.u}
+    us = {} if a.skip_start else {"start": cur.u}
     for item in a.x:
         label, path = item.split("=", 1)
         us[label] = np.load(path)["x"][: cur.n_free]
@@ -133,12 +144,12 @@ def main():
     B_ext = np.concatenate([inp.B_ext(X[i : i + per]) for i in range(0, len(X), per)])
     print(f"B_ext at {len(X)} points: {time.time() - t1:.0f} s", flush=True)
 
-    spec, rms = {}, {}
+    spec, rms, mk = {}, {}, (a.m_max, a.k_max)
     b = b_rho(s["B"], s)
-    spec["DESC"], rms["DESC"] = spectrum(b, s, eq.NFP), np.sqrt(np.mean(b**2, (1, 2)))
+    spec["DESC"], rms["DESC"] = spectrum(b, s, eq.NFP, *mk), np.sqrt(np.mean(b**2, (1, 2)))
     b = b_rho(to_cyl(B_ext), s)  # the coils alone (b^rho is linear in B only at fixed
     # B . grad zeta, so this is the coil field's own excursion, a reference)
-    spec["coils"], rms["coils"] = spectrum(b, s, eq.NFP), np.sqrt(np.mean(b**2, (1, 2)))
+    spec["coils"], rms["coils"] = spectrum(b, s, eq.NFP, *mk), np.sqrt(np.mean(b**2, (1, 2)))
     for name, u in us.items():
         t1 = time.time()
         B_box = fields._solve(fft_J(fields.J_box(jnp.asarray(u))), fields.axes, fields.K_hat)
@@ -146,17 +157,17 @@ def main():
                                                       X[i : i + per]))
                                for i in range(0, len(X), per)])
         b = b_rho(to_cyl(B_ext + B_pl), s)
-        spec[name], rms[name] = spectrum(b, s, eq.NFP), np.sqrt(np.mean(b**2, (1, 2)))
+        spec[name], rms[name] = spectrum(b, s, eq.NFP, *mk), np.sqrt(np.mean(b**2, (1, 2)))
         print(f"{name}: {time.time() - t1:.0f} s; rms b^rho {rms[name].min():.2e} - "
               f"{rms[name].max():.2e}", flush=True)
     del B_box
 
-    iota, iota_r = inp.iota(rho)
+    iota, iota_r = (inp if a.iota_eq is None else DESCInput.load(a.iota_eq)).iota(rho)
     print(f"DESC check: max |c_mn| {np.abs(spec['DESC']).max():.1e}")
     out = os.path.join(ROOT, "figures", a.out + ".npz")
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    np.savez(out, rho=rho, iota=iota, iota_r=iota_r, NFP=eq.NFP, m=np.arange(M_MAX + 1),
-             n=eq.NFP * np.arange(-K_MAX, K_MAX + 1), runs=np.array(list(spec)),
+    np.savez(out, rho=rho, iota=iota, iota_r=iota_r, NFP=eq.NFP, m=np.arange(a.m_max + 1),
+             n=eq.NFP * np.arange(-a.k_max, a.k_max + 1), runs=np.array(list(spec)),
              **{f"c_{k}": v for k, v in spec.items()},
              **{f"rms_{k}": v for k, v in rms.items()})
     print(f"saved {out}; total {time.time() - t0:.0f} s")

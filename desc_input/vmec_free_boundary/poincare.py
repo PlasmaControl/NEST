@@ -3,7 +3,10 @@
 B_ext + B_plasma is tabulated once on a cylindrical grid over a field period and
 the field lines are traced in phi with RK4 on cubic splines (the tracer of
 ``scripts/validate_opt.py``, copied here so that only ``nest/`` is needed). This is
-done for the start (the fits of DESC's J and p) and for the optimized x.
+done for the start (the fits of DESC's J and p) and for the optimized x. B_plasma is
+averaged over the NFP rotations first: the box's field differs between periods by
+~1e-4 |B| rms, and the jump at the seam of the repeated period is a source of B that
+pushes every line outward (``--no-periodize`` traces it as it is).
 
 On top of the uniform seeds along theta = 0, lines are seeded around each resonant
 surface iota = n/m (n a multiple of NFP, m <= 12). By default these are DESC's
@@ -25,7 +28,9 @@ run (GPU): sbatch --mem=128G run.sbatch desc_input/vmec_free_boundary/poincare.p
     --eq desc_input/vmec_free_boundary/NCSX/NCSX_L16M16N12.h5 \
     --coils desc_input/vmec_free_boundary/NCSX/NCSX_coils.h5 \
     --x results/ncsx/opt_L16M16N12.npz --frac 20
-``--x start`` traces the start only (a smoke test).
+``--x start`` traces the start only (a smoke test). For a free-boundary run
+(``scripts/optimize_fb.py``) pass its moved geometry, ``--eq <out>_eq.h5 --x <out>.npz
+--skip-start``.
 """
 
 import argparse
@@ -60,8 +65,13 @@ from separable import Separable  # noqa: E402
 jax.config.update("jax_enable_x64", True)
 
 
-def field_on_cylinder(fields, u, inp, nR=121, nphi=64, nZ=121, margin=0.25):
-    """B_ext + B_plasma (R, phi, Z components) on a cylindrical grid over one field period."""
+def field_on_cylinder(fields, u, inp, nR=121, nphi=64, nZ=121, margin=0.25, periodize=True):
+    """B_ext + B_plasma (R, phi, Z components) on a cylindrical grid over one field period.
+
+    The box's B_plasma is not exactly NFP-periodic (a Cartesian box is not
+    NFP-symmetric): tabulated over one period and repeated, it jumps at the period
+    seam. With ``periodize``, B_plasma is averaged over the NFP rotations (the
+    true field is periodic), and the size of the removed part is printed."""
     eq = inp.eq
     RZ = Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP)
     t = np.linspace(0, 2 * np.pi, 200)
@@ -75,7 +85,26 @@ def field_on_cylinder(fields, u, inp, nR=121, nphi=64, nZ=121, margin=0.25):
     R, P, Z = np.meshgrid(Rs, phis, Zs, indexing="ij")
     X = np.column_stack([(R * np.cos(P)).ravel(), (R * np.sin(P)).ravel(), Z.ravel()])
     B_box = fields._solve(fft_J(fields.J_box(jnp.asarray(u))), fields.axes, fields.K_hat)
-    Bc = inp.B_ext(X) + np.asarray(interpolate(np.asarray(B_box), fields.axes, X))
+    per = 1_000_000  # B_ext in chunks (a fine grid has millions of points)
+    Bc = np.concatenate([inp.B_ext(X[i : i + per]) for i in range(0, len(X), per)])
+    B_box = np.asarray(B_box)
+    if not periodize:
+        Bc += np.asarray(interpolate(B_box, fields.axes, X))
+    else:
+        Bk = []
+        for k in range(eq.NFP):  # B_plasma at the rotated points, rotated back
+            a_k = 2 * np.pi * k / eq.NFP
+            ck, sk = np.cos(a_k), np.sin(a_k)
+            Xk = np.column_stack([ck * X[:, 0] - sk * X[:, 1], sk * X[:, 0] + ck * X[:, 1], X[:, 2]])
+            B = np.asarray(interpolate(B_box, fields.axes, Xk))
+            Bk.append(np.column_stack([ck * B[:, 0] + sk * B[:, 1], -sk * B[:, 0] + ck * B[:, 1],
+                                       B[:, 2]]))
+        Bm = np.mean(Bk, axis=0)
+        dev = np.sqrt(np.mean([np.sum((b - Bm) ** 2, 1) for b in Bk], axis=0))
+        mag = np.linalg.norm(Bc + Bm, axis=1)
+        print(f"periodized B_plasma: its period-to-period part is {np.sqrt(np.mean((dev / mag) ** 2)):.1e} "
+              f"of |B| rms ({np.max(dev / mag):.1e} max) on the tracing grid", flush=True)
+        Bc += Bm
     c, s = np.cos(P.ravel()), np.sin(P.ravel())
     Bcyl = np.column_stack([Bc[:, 0] * c + Bc[:, 1] * s, -Bc[:, 0] * s + Bc[:, 1] * c, Bc[:, 2]])
     return Rs, phis, Zs, Bcyl.reshape(nR, nphi, nZ, 3)
@@ -192,12 +221,22 @@ def main():
     ap.add_argument("--kernel", default="truncated")
     ap.add_argument("--factors", type=float, nargs=3, default=(3, 3, 2.5))
     ap.add_argument("--periods", type=int, default=400)
+    ap.add_argument("--grid", type=int, nargs=3, default=(121, 64, 121),
+                    help="cylindrical grid nR nphi nZ of the traced field (nphi per period)")
+    ap.add_argument("--steps", type=int, default=64, help="RK4 steps per field period")
+    ap.add_argument("--periodize", action=argparse.BooleanOptionalAction, default=True,
+                    help="average B_plasma over the NFP rotations before tracing (default). "
+                         "The box's field is not exactly periodic, and its jump at the period "
+                         "seam moves every line outward (NCSX: rho +0.07 in 800 periods)")
     ap.add_argument("--lines", type=int, default=32, help="uniform seeds on theta = 0")
     ap.add_argument("--island-lines", type=int, default=0,
                     help="extra seeds across each low-order chain (m <= 6) on theta = pi / m")
     ap.add_argument("--island-width", type=float, default=0.12,
                     help="those seeds span the resonant rho +- this")
     ap.add_argument("--out", default=None, help="npz (default figures/<x name>_poincare.npz)")
+    ap.add_argument("--skip-start", action="store_true",
+                    help="trace x only (e.g. a free-boundary NEST run: --eq its _eq.h5, whose "
+                         "fits are not a start)")
     ap.add_argument("--islands", default=None,
                     help="_poincare_flux.npz of a previous trace (poincare_flux.py): seed the "
                          "chains of each field at its own measured resonances, across the "
@@ -209,7 +248,7 @@ def main():
     cur = fit_cache.fit(BoundaryPotential, inp, factors=tuple(a.factors))
     pre = fit_cache.fit(Pressure, inp, factors=tuple(a.factors), edge_order=2)
     box = CartesianGrid.periodic_box(inp, inp.a / a.frac, odd=bool(eq.sym)).locate_plasma(inp)
-    us = {"start": cur.u}
+    us = {} if a.skip_start and a.x != "start" else {"start": cur.u}
     if a.x != "start":
         us["optimized"] = np.load(a.x)["x"][: cur.n_free]
     fields = Fields(ForceResidual(inp, box), cur, pre, kernel=a.kernel)
@@ -242,8 +281,9 @@ def main():
         st = np.asarray(RZ.evaluate(jnp.asarray(seeds[name][:, 0]), jnp.asarray(seeds[name][:, 1]),
                                     jnp.zeros(len(seeds[name]))))
         t1 = time.time()
-        Rs, phis, Zs, Bcyl = field_on_cylinder(fields, u, inp)
-        sections[name] = trace(Rs, phis, Zs, Bcyl, st[:, 0], st[:, 1], eq.NFP, a.periods)
+        Rs, phis, Zs, Bcyl = field_on_cylinder(fields, u, inp, *a.grid, periodize=a.periodize)
+        sections[name] = trace(Rs, phis, Zs, Bcyl, st[:, 0], st[:, 1], eq.NFP, a.periods,
+                               a.steps)
         lost = np.isnan(sections[name][0][-1]).sum()
         print(f"{name}: chains seeded at " + ", ".join(f"{n}/{m} at {r:.3f}"
                                                       for n, m, r in run_res[name])

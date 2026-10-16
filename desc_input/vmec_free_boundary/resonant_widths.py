@@ -19,8 +19,11 @@ sections in DESC flux coordinates of ``poincare_flux.py``. For each chain iota =
 This separates a change of the island from a change of iota (where the chain sits,
 and the shear iota' that sets the width) and from a change of b_mn (the forcing).
 
-usage: python resonant_widths.py RESONANT.npz label=FLUX.npz[:prefix] ...
-(prefix: optimized (default) or start). Writes RESONANT_widths.png and a table.
+usage: python resonant_widths.py RESONANT.npz [MORE.npz ...] label=FLUX.npz[:prefix] ...
+(prefix: optimized (default) or start). Writes RESONANT_widths.png and a table. The
+fields of MORE.npz (e.g. a free-boundary run, on its own geometry) are added, without
+their DESC, coils and start; all on the same rho. ``--chains 3/5 9/16 ...`` picks the
+chains (m up to the spectra's m_max).
 """
 
 import argparse
@@ -88,16 +91,27 @@ def measured(flux, prefix, m, n, NFP, rho_F):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("resonant")
-    ap.add_argument("flux", nargs="*", help="label=FLUX.npz[:prefix]")
+    ap.add_argument("files", nargs="+",
+                    help="RESONANT.npz [MORE.npz ...], then label=FLUX.npz[:prefix] ...")
+    ap.add_argument("--chains", nargs="*", default=None, help="n/m ... (default: CHAINS)")
     a = ap.parse_args()
-    d = np.load(a.resonant)
+    res_files = [f for f in a.files if "=" not in f]
+    d0 = np.load(res_files[0])
+    d = dict(d0)
+    for f in res_files[1:]:
+        e = np.load(f)
+        assert np.allclose(e["rho"], d["rho"]), f"{f}: another rho grid"
+        new = [str(r) for r in e["runs"] if str(r) not in ("DESC", "coils", "start")]
+        d.update({f"c_{r}": e[f"c_{r}"] for r in new})
+        d["runs"] = np.array([str(r) for r in d["runs"]] + new)
+    chains = CHAINS if a.chains is None else [tuple(int(v) for v in c.split("/"))[::-1]
+                                              for c in a.chains]
     rho, iota_D, NFP = d["rho"], d["iota"], int(d["NFP"])
     sgn = np.sign(np.mean(iota_D))
     n_list = list(d["n"])
     runs = [str(r) for r in d["runs"] if str(r) != "DESC"]
     fluxes = {}
-    for item in a.flux:
+    for item in [f for f in a.files if "=" in f]:
         label, rest = item.split("=", 1)
         path, _, prefix = rest.partition(":")
         fluxes[label] = (np.load(path), prefix or "optimized")
@@ -111,7 +125,7 @@ def main():
           f"{'b(rho_D)':>9s} {'b(rho_F)':>9s} {'w_pred':>7s} {'w_meas':>7s} {'lock':>4s} "
           f"{'raw':>6s}")
     for run in runs:
-        for m, n in CHAINS:
+        for m, n in chains:
             q = n / m
             rho_D, slope_D = crossing(rho, np.abs(iota_D), q)
             rho_F, slope_F, w_meas, nl, bg = np.nan, np.nan, np.nan, 0, np.nan
@@ -137,10 +151,10 @@ def main():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    fig = plt.figure(figsize=(4.2 * len(CHAINS), 9.5), constrained_layout=True)
-    gs = fig.add_gridspec(2, len(CHAINS))
+    fig = plt.figure(figsize=(4.2 * len(chains), 9.5), constrained_layout=True)
+    gs = fig.add_gridspec(2, len(chains))
     colors = {r: f"C{i}" for i, r in enumerate(runs)}
-    for j, (m, n) in enumerate(CHAINS):
+    for j, (m, n) in enumerate(chains):
         ax = fig.add_subplot(gs[0, j])
         for run in runs:
             c = d[f"c_{run}"][:, m, n_list.index(int(sgn * n))]
@@ -189,7 +203,7 @@ def main():
     ax.legend(fontsize=8)
     ax.set_title("rotational transform of each field relative to DESC's\n"
                  "(lines locked in chains sit at n/m exactly)")
-    out = os.path.splitext(a.resonant)[0] + "_widths.png"
+    out = os.path.splitext(res_files[0])[0] + "_widths.png"
     fig.savefig(out, dpi=130)
     print(f"saved {out}")
 

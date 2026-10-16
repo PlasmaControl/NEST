@@ -2,6 +2,52 @@
 
 One entry per commit, newest first.
 
+## 2026-10-16: NEST with a free boundary: B.n = 0 on a moving boundary, solved with force balance
+- `nest/free_boundary.py`: the boundary's normal displacement xi is a new set of unknowns, x = (u, c_p, xi), extended inside as rho^|m|. J and p are carried with the coordinates.
+  - New objectives: `BoundaryNormalField` (B.n/|B| on the boundary), `ToroidalFlux` (Psi held), `StoredEnergy` (int p dV in the moving volume) and `TransportedCurrentError`.
+  - Pressure balance [[B^2/2mu0 + p]] = 0 holds identically: no sheet current, and p = 0 on the boundary.
+  - The geometry is exact in xi, and so are the points at which B_plasma is interpolated (`MovingInterpolator`). B_ext and the box current are first order in the displacement (`BoxShift`). Re-anchoring (`Displacement.apply`) makes them exact.
+  - `DirectField`: B_plasma on the boundary by direct Biot-Savart over the volume current (offset source grid, symmetry copies), for B.n. The box's B.n on NCSX's boundary is off by ~1.5e-3 |B| at a/10 (5e-4 at a/20) and differs between field periods. A run with the box's B.n fitted that error on its half-period grid.
+  - Derivative of B on the boundary: the box's by default; `direct_tangent` uses a (coarser) direct field.
+  - `FreeBoundaryPreconditioner`: the (u, c_p) blocks plus one exact xi block. xi is scaled so its columns match the current's (otherwise the damping floor kills the steps of u). A coupled Schur form (`coupled=True`) converged worse on NCSX and is off.
+  - `release`: deletes an anchor's device arrays. JAX's caches otherwise kept about 4 GB per anchor, and the run ran out of memory after four anchors.
+- `scripts/optimize_fb.py`: anchored Levenberg-Marquardt, with one box per stage and lam carried across anchors.
+  - Options: `--fix-I` (I(rho) held), `--targets` (continue a run with its W, Psi and B.n normalization), `--start-eq`, `--direct N_RHO Q` (default 32 4), `--direct-tangent`.
+  - Step control: `--max-disp` per anchor and `--max-step` per iteration (default max-disp / 3).
+  - `--grad-every`: the gradient of B_ext is reused for a few anchors (B_ext itself is always exact).
+  - It saves x and the moved geometry as a DESC file (`<out>_eq.h5`) for `poincare.py --eq ... --skip-start`.
+- `scripts/fb_compare.py`: B.n/|B| maps, the normal displacement of the boundary and the boundaries of several runs.
+- `nest/optimize.py`: `quadratic=False` checks each step against the true residual; `step_limit(d)` bounds the step length (used to bound the boundary's motion per iteration); a callback returning True stops the iterations.
+- `tests/test_free_boundary.py` (NCSX, CPU):
+  - xi = 0 reproduces `Fields` to 5e-15;
+  - J v matches central differences to 5e-10 in xi, and the adjoint identity holds to 6e-15;
+  - the model agrees with the displaced rebuild to second order.
+- `free_boundary_desc.py`: chunked Jacobian in the final solve (40 GB A100). NCSX result `NCSX_fb_L16M16N12.h5`: the pressure jump drops from 8.3e-3 to 2.6e-3 rms, but B.n/|B| does not (4.4e-3 -> 4.5e-3 rms).
+- NEST on it, fixed boundary (a/20 check; DESC 8.8e-4):
+  - `--w-J 1e-3`: 6.8e-5, but the core iota rises from 0.35 to 0.44;
+  - `--fix-I`: 8.9e-5 with DESC's iota. Its field has B.n/|B| = 2.9e-3 on DESC's LCFS.
+- NEST free boundary, from the `--fix-I` optimum (xi up to M = 16, N = 12, direct B.n, a/10 then a/20):
+  - force error 1.2e-4 on the a/20 check; B.n/|B| 3.0e-4 rms (2.7e-3 max), against 2.8e-3 (2.8e-2) with the boundary fixed;
+  - the boundary moves up to 9 mm (3.3 mm rms).
+  - Islands (`figures/ncsx_fixed_vs_free_poincare_periodized.png`, 800 periods):
+    - rho 0.62-0.78 has nested surfaces between thin chains in both fields (Chirikov sigma < 0.72).
+    - The 3/6 chain is about 3x wider with the free boundary: the free field does not shield the coils' 3/6 drive (2|c_mn| 9.8e-4 against 1.2e-4 fixed).
+    - 3/5 is about the same width in both.
+    - The a/10 stage of the free run is chaotic over rho 0.66-0.88 even periodized: its high-order b_mn are 3-10x those at a/20, so that chaos is resolution error.
+  - Details and the lessons of the runs in `desc_input/vmec_free_boundary/README.md`.
+- `poincare.py`: B_plasma is averaged over the NFP rotations before tracing (default; `--no-periodize`).
+  - The box's field differs between periods by 1e-4 |B| rms at a/20. Its jump at the seam of the repeated period pushed every line outward: rho +0.07 over 800 periods, free boundary.
+  - That drift was also the "stochastic band" at rho 0.62-0.78 and the narrow 3/5 chain of the first free-boundary sections.
+  - New options: `--grid` (the traced field's cylindrical grid) and `--steps` (RK4 steps per period).
+- `poincare.py --skip-start`; `poincare_flux.py` takes an optional DESC equilibrium for its iota curve; `poincare_compare.py` draws several runs side by side.
+- `resonant_field.py`: options `--m-max`, `--k-max`, `--skip-start`, `--iota-eq`.
+- `resonant_overlap.py`: chains in a band of rho, with b_mn, pendulum width and Chirikov sigma, against a long trace.
+  - Per line, it reports the drift of rho and the thickness (rms of rho about a fit rho(theta)): surfaces < 6e-3, the 3/5 separatrix layer 2e-2.
+  - The weighted Birkhoff rotation number stops converging at 1e-4-1e-5 on surfaces with this tracer, so it is not used to flag chaos.
+
+## 2026-10-14: Free-boundary DESC inputs for NCSX, QH and CTH-like in their coils
+- `desc_input/vmec_free_boundary/free_boundary_desc.py CASE`: from the fixed-boundary re-solve on the VMEC LCFS (B.n/|B| 2-3.5e-3 rms), the LCFS is solved for in the fixed coils. It minimizes `BoundaryError` with p, I and Psi fixed, `proximal-lsq-exact` at 12/12/8-10, and releases LCFS modes for k = 2, 4, 6. A tight solve then runs at 16/16/12, and the result is saved as `<case>_fb_L..M..N...h5`. Jobs can be split with `--resume` and `--no-final`.
+
 ## 2026-10-14: Axisymmetric tokamak: DESC-matched start, dense model, rank and drift of force balance
 - `desc_input/tokamak_free_boundary/`: a free-boundary tokamak (DSHAPE boundary, p ∝ (1-ρ²)³, I ∝ 1-(1-ρ²)³, ⟨β⟩ 2.4 %, q 1.18 → 7.5) at L = M = 12, 16, 24, 32.
   - The external field is a REGCOIL `FourierCurrentPotentialField`, with B.n/|B| 5e-7.

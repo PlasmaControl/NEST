@@ -88,7 +88,8 @@ def _diag(J, JT, n, mask, n_probes, seed=0):
 
 def levenberg_marquardt(obj, x0=None, free=None, maxiter=10, lam=1e-2, cg_tol=1e-2,
                         cg_maxiter=50, n_probes=8, d_floor=1e-6, gtol=1e-6, verbose=True,
-                        callback=None, time_limit=None, precond=None, ftol=None):
+                        callback=None, time_limit=None, precond=None, ftol=None,
+                        quadratic=True, step_limit=None):
     """Minimize |r(x)|^2 / 2 from x0 over the unknowns with ``free`` True.
 
     Each iteration linearizes r once (``_linearized``); the CG products, the
@@ -97,10 +98,15 @@ def levenberg_marquardt(obj, x0=None, free=None, maxiter=10, lam=1e-2, cg_tol=1e
     |J^T r| < gtol |J^T r|_0, when f decreased by less than a fraction ``ftol``
     per iteration over the last 5 (stagnation), or when the next iteration would end after
     ``time_limit`` seconds from the start. ``callback(x, history)`` is called after
-    every accepted step. ``precond``: None for the Jacobi preconditioner (D from
-    Hutchinson), or a block preconditioner (``precondition.BlockPreconditioner``,
-    called as precond(r, lam); D is the diagonal of its blocks). Returns x and
-    the history (a list of dicts).
+    every accepted step; if it returns True, the iterations stop. ``precond``:
+    None for the Jacobi preconditioner (D from Hutchinson), or a block
+    preconditioner (``precondition.BlockPreconditioner``, called as
+    precond(r, lam); D is the diagonal of its blocks). ``quadratic=False`` when r
+    is not exactly quadratic in x (``free_boundary``): the step of the quartic
+    model is then checked with the true residual, against the full step whose
+    residual is already known. ``step_limit(d)``: the largest step length a along d
+    (e.g. a bound on the boundary's motion per iteration, ``free_boundary``).
+    Returns x and the history (a list of dicts).
     """
     x = obj.x0 if x0 is None else jnp.asarray(x0)
     mask = jnp.ones(obj.n) if free is None else jnp.asarray(free, float)
@@ -132,8 +138,17 @@ def levenberg_marquardt(obj, x0=None, free=None, maxiter=10, lam=1e-2, cg_tol=1e
             d, n_cg = pcg(mv, -g, Minv, cg_tol, cg_maxiter)
             Jd = J(d)
             q = obj.r(x + d) - r - Jd
-            a, f2 = quartic_step(r, Jd, q)
+            a_max = 10.0 if step_limit is None else min(10.0, float(step_limit(d)))
+            a, f2 = quartic_step(r, Jd, q, a_max=a_max)
             f_new = 0.5 * f2
+            if not quadratic:  # the model's step against the true residual and a = 1
+                ra = obj.r(x + a * d)
+                f_new = 0.5 * float(jnp.vdot(ra, ra))
+                if a_max >= 1.0:
+                    r1 = r + Jd + q
+                    f1 = 0.5 * float(jnp.vdot(r1, r1))
+                    if f1 < f_new:
+                        a, f_new = 1.0, f1
             if f_new < f:
                 x = x + a * d
                 lam = max(lam / 3, 1e-8)
@@ -151,8 +166,8 @@ def levenberg_marquardt(obj, x0=None, free=None, maxiter=10, lam=1e-2, cg_tol=1e
                         "time": time.time() - t1, **obj.report(x)})
         if verbose:
             _log(history[-1])
-        if callback is not None:
-            callback(x, history)
+        if callback is not None and callback(x, history):
+            break
         if ftol is not None and it >= 5:
             f5 = history[-6]["f"]
             if (f5 - f) / f < 5 * ftol:
