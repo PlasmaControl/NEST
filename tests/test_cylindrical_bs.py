@@ -288,6 +288,113 @@ def test_A4_switch_and_kernel():
             assert e < 1e-12
 
 
+# ------------------------------------------------------------------ A5
+from single_layer import single_layer_matrix  # noqa: E402
+
+A5_BOX = dict(R_in=0.6, R_out=1.4, z0=0.45)
+
+
+def _a5_setup(n_r=24, n_z=28):
+    b = A5_BOX
+    ra, za = ChebAxis(b["R_in"], b["R_out"], n_r), ChebAxis(-b["z0"], b["z0"], n_z)
+    ap = AnnulusPoisson(ra, za, [0])
+
+    # a smooth density per face, nonzero at the corners and at every target
+    def sig(face, l):
+        c = {"in": (1.0, 0.3), "out": (-0.7, 0.5), "bot": (0.4, -0.8), "top": (1.2, 0.2)}[face]
+        return c[0] + c[1] * np.cos(3 * l + 0.4) + 0.2 * l**2
+
+    axes = {"in": za, "out": za, "bot": ra, "top": ra}
+    sigma = ap.pack({f: sig(f, axes[f].s) for f in ("in", "out", "bot", "top")})
+    return ap, sig, sigma
+
+
+def _face_param(face, l):
+    b = A5_BOX
+    return {"in": (b["R_in"], l), "out": (b["R_out"], l), "bot": (l, -b["z0"]), "top": (l, b["z0"])}[face]
+
+
+def test_A5_normalization_3d():
+    """S_m sigma at interior targets against the 3-D surface integral
+    -(1/4 pi) int sigma(l') cos(m phi') / |x - y| r' dphi' dl' (scipy dblquad).
+
+    The density here is the face interpolant itself, so only the operator is tested."""
+    from scipy.integrate import dblquad
+    ap, sig, sigma = _a5_setup()
+    b = A5_BOX
+    lims = {"in": (-b["z0"], b["z0"]), "out": (-b["z0"], b["z0"]),
+            "bot": (b["R_in"], b["R_out"]), "top": (b["R_in"], b["R_out"])}
+    targets = np.array([[1.0, 0.1], [0.75, -0.3], [1.3, 0.35]])
+    ms = [0, 1, 2, 5]
+    S = single_layer_matrix(ap, ms, targets)
+    worst = 0.0
+    for i, (rt, zt) in enumerate(targets):
+        for k, m in enumerate(ms):
+            ref = 0.0
+            for f in ("in", "out", "bot", "top"):
+                def g(phi, l, f=f, m=m):
+                    rp, zp = _face_param(f, l)
+                    d = np.sqrt(rt**2 + rp**2 - 2 * rt * rp * np.cos(phi) + (zt - zp) ** 2)
+                    return sig(f, l) * np.cos(m * phi) * rp / d
+                ref += dblquad(g, *lims[f], 0, 2 * np.pi, epsabs=1e-14, epsrel=1e-13)[0]
+            ref *= -1 / (4 * np.pi)
+            val = S[k, i] @ sigma
+            e = abs(val - ref) / abs(ref)
+            worst = max(worst, e)
+            print(f"  A5 3-D target ({rt}, {zt}) m={m}: S sigma {val: .12e}  ref {ref: .12e}  rel {e:.1e}")
+    assert worst < 1e-10, worst
+
+
+def test_A5_on_surface():
+    """Boundary targets (face interiors, near corners, corners) against 1-D adaptive
+    quadrature of -1/2 int r' k_m sigma dl' with breakpoints; corner rows agree; the
+    entries are converged in the panel rule."""
+    from scipy.integrate import quad
+    ap, sig, sigma = _a5_setup()
+    b = A5_BOX
+    pts, face_id = ap.boundary_points()
+    sel = [3, 14, 0, ap.face_sizes["in"] - 1, ap.face_sizes["in"] + 1,
+           2 * ap.face_sizes["in"] + 5, 2 * ap.face_sizes["in"] + ap.face_sizes["bot"] + 22]
+    targets = pts[sel]
+    targets = np.vstack([targets, [[b["R_in"] + 1e-4, b["z0"] - 2e-4]]])  # just inside a corner
+    ms = [0, 1, 2, 3, 9, 60, 300]
+    S = single_layer_matrix(ap, ms, targets)
+    lims = {"in": (-b["z0"], b["z0"]), "out": (-b["z0"], b["z0"]),
+            "bot": (b["R_in"], b["R_out"]), "top": (b["R_in"], b["R_out"])}
+    from toroidal_kernel import toroidal_kernel
+    worst = 0.0
+    for i, (rt, zt) in enumerate(targets):
+        vals, refs = S[:, i] @ sigma, np.zeros(len(ms))
+        for f in ("in", "out", "bot", "top"):
+            a, c = lims[f]
+            along = zt if f in ("in", "out") else rt
+            brk = [x for x in (along, a, c) if a < x < c]
+            for k, m in enumerate(ms):
+                def g(l, f=f, m=m):
+                    rp, zp = _face_param(f, l)
+                    if rp == rt and zp == zt:
+                        return 0.0
+                    return -0.5 * rp * toroidal_kernel(rt, zt, rp, zp, m)[m] * sig(f, l)
+                refs[k] += quad(g, a, c, points=brk or None, limit=400, epsabs=1e-15, epsrel=1e-13)[0]
+        scale = np.abs(refs).max()  # the m = 0 value: high-m potentials are small
+        e = np.abs(vals - refs) / np.maximum(np.abs(refs), 1e-3 * scale)
+        worst = max(worst, e.max())
+        print(f"  A5 surface target ({rt:.4f}, {zt:.4f}): rel err by m " + " ".join(f"{x:.0e}" for x in e))
+    assert worst < 1e-10, worst
+    # the corner (R_in, -z0) is node 0 of 'in' and node 0 of 'bot': identical rows
+    nin = ap.face_sizes["in"]
+    Sc = single_layer_matrix(ap, [0, 4], pts[[0, 2 * nin]])
+    assert np.allclose(pts[0], pts[2 * nin])
+    dc = np.abs(Sc[:, 0] - Sc[:, 1]).max() / np.abs(Sc).max()
+    # panel-rule convergence
+    S2 = single_layer_matrix(ap, ms, targets, n_gl=24, ratio=0.1)
+    dp = (np.abs(S2 - S).max(axis=(1, 2)) / np.abs(S2).max(axis=(1, 2)))
+    print(f"  A5 corner rows differ by {dc:.1e}; panel rule (16, 0.15) vs (24, 0.1) by m: "
+          + " ".join(f"{x:.0e}" for x in dp))
+    # entries: the floor at high m is the recurrence's accuracy near chi = 1 (gate A4, ~1e-12)
+    assert dc < 1e-13 and dp.max() < 1e-11
+
+
 if __name__ == "__main__":
     names = sys.argv[1:]
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
