@@ -395,6 +395,21 @@ def test_A5_on_surface():
     assert dc < 1e-13 and dp.max() < 1e-11
 
 
+# ------------------------------------------------------------------ A6
+def test_A6_gaussian_charges():
+    """Free-space scalar solve against NFP-periodic, z-asymmetric Gaussian charges, both
+    mode shifts (the full sweep, to 1e-12, is tests/cyl_a6.py)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from cyl_a6 import run_case
+    r, _ = run_case(64, 151)
+    for s in (0, 1):
+        e = r[f"shift{s}"]
+        print(f"  A6 n=64 N_phi=151 shift {s}: g {e['boundary_g']:.1e} nodes {e['nodes']:.1e} "
+              f"off-node {e['off_node']:.1e}")
+        assert max(e[k] for k in ('boundary_g', 'nodes', 'off_node')) < 1e-6
+    assert r["wall_tail"] < 1e-16
+
+
 if __name__ == "__main__":
     names = sys.argv[1:]
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
