@@ -410,6 +410,33 @@ def test_A6_gaussian_charges():
     assert r["wall_tail"] < 1e-16
 
 
+# ------------------------------------------------------------------ B1
+def _jax64():
+    import jax
+    jax.config.update("jax_enable_x64", True)
+    return jax
+
+
+def test_B1_jax_vs_numpy():
+    """The JAX potential equals the NumPy reference (FreeSpaceAnnulus) mode for mode,
+    for A_z (shift 0) and A_+ (shift 1), with a chunk that does not divide the modes."""
+    _jax64()
+    import jax.numpy as jnp
+    from scipy.constants import mu_0
+    from cylindrical_bs import CylindricalSolver, potential
+    ra, za = ChebAxis(0.6, 1.4, 20), ChebAxis(-0.45, 0.45, 22)
+    sol = CylindricalSolver(ra, za, NFP=3, N_phi=15, chunk=4)
+    rng = np.random.default_rng(5)
+    J = rng.standard_normal(sol.shape + (3,))
+    A = np.asarray(potential(sol, jnp.asarray(J)))
+    Az = sol.fs.solve(-mu_0 * J[..., 2], shift=0)
+    Ac = sol.fs.solve(-mu_0 * (J[..., 0] + 1j * J[..., 1]), shift=1)
+    ez = np.abs(A[..., 2] - Az).max() / np.abs(Az).max()
+    ec = np.abs(A[..., 0] + 1j * A[..., 1] - Ac).max() / np.abs(Ac).max()
+    print(f"  B1 JAX vs NumPy: A_z {ez:.1e}, A_r + i A_phi {ec:.1e}")
+    assert ez < 1e-13 and ec < 1e-13
+
+
 if __name__ == "__main__":
     names = sys.argv[1:]
     tests = [(k, v) for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
