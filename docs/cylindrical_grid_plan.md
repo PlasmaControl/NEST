@@ -141,6 +141,14 @@ Goal: a free-space solve of Δu = f for an NFP-periodic scalar f in Ω, exact to
 - **Stop point S2**: present the B4 curves; go/no-go for integration.
 - [ ] done
 
+### B5. High-resolution memory push, local (added at S1, 2026-10-16)
+The purpose of the branch is to find out how far the new grid pushes resolution for a given memory. Dense S_m grows like h^-3, like the grid itself, so it must not set the limit.
+- Banded or low-rank S_m for high |m| (formerly E1) and the z-reflection split (formerly E2). Accuracy unchanged to 1e-12 against dense at B4 sizes.
+- Peak memory (process RSS and the XLA peak) and wall time against h for the **whole** J -> B call, forward and reverse (J v, J^T w), not one operator. Report it per stage: J gather, FFT, mode solves, S matvec, curl, interpolation to the points, and precomputed operators.
+- Push to the largest size that fits on the 8 GB laptop, and compare with the box at its own laptop limit.
+- False pass: measuring only the forward call, which hides the reverse-mode buffers. Covered by measuring J^T w too. Precomputed operators left out of the peak are covered by reporting them separately.
+- [ ] done
+
 ---
 
 ## Stage C: integration into NEST (CPU)
@@ -178,7 +186,7 @@ Goal: a free-space solve of Δu = f for an NFP-periodic scalar f in Ω, exact to
 ## Stage D: production-size validation (GPU, needs approval)
 
 - **Stop point S3**: no Modal job before the user approves the job list, sizes and time caps.
-- [ ] D1. Error against memory and time on A100: cylindrical against VG box at a/10, a/20, a/30 (box a/30 if it fits; else a/25). Instrumented per-stage XLA peak memory.
+- [ ] D1. **Memory push on one A100**: the finest h that fits for each method (cylindrical against VG box), with B-field error at that h. Instrumented per-stage XLA peak for the full `Fields` f, J v and J^T w. Error against memory and time curves from a/10 up to each method's limit.
 - [ ] D2. precise_QA production `optimize_qa` with the cylindrical backend (a/10-equivalent then refine). Check on the VG a/20 box with 3× collocation and on a finer cylindrical grid. Compare against main's anchor (8.2e-6 on a/20).
 - [ ] D3. DSHAPE axisymmetric (files from branch `optimization`): N_φ = 1, so the solve is two 2-D problems (m = 0 for A_z, m = 1 for A₊). Compare the force floor against the G6-axi box results, including the E2 effect (16 against 32 ζ planes), which the cylindrical solve should not show.
 
@@ -186,8 +194,8 @@ Goal: a free-space solve of Δu = f for an NFP-periodic scalar f in Ω, exact to
 
 ## Stage E: optimisations (each only if a measurement calls for it)
 
-- [ ] E1. Banded or low-rank storage of S_m at high |m| (required before a/30 precise_QA: dense S_m is 4.3 GB).
-- [ ] E2. z-reflection split of S_m (×½ storage and work).
+- [x] E1. moved to B5.
+- [x] E2. moved to B5.
 - [ ] E3. Stellarator symmetry in the solve (cos and sin with fixed z-parity, ×½).
 - [ ] E4. Fused curl back-transforms (proposal step 7). Large GEMMs over all modes.
 - [ ] E5. float32 trial against float64 at B4 sizes.
@@ -199,7 +207,7 @@ Each E item: before/after error at fixed size (must be unchanged to 1e-12 except
 
 ## Stop points (the user decides)
 
-- S1, after A6: α, δ, and precompute cost.
+- S1, after A6: α, δ, and precompute cost. **Decided 2026-10-16:** α = 0, δ = 2 h (studied in B4), a/20 precompute accepted, plus a high-resolution memory push (B5, D1).
 - S2, after B4: go/no-go for integration.
 - S3, before any GPU/Modal job.
 - Any change to a default of main's code paths.
