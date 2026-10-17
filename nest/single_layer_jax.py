@@ -9,12 +9,13 @@ cache key (``single_layer.S_NUMERICS``) is shared. What differs is the organisat
   face coordinate y of the Lagrange map), the start values Q_{-1/2}, Q_{1/2} (SciPy elliptic
   integrals, as on the CPU) and the choice forward / Miller with its start length
   K = ceil(40 / eta) (Miller start N = m_max + K);
-* device: lanes are grouped by K on the ladder 64 * 2^j (a longer start only lowers the start
-  error below e^{-80}) and run in fixed-shape blocks of B lanes: the start sweep (K steps), the
-  stored sweep of the ratios (m_max steps), the upward product; forward lanes run the forward
-  recurrence. The Lagrange matrices of each face are formed on the device (barycentric, as
-  ``chebyshev.barycentric_matrix``) and S_m[:, t, face] = kw @ L is one batched einsum per
-  chunk of targets.
+* device, per chunk of targets: (1) the Miller start sweep (K steps, a vector per lane) for the
+  lanes grouped by K on the ladder 64 * 2^j (a longer start only lowers the start error below
+  e^{-80}), giving rho_{m_max}; (2) over all lanes of the chunk at once, the stored sweep of the
+  ratios, the upward product, and the forward recurrence, selected per lane; (3) the Lagrange
+  matrices of each face (barycentric, as ``chebyshev.barycentric_matrix``) and
+  S_m[:, t, face] = kw @ L as one batched einsum. Shapes are fixed for the whole build (the
+  lane counts per face padded to the largest), so each function compiles once.
 
 Needs ``jax_enable_x64``. Memory: about ``mem_bytes`` of device memory (Q of one chunk of
 targets, one lane block, the Lagrange matrices of a face); the result is copied to the host
@@ -29,54 +30,50 @@ from annulus_poisson import FACES
 from single_layer import _face_geometry, _panel_rule
 from toroidal_kernel import _Q_start
 
-_PAD_Y = 3.0  # face coordinate of padding lanes: outside [-1, 1], never a node
+# padding lanes: weight 0 at the face node y = -1 (an exact hit, so a one-hot Lagrange row; a
+# point outside [-1, 1] makes the barycentric denominator ~5.8^-n, lost to cancellation: 0 * inf)
+_PAD_Y = -1.0
+_B1 = 1 << 16  # lanes per block of the start sweep
 
 
 def _round_up(n, k):
     return (int(n) + k - 1) // k * k
 
 
-def _device_fns(m_max, am):
-    """Jitted device functions for one m_max and |m| set (cached per call)."""
+def _device_fns(m_max, am, unroll=8):
     import jax
     import jax.numpy as jnp
     from jax import lax
 
     am = jnp.asarray(am)
 
-    def upward(q0, rat):  # Q_{m+1/2} = rho_m Q_{m-1/2}, sequential as on the CPU
-        def step(q, r):
-            q = q * r
-            return q, q
-        _, qs = lax.scan(step, q0, rat)
-        return jnp.concatenate([q0[None], qs])[am]
-
-    def miller(c, q0, K):
-        def start(i, rho):  # m = m_max + K .. m_max + 1
+    def start(c, K):  # m = m_max + K .. m_max + 1, from rho = 0: rho_{m_max}
+        def step(i, rho):
             m = (m_max + K - i).astype(c.dtype)
             return (m - 0.5) / (2 * m * c - (m + 0.5) * rho)
-        rho = lax.fori_loop(0, K, start, jnp.zeros_like(c))
+        return lax.fori_loop(0, K, step, jnp.zeros_like(c), unroll=unroll)
 
-        def store(rho, m):  # m = m_max .. 1: rho becomes rho_{m-1}
-            rho = (m - 0.5) / (2 * m * c - (m + 0.5) * rho)
-            return rho, rho
-        _, rat = lax.scan(store, rho, jnp.arange(m_max, 0, -1, dtype=c.dtype))
-        return upward(q0, rat[::-1])
+    def Q(c, q0, q1, rho, fwd):
+        def store(r, m):  # m = m_max .. 1: r becomes rho_{m-1}
+            r = (m - 0.5) / (2 * m * c - (m + 0.5) * r)
+            return r, r
+        _, rat = lax.scan(store, rho, jnp.arange(m_max, 0, -1, dtype=c.dtype), unroll=unroll)
 
-    def forward(c, q0, q1):
-        def step(carry, m):
-            qm, q = carry
-            qn = (2 * m * c * q - (m - 0.5) * qm) / (m + 0.5)
-            return (q, qn), qn
-        _, qs = lax.scan(step, (q0, q1), jnp.arange(1, m_max, dtype=c.dtype))
-        return jnp.concatenate([q0[None], q1[None], qs])[am] if m_max > 1 else \
-            jnp.concatenate([q0[None], q1[None]])[am]
+        def up(q, r):  # Q_{m+1/2} = rho_m Q_{m-1/2}, sequential as on the CPU
+            q = q * r
+            return q, q
+        _, qm = lax.scan(up, q0, rat[::-1], unroll=unroll)
 
-    def scatter(Qc, idx, vals):
-        return Qc.at[:, idx].set(vals)
+        def fw(carry, m):
+            a, b = carry
+            n = (2 * m * c * b - (m - 0.5) * a) / (m + 0.5)
+            return (b, n), n
+        _, qf = lax.scan(fw, (q0, q1), jnp.arange(1, m_max, dtype=c.dtype), unroll=unroll)
+        Qm = jnp.concatenate([q0[None], qm])
+        Qf = jnp.concatenate([q0[None], q1[None], qf])
+        return jnp.where(fwd[None], Qf, Qm)[am]
 
     def face(Qf, pref, y, y_nodes, w_bary):
-        # Qf (n_m, T, P), pref / y (T, P); Lagrange rows as chebyshev.barycentric_matrix
         d = y[:, :, None] - y_nodes[None, None, :]
         exact = d == 0
         c = w_bary / jnp.where(exact, 1.0, d)
@@ -84,33 +81,42 @@ def _device_fns(m_max, am):
         L = jnp.where(exact.any(axis=2, keepdims=True), exact.astype(L.dtype), L)
         return jnp.einsum("mtp,tpn->mtn", Qf * pref[None], L, precision=lax.Precision.HIGHEST)
 
-    return dict(miller=jax.jit(miller, static_argnums=2), forward=jax.jit(forward),
-                scatter=jax.jit(scatter, donate_argnums=0), face=jax.jit(face))
+    return dict(start=jax.jit(start, static_argnums=1), Q=jax.jit(Q), face=jax.jit(face))
+
+
+def _default_mem():
+    import jax
+    try:
+        lim = jax.devices()[0].memory_stats()["bytes_limit"]
+        return 0.3 * lim
+    except Exception:
+        return 2e9
 
 
 def single_layer_matrix_jax(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False, dtype=np.float64,
-                            mem_bytes=4e9, out=None):
+                            mem_bytes=None, out=None):
     """As ``single_layer.single_layer_matrix`` (same arguments and result), on the default JAX
-    device. ``out``: an optional preallocated host array (len(ms), n_t, ap.n_boundary)."""
+    device. ``mem_bytes``: device working set (default 0.3 of the device memory limit, else 2 GB);
+    ``out``: an optional preallocated host array (len(ms), n_t, ap.n_boundary)."""
     import jax
     import jax.numpy as jnp
     if not jax.config.jax_enable_x64:
         raise RuntimeError("single_layer_matrix_jax needs jax_enable_x64")
+    mem_bytes = mem_bytes or _default_mem()
     targets = np.atleast_2d(np.asarray(targets, dtype=float))
     ms = np.asarray(ms)
     am = np.abs(ms)
     m_max = int(am.max())
     n_m, n_t = len(ms), len(targets)
-    if m_max < 1:
-        raise ValueError("m_max >= 1 expected")
+    if m_max < 2:
+        raise ValueError("m_max >= 2 expected")
     geo = _face_geometry(ap)
     sizes = ap.face_sizes
     offs = np.cumsum([0] + [sizes[f] for f in FACES])
     S = out if out is not None else np.zeros((n_m, n_t, ap.n_boundary), dtype=dtype)
     fns = _device_fns(m_max, am)
     nodes = {f: (jnp.asarray(geo[f][0].y), jnp.asarray(geo[f][0].w_bary)) for f in FACES}
-    # lane block: the (m_max + 1, B) intermediates of a block (ratios, Q) in ~mem_bytes / 4
-    B = int(2 ** np.floor(np.log2(max(4096, mem_bytes / 4 / (16 * (m_max + 1))))))
+    t0 = time.time()
 
     def lanes(rt, zt):
         """Per face: (y, chi - 1, weight factor) of the quadrature of one target."""
@@ -129,16 +135,14 @@ def single_layer_matrix_jax(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False,
             res.append((axis.to_y(l), d2 / (2 * rr), -0.5 * w * rp / (np.pi * np.sqrt(rr))))
         return res
 
-    # targets per chunk: Q of the chunk (n_m, T * P) in ~mem_bytes / 4
-    probe = lanes(*targets[0])
-    P_est = sum(len(x[0]) for x in probe) + 4 * 512
-    T = int(max(1, min(n_t, mem_bytes / 4 / (8 * n_m * P_est))))
-    t0, t_dev = time.time(), 0.0
+    per_all = [lanes(*t) for t in targets]  # host: panel rules (lane counts fix the shapes)
+    P = [_round_up(max(len(p[fi][0]) for p in per_all), 256) for fi in range(len(FACES))]
+    t_host = time.time() - t0
+    # targets per chunk: ~5 arrays (m_max + 1, T * sum(P)) on the device
+    T = int(max(1, min(n_t, mem_bytes / (5 * 8 * (m_max + 1) * sum(P)))))
+    t_dev = 0.0
     for c0 in range(0, n_t, T):
-        tgt = targets[c0:c0 + T]
-        per = [lanes(*t) for t in tgt]
-        P = [_round_up(max(len(p[fi][0]) for p in per), 512) for fi in range(len(FACES))]
-        # lanes in face-major blocks (T, P_f); padding lanes: chi - 1 = 1, weight 0, y = 3
+        per = per_all[c0:c0 + T]
         Y, X, W = ([np.full((T, Pf), v) for Pf in P] for v in (_PAD_Y, 1.0, 0.0))
         for ti, p in enumerate(per):
             for fi, (y, x, w) in enumerate(p):
@@ -149,32 +153,27 @@ def single_layer_matrix_jax(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False,
         Q0, Q1 = _Q_start(x)
         fwd = (m_max * eta <= 2.0) & (eta <= 0.5)
         K = np.where(fwd, 0, np.ceil(40.0 / eta)).astype(np.int64)
-        Kb = np.where(fwd, -1, 64 * 2 ** np.ceil(np.log2(np.maximum(K, 64) / 64)).astype(np.int64))
-        n_lane = len(x)
+        Kb = np.where(fwd, 0, 64 * 2 ** np.ceil(np.log2(np.maximum(K, 64) / 64)).astype(np.int64))
         td = time.time()
-        Qc = jnp.zeros((n_m, n_lane + 1))  # last column: sink of padding lanes
-        for kb in np.unique(Kb):
+        rho = np.zeros_like(x)
+        for kb in np.unique(Kb[~fwd]):
             idx = np.flatnonzero(Kb == kb)
-            for b0 in range(0, len(idx), B):
-                ib = idx[b0:b0 + B]
-                pad = B - len(ib)
-                cb = np.concatenate([chi[ib], np.full(pad, 2.0)])
-                q0 = np.concatenate([Q0[ib], np.ones(pad)])
-                if kb < 0:
-                    q1 = np.concatenate([Q1[ib], np.ones(pad)])
-                    vals = fns["forward"](jnp.asarray(cb), jnp.asarray(q0), jnp.asarray(q1))
-                else:
-                    vals = fns["miller"](jnp.asarray(cb), jnp.asarray(q0), int(kb))
-                Qc = fns["scatter"](Qc, jnp.asarray(np.concatenate([ib, np.full(pad, n_lane)])), vals)
+            for b0 in range(0, len(idx), _B1):
+                ib = idx[b0:b0 + _B1]
+                cb = np.concatenate([chi[ib], np.full(_B1 - len(ib), 2.0)])
+                rho[ib] = np.asarray(fns["start"](jnp.asarray(cb), int(kb)))[:len(ib)]
+        Qc = fns["Q"](jnp.asarray(chi), jnp.asarray(Q0), jnp.asarray(Q1), jnp.asarray(rho), jnp.asarray(fwd))
         o = 0
         for fi, f in enumerate(FACES):
             n = T * P[fi]
             Sf = fns["face"](Qc[:, o:o + n].reshape(n_m, T, P[fi]), jnp.asarray(W[fi]), jnp.asarray(Y[fi]),
                              *nodes[f])
-            S[:, c0:c0 + len(tgt), offs[fi]:offs[fi + 1]] = np.asarray(Sf)[:, :len(tgt)]
+            S[:, c0:c0 + len(per), offs[fi]:offs[fi + 1]] = np.asarray(Sf)[:, :len(per)]
             o += n
+        del Qc
         t_dev += time.time() - td
         if verbose and ((c0 // T + 1) % max(1, (n_t // T) // 10) == 0 or c0 + T >= n_t):
             print(f"    S_m (jax {jax.default_backend()}): {min(c0 + T, n_t)}/{n_t} targets "
-                  f"({time.time() - t0:.0f} s; device {t_dev:.0f} s; chunk {T}, block {B})", flush=True)
+                  f"({time.time() - t0:.0f} s; host lanes {t_host:.0f} s, device {t_dev:.0f} s; chunk {T}, "
+                  f"lanes/target {sum(P)})", flush=True)
     return S

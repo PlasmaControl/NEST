@@ -53,8 +53,11 @@ def main():
     p.add_argument("--warm", type=int, default=10)
     p.add_argument("--ref", default="/results/cyl/S_cache")
     p.add_argument("--refjson", default="/results/cyl/s_ref")
-    p.add_argument("--mem-bytes", type=float, default=4e9)
-    p.add_argument("--tol", type=float, default=1e-12)
+    p.add_argument("--mem-bytes", type=float, default=None)
+    # tolerance: the forward-recurrence lanes (near-coincident points) amplify rounding by up to
+    # e^4 m eps, so two correct implementations differ by ~1e-11 there in Q and ~1e-12 in S_m
+    # (a/30 subset: 6.6e-13), below the quadrature error (<= 3.4e-11)
+    p.add_argument("--tol", type=float, default=5e-12)
     p.add_argument("--rekey", action="store_true")
     p.add_argument("--load-frac", type=int, default=60)
     p.add_argument("--out", default=".")
@@ -79,12 +82,15 @@ def main():
         t = time.time()
         rows = single_layer_matrix_jax(ap, ap.ms, rows_pts, verbose=True, mem_bytes=a.mem_bytes)
         t_b = time.time() - t
-        log(f"a/{frac}: device build {t_b:.1f} s ({rows.nbytes / 1e9:.2f} GB rows)")
-        run = dict(eig_s=t_eig, eig_threads=n_th, build_s=t_b, rows_GB=rows.nbytes / 1e9)
+        n_nan = int(np.isnan(rows).sum())
+        log(f"a/{frac}: device build {t_b:.1f} s ({rows.nbytes / 1e9:.2f} GB rows; NaN entries {n_nan})")
+        run = dict(eig_s=t_eig, eig_threads=n_th, build_s=t_b, rows_GB=rows.nbytes / 1e9, nan=n_nan)
         rj = os.path.join(a.refjson, f"s_ref_a{frac}.json")
         if os.path.exists(rj):
             key_old = json.load(open(rj))["key"]
             path = os.path.join(a.ref, f"S_{key_old}")
+            if not os.path.isdir(path):  # already re-keyed
+                path = os.path.join(a.ref, f"S_{S_key(ap, True)}")
             Se, So = (np.load(os.path.join(path, n), mmap_mode="r") for n in ("S.npy", "S_o.npy"))
             cc = 2 * zf.c[:, None] * zf.c[None, :]
             err = np.zeros(len(ap.ms))
