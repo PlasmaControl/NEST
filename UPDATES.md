@@ -2,6 +2,13 @@
 
 One entry per commit, newest first.
 
+## 2026-10-17: Cylindrical-annulus J → B (branch `cylindrical-grid`)
+- New free-space J → B solve on one field period of an annulus: Fourier in φ, Chebyshev in r and z, James' correction per toroidal mode (`nest/cylindrical_bs.py`, `cylindrical_grid.py`, `annulus_freespace.py`, `single_layer.py`, `toroidal_kernel.py`, `annulus_poisson.py`, `chebyshev.py`).
+- `Fields` with a `CylindricalGrid` box, `optimize_qa.py --grid cylindrical`; `DenseFields` works unchanged; main's paths bitwise unchanged (C4).
+- Gates A1–C6 pass (`tests/test_cylindrical_bs.py`, `tests/test_cylindrical_integration.py`).
+- precise_QA: at equal h, 5.6–7.2× less memory than the float32 VG box (JᵀW product + J sampling), ~0.6× its exterior B error, 13× faster JᵀW on the laptop CPU. At equal memory ~1.9× finer h; extrapolated A100-80GB: box a/40 vs cylindrical a/76.
+- Details and the proposed GPU jobs: `docs/cylindrical_grid.md`.
+
 ## 2026-10-14: Axisymmetric tokamak: DESC-matched start, dense model, rank and drift of force balance
 - `desc_input/tokamak_free_boundary/`: a free-boundary tokamak (DSHAPE boundary, p ∝ (1-ρ²)³, I ∝ 1-(1-ρ²)³, ⟨β⟩ 2.4 %, q 1.18 → 7.5) at L = M = 12, 16, 24, 32.
   - The external field is a REGCOIL `FourierCurrentPotentialField`, with B.n/|B| 5e-7.

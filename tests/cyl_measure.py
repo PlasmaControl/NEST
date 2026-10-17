@@ -13,7 +13,8 @@ in an ellipse within the plasma extent.
                b_plasma_truncated, SpectralInterpolator
 
 Stages: build, fwd (f), rev (J^T w by jax.linear_transpose, as the optimizer); the
-process peak RSS (ru_maxrss) is printed after each, with the time of a second call.
+peak (device peak_bytes_in_use on a GPU, process ru_maxrss on the CPU) is printed after
+each, with the time of a second call.
 
 run: python tests/cyl_measure.py --method cylindrical --frac 20 [--dtype float32] [--sym]
      [--out results/cyl/measure/<name>.json]
@@ -42,6 +43,12 @@ T0 = time.time()
 
 
 def peak():
+    """The device peak on an accelerator (XLA memory_stats), else the process peak RSS."""
+    d = jax.devices()[0]
+    if d.platform != "cpu":
+        st = d.memory_stats() or {}
+        if "peak_bytes_in_use" in st:
+            return st["peak_bytes_in_use"] / 1e9
     r = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return r / 1e9 if sys.platform == "darwin" else r / 1e6
 

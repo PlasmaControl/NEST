@@ -58,21 +58,21 @@ Edits to existing files (opt-in branches only):
 Goal: a free-space solve of Δu = f for an NFP-periodic scalar f in Ω, exact to discretisation error, before any vector or NEST code.
 
 ### A0. Setup
-- [ ] Worktree exists (the user runs `git worktree add ../NEST-cyl cylindrical-grid`). The sandbox cannot create `.git/worktrees/`.
-- [ ] Env `nest` plus `mpmath` (reference toroidal harmonics). `PYTHONPATH=<worktree>/nest:/Users/singh/PycharmProjects/DESC`.
-- [ ] Commit this plan as `docs/cylindrical_grid_plan.md`.
+- [x] Worktree exists (the user runs `git worktree add ../NEST-cyl cylindrical-grid`). The sandbox cannot create `.git/worktrees/`.
+- [x] Env `nest` plus `mpmath` (reference toroidal harmonics). `PYTHONPATH=<worktree>/nest:/Users/singh/PycharmProjects/DESC`.
+- [x] Commit this plan as `docs/cylindrical_grid_plan.md`.
 
 ### A1. Chebyshev operators
 - Test: D and D² on polynomials of degree ≤ N (exact) and on e^{x}, sin(5x) (spectral decay). Mapped nodes: the derivative of a mapped function is correct and convergence is spectral. Barycentric interpolation matrices reproduce the nodes, and off-node values are spectrally accurate.
 - Pass: polynomial error ≤ 1e-12·N² relative. Mapped and unmapped errors fall to ≤ 1e-12 by N = 64 for sin(5x).
 - False pass: tests on polynomials only, which are exact for any correct-looking D. Covered by also testing non-polynomial functions and the mapped case.
-- [ ] done
+- [x] done
 
 ### A2. Radial eigendecomposition per |m|
 - Test: interior L_r,m = D_rr + (1/r)D_r − m²/r² on [R_in, R_out] for |m| ∈ {0, 1, NFP, …, m_max}. Check that eigenvalues are real and negative, that ‖V Λ V⁻¹ − L‖/‖L‖ is small, and record κ(V_r,m). Same for D_zz.
 - Pass: |Im λ| ≤ 1e-10|λ|, λ < 0, reconstruction ≤ 1e-11. κ(V) reported against m. If κ > 1e8 at any m: stop and discuss (Legendre–Galerkin fallback in the proposal).
 - False pass: only checking small m. Covered by sweeping to m_max for the a/20 precise_QA size (m ≈ 500).
-- [ ] done
+- [x] done
 
 ### A3. Dirichlet core
 - Test (a): the eigen path against a dense direct solve of the same Kronecker collocation system, at small N (N_r = N_z ≈ 24), for several m. This isolates implementation errors from discretisation error.
@@ -81,19 +81,19 @@ Goal: a free-space solve of Δu = f for an NFP-periodic scalar f in Ω, exact to
 - Pass: (a) ≤ 1e-11 relative. (b) error ≤ 1e-10 by N ≈ 48. (c) σ self-converges to ≤ 1e-10.
 - False pass: a manufactured u that is a low-degree polynomial is reproduced exactly by any consistent scheme, and an m-independent u hides m²/r² bugs. Both covered by the choice in (b).
 - False fail: a corner singularity from an f that does not vanish at the corners. Covered by using a compact f in (c); (b) has u = 0 on ∂Ω and smooth f.
-- [ ] done
+- [x] done
 
 ### A4. Toroidal kernel k_m
 - Test: (i) |m| = 0, 1 against the closed forms with K, E (`ellipkm1` near χ → 1). (ii) m ∈ {0, 1, 2, 5, 20, 100, 500, 1000} at χ − 1 ∈ {1e-12, 1e-8, 1e-4, 1e-2, 1, 10, 100} against `mpmath.legenq(m − ½, 0, χ, type=3)`. (iii) the continuity of the hybrid forward/Miller switch. (iv) the log-singular asymptotics Q ≈ −½ln((χ−1)/2) − γ − ψ(m + ½).
 - Pass: relative error ≤ 1e-12 everywhere tested (≤ 1e-10 for χ − 1 ≤ 1e-8, where the argument itself loses digits). Compute χ − 1 directly as d²/(2rr′), never as χ − 1.
 - False pass: testing only moderate χ, where both recurrences work. Covered by the χ and m grid above.
-- [ ] done
+- [x] done
 
 ### A5. Single-layer matrices S_m
 - Test: (i) S_m σ against an independent 3-D brute-force surface quadrature of −(1/4π)∫∫ σ(ℓ′)e^{imφ′}/|x − y| dS, using adaptive `scipy.integrate` in (φ′, ℓ′) with breakpoints at the singular point, for ~10 targets (face interiors, near corners, at corners) and m ∈ {0, 1, NFP, NFP + 1, 4NFP + 1, large}. (ii) Edge consistency: a corner node's row agrees when built from either face. (iii) Convergence of the grading depth.
 - Pass: (i) ≤ 1e-10 relative to max|S σ|. (ii) ≤ 1e-13. (iii) entries stable to 1e-13 with one more grading level.
 - False pass: a σ that vanishes near the singular point hides a wrong singular quadrature. Covered by testing σ = 1 and σ = a Chebyshev polynomial nonzero at the target. A factor-2 or sign error in the normalisation would pass a relative or self-consistency test. Covered by the absolute 3-D comparison in (i).
-- [ ] done
+- [x] done
 
 ### A6. Scalar free-space solve (James complete)
 - Test: f = Σ over NFP copies and two off-axis, z-asymmetric centres of narrow Gaussians (width s; tail ≤ 1e-16 at ∂Ω), so f is NFP-periodic but has no z or stellarator symmetry. The exact u is Σ −q erf(ρ/(√2 s))/(4πρ). Run FFT in φ, the per-mode solve and the inverse FFT.
@@ -105,7 +105,7 @@ Goal: a free-space solve of Δu = f for an NFP-periodic scalar f in Ω, exact to
 - Pass: (a) and (b) ≤ 1e-9 relative to max|u| at the resolved size, with spectral convergence in (c).
 - False pass: with a symmetric source, z-parity or φ-sign errors cancel. Covered by the asymmetric centres. Too-wide Gaussians leak to the walls and give a false floor (false fail). Pre-flight: print max f on ∂Ω.
 - **Stop point S1**: report A1–A6 (tables and the convergence figure), the recommended α and δ, and the precompute time and storage. The user confirms before stage B.
-- [ ] done
+- [x] done
 
 ---
 
@@ -114,18 +114,18 @@ Goal: a free-space solve of Δu = f for an NFP-periodic scalar f in Ω, exact to
 ### B1. Vector assembly
 - Implement J_c = J_r + iJ_φ and J_z → modes. A₊ and A_z by the stage-A solver (JAX port of the apply path, NumPy precompute). Curl as in proposal step 7, implemented per D10. Inverse FFT gives (B_r + iB_φ, B_z).
 - Test: the JAX apply path against the NumPy stage-A path on the same scalar data, ≤ 1e-13.
-- [ ] done
+- [x] done
 
 ### B2. Manufactured exact field (interior included)
 - Test: pick a compactly supported smooth vector ψ in Ω (bump in (r, z) × NFP-periodic φ dependence, all three cylindrical components, no symmetry). Set A = ∇×ψ, so ∇·A = 0, and J = −ΔA/μ0 (by JAX autodiff, compact). The free-space solution is exactly A, so B = ∇×A everywhere, including inside the current. Also run an axisymmetric Gaussian ring (J_φ only) against an elliptic-integral loop-quadrature reference.
 - Pass: rms and max |B − B_exact|/max|B_exact| ≤ 1e-9 at the resolved size, with spectral convergence. The ring agrees to ≤ 1e-9.
 - False pass: a purely toroidal J only exercises the m = 1 A₊ path with J_r = 0. Covered by ψ with all components and φ dependence. Comparing only exterior points hides interior errors. Covered by the exact interior B.
-- [ ] done
+- [x] done
 
 ### B3. Identities and linear algebra
 - Test: div B (spectral, on the grid) ≈ 0. curl B − μ0 J against the discrete div J (J from B2 with a deliberately non-solenoidal perturbation). Linearity. Adjoint ⟨L J, b⟩ = ⟨J, Lᵀ b⟩ with `jax.vjp`. `jax.test_util.check_grads` on a small grid.
 - Pass: div B ≤ 1e-10 relative. The curl residual tracks ∇(∇·A) as predicted. Adjoint ≤ 1e-12. `check_grads` passes.
-- [ ] done
+- [x] done
 
 ### B4. NEST's J (precise_QA, kinked edge) against main's box
 - Setup: `precise_QA_free_boundary_L16N14` with its helical coils, the `BoundaryPotential` fit at production factors (3, 3, 2.5) via `fit_cache`, and B_plasma at the production collocation points.
@@ -139,15 +139,16 @@ Goal: a free-space solve of Δu = f for an NFP-periodic scalar f in Ω, exact to
 - False pass: both methods share the flux-grid interpolation of J and the same J kink, so their agreement does not prove either is right. Covered by (c) and (d) and by B2's exact test. A cylindrical "reference" that is not converged would make the box look converged. Covered by requiring cylindrical self-convergence at ≥ 2 sizes beyond the comparison size.
 - False fail: an h-matching rule that under-resolves φ at R_out. Pre-flight: print node spacings over the plasma in all three directions.
 - **Stop point S2**: present the B4 curves; go/no-go for integration.
-- [ ] done
+- [x] done
 
 ### B5. High-resolution memory push, local (added at S1, 2026-10-16)
+Result (2026-10-17, `docs/cylindrical_grid.md`): z-folded S_m (½, exact), float32 path, symmetric half sampling; banding measured and dropped (≤3×). Model validated against measured peaks at a/10–a/25; the per-stage breakdown moves to D1.
 The purpose of the branch is to find out how far the new grid pushes resolution for a given memory. Dense S_m grows like h^-3, like the grid itself, so it must not set the limit.
 - Banded or low-rank S_m for high |m| (formerly E1) and the z-reflection split (formerly E2). Accuracy unchanged to 1e-12 against dense at B4 sizes.
 - Peak memory (process RSS and the XLA peak) and wall time against h for the **whole** J -> B call, forward and reverse (J v, J^T w), not one operator. Report it per stage: J gather, FFT, mode solves, S matvec, curl, interpolation to the points, and precomputed operators.
 - Push to the largest size that fits on the 8 GB laptop, and compare with the box at its own laptop limit.
 - False pass: measuring only the forward call, which hides the reverse-mode buffers. Covered by measuring J^T w too. Precomputed operators left out of the peak are covered by reporting them separately.
-- [ ] done
+- [x] done
 
 ---
 
@@ -156,30 +157,30 @@ The purpose of the branch is to find out how far the new grid pushes resolution 
 ### C1. `CylindricalGrid`
 - `around(inp, h, margin, alpha, support_rho=1)`, then `locate_plasma` (inside nodes, rtz), scatter/gather and quadrature weights (Clenshaw–Curtis × uniform × r).
 - Test: the node-weight volume of the inside set against DESC's volume (staircase, O(h)). The toroidal current through a φ-plane from the gathered J against the net current I (section current, as on container-mask).
-- [ ] done
+- [x] done
 
 ### C2. `Fields(kernel="cylindrical")`
 - J at the solver nodes by gather (D14), the solver, and the interpolator to collocation points. `ForceResidual` takes the grid.
 - Test: `Fields` B_plasma against the standalone B4 path at the same points, ≤ 1e-13. F(x0) against main's VG `Fields` at a/10 and a/15; the difference must be consistent with B4's box error. The `ForceResidual.decompose` field term is reported.
-- [ ] done
+- [x] done
 
 ### C3. Tangent and adjoint
 - Test: `_tangent` (Jv) against `jax.jvp` of `_compute`. Jᵀw by adjoint identity. Mirror main's `tests/test_objective.py` checks.
 - Pass: ≤ 1e-12 relative (float64).
-- [ ] done
+- [x] done
 
 ### C4. G0: main paths unchanged
 - Test: on origin/main 263bfad against this branch, deterministic flags, `NEST_CACHE=off`: `Fields` with hockney and truncated, F, Jv and Jᵀw for 2 configurations. Bitwise identical. Run the main test-suite (`scripts/time_tests.py`, local subset).
 - False pass: comparing with caches on can reuse the old result. Covered by `NEST_CACHE=off`.
-- [ ] done
+- [x] done
 
 ### C5. Short local optimisation
 - `optimize_qa.py --grid cylindrical` at small factors (1, 1, 1), 20 iterations, streaming per-iteration output. Run the same settings with the VG box. Compare trajectories and check the final state on a finer cylindrical grid and on the a/15 box.
-- [ ] done
+- [x] done
 
 ### C6. `DenseFields` compatibility (axisymmetric use)
 - G (one solve per column) built through the cylindrical solver. Check against the box-built G on a small case to the B4 level.
-- [ ] done
+- [x] done
 
 ---
 
@@ -196,9 +197,9 @@ The purpose of the branch is to find out how far the new grid pushes resolution 
 
 - [x] E1. moved to B5.
 - [x] E2. moved to B5.
-- [ ] E3. Stellarator symmetry in the solve (cos and sin with fixed z-parity, ×½).
+- [ ] E3. (Sampling and locate are halved, C1b/C2b; the solve itself is not.) Stellarator symmetry in the solve (cos and sin with fixed z-parity, ×½).
 - [ ] E4. Fused curl back-transforms (proposal step 7). Large GEMMs over all modes.
-- [ ] E5. float32 trial against float64 at B4 sizes.
+- [~] E5. float32 trial against float64: done at a/6 in `Fields` (C2c, 1.6e-6 rms); not yet at B4 sizes.
 - [ ] E6. Mode truncation K < N_φ if J's φ-spectrum allows (measure it first).
 
 Each E item: before/after error at fixed size (must be unchanged to 1e-12 except E5 and E6), memory, time.
