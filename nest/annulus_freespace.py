@@ -121,6 +121,32 @@ class ZFold:
         return ce * y_e[..., self.a_of] + so * y_o[..., self.b_of]
 
 
+def S_backend():
+    """'jax' or 'numpy' for the S_m build: $NEST_S_BACKEND ('jax', 'numpy', or 'auto', the
+    default: JAX when its default backend is a GPU with x64 enabled, else NumPy)."""
+    import os
+    want = os.environ.get("NEST_S_BACKEND", "auto").lower()
+    if want in ("jax", "numpy"):
+        return want
+    try:
+        import jax
+        if jax.default_backend() == "gpu" and jax.config.jax_enable_x64:
+            return "jax"
+    except Exception:
+        pass
+    return "numpy"
+
+
+def _S_rows(ap, ms, pts, verbose=False, dtype=np.float64, **sl_kw):
+    """S_m rows at pts by the backend of ``S_backend`` (entries agree to rounding: the device build
+    against the float64 references a/20-a/60, <= 4e-14 row-relative)."""
+    if S_backend() == "jax":
+        from single_layer_jax import single_layer_matrix_jax
+        kw = {k: v for k, v in sl_kw.items() if k in ("n_gl", "ratio")}
+        return single_layer_matrix_jax(ap, ms, pts, verbose=verbose, dtype=dtype, **kw)
+    return single_layer_matrix(ap, ms, pts, verbose=verbose, dtype=dtype, **sl_kw)
+
+
 def S_key(ap, zsym, n_gl=16, ratio=0.15):
     """Cache key of the single-layer matrices of ``ap`` (AnnulusPoisson): the axes, the
     |m| set, the z-fold, the quadrature rule, and ``single_layer.S_NUMERICS``, the version
@@ -219,6 +245,7 @@ class FreeSpaceAnnulus:
         self.zfold = None if perm is None else ZFold(perm)
         where = _S_cache_dir(cache)
         self.S_cache = None
+        self.S_built_by = None  # 'jax' / 'numpy' when built here
         if where is not None:
             key = S_key(self.ap, self.zfold is not None, sl_kw.get("n_gl", 16), sl_kw.get("ratio", 0.15))
             got = load_S(where, key, S_dtype)
@@ -228,12 +255,13 @@ class FreeSpaceAnnulus:
         if self.S_cache is None:
             # with a cache the build is float64 (the stored copy), else in S_dtype
             build_dtype = np.float64 if where is not None else S_dtype
+            self.S_built_by = S_backend()
             if self.zfold is None:
-                self.S = single_layer_matrix(self.ap, self.ap.ms, pts, verbose=verbose, dtype=build_dtype,
+                self.S = _S_rows(self.ap, self.ap.ms, pts, verbose=verbose, dtype=build_dtype,
                                              **sl_kw)
                 self.S_o = None
             else:  # half the rows, folded into the even and odd blocks
-                rows = single_layer_matrix(self.ap, self.ap.ms, pts[self.zfold.rep], verbose=verbose,
+                rows = _S_rows(self.ap, self.ap.ms, pts[self.zfold.rep], verbose=verbose,
                                            dtype=build_dtype, **sl_kw)
                 self.S, self.S_o = self.zfold.fold(rows)
                 del rows
@@ -252,7 +280,8 @@ class FreeSpaceAnnulus:
         if verbose:
             print(f"  FreeSpaceAnnulus: {len(self.ap.ms)} distinct |m| <= {self.ap.ms.max()}, "
                   f"N_b = {self.ap.n_boundary}{' (z-folded)' if self.zfold else ''}; eig "
-                  f"{self.timing['eig']:.1f} s, S {self.timing['S']:.1f} s "
+                  f"{self.timing['eig']:.1f} s, S {self.timing['S']:.1f} s"
+                  + (f" [{self.S_built_by}]" if self.S_built_by else "") + " "
                   f"({self.S_nbytes / 1e6:.0f} MB"
                   + (f"; cache {self.S_cache[0]} S_{self.S_cache[1]}" if self.S_cache else "") + ")",
                   flush=True)
