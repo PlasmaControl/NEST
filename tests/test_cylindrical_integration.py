@@ -106,7 +106,9 @@ def _fields(kernel=None, dtype=jnp.float64):
     key = ("fr", kernel)
     if key not in c:
         c[key] = ForceResidual(inp, box)
-    return Fields(c[key], c["cur"], c["pre"], kernel=kernel or "cylindrical", dtype=dtype)
+    if kernel is None:  # the cylindrical path's precision is cyl_dtype (dtype is the box's)
+        return Fields(c[key], c["cur"], c["pre"], dtype=dtype, cyl_dtype=dtype)
+    return Fields(c[key], c["cur"], c["pre"], kernel=kernel, dtype=dtype)
 
 
 def test_C2_fields():
@@ -160,8 +162,9 @@ def test_C2b_symmetric_half():
 
 
 def test_C2c_float32():
-    """The float32 cylindrical path (J, mode solves, interpolation; main's production
-    precision) against float64: far below the discretization error (~1e-3 at a/6)."""
+    """The float32 cylindrical path (cyl_dtype=float32) against float64 at a/6. Small here,
+    but it grows ~n^2 with the Chebyshev order (3.5e-4 rms in the B modes at a/20) and broke
+    the production optimizations, so float64 is the default (test_C2d)."""
     f64, f32 = _fields(), _fields(dtype=jnp.float32)
     u = jnp.asarray(f64.x0[: f64.n_u])
     B64, B32 = np.asarray(f64.B_plasma(u)), np.asarray(f32.B_plasma(u))
@@ -170,6 +173,16 @@ def test_C2c_float32():
     erms = np.sqrt(np.sum(w * np.sum((B32 - B64) ** 2, 1))) / np.abs(B64).max()
     print(f"  C2c float32 vs float64 B_plasma: max {e:.1e}, rms {erms:.1e}")
     assert e < 1e-5
+
+
+def test_C2d_default_float64():
+    """Fields' cylindrical path is float64 by default, whatever dtype (main's box) is."""
+    from objective import Fields
+    c = setup()
+    f = Fields(_fields().force, c["cur"], c["pre"], dtype=jnp.float32)
+    assert f.cyl_dtype == jnp.float64 and f.solver.dtype == jnp.float64
+    assert f.to_points.yr.dtype == jnp.float64
+    print("  C2d default cylindrical precision float64 with dtype=float32: ok")
 
 
 def test_C3_tangent_adjoint():

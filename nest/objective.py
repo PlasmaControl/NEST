@@ -76,6 +76,12 @@ class Fields(_Pytree):
         in cylindrical components at the grid's inside nodes and B at the points
         by ``CylindricalInterpolator``; ``dtype`` sets the precision of J on the grid,
         the mode solves and the interpolation, as it does for the box.
+    cyl_dtype : float64 (default) or float32
+        Precision of the cylindrical path (J at the nodes, the mode solves, the
+        interpolation), independent of ``dtype``. float32 is NOT accurate at production
+        sizes: its error grows ~n^2 with the Chebyshev order (B rms 3.5e-4 at a/20, from
+        the per-mode Dirichlet solve and from differentiating a float32 A), which broke
+        Gauss-Newton line searches in production (D2, results/cyl/c6/f32_mixed.log).
     S_dtype : float32 or float64
         Storage of the cylindrical solver's single-layer matrices.
     cyl_half : bool
@@ -101,7 +107,7 @@ class Fields(_Pytree):
 
     def __init__(self, force, current, pressure, kernel="hockney", flux_grid=None, order=4,
                  dtype=jnp.float32, chunk=65536, share=None, S_dtype=jnp.float32, mode_chunk=16,
-                 cyl_half=True):
+                 cyl_half=True, cyl_dtype=jnp.float64):
         eq, box = force.inp.eq, force.box
         from cylindrical_grid import CylindricalGrid
         self.cyl = isinstance(box, CylindricalGrid)
@@ -110,6 +116,7 @@ class Fields(_Pytree):
         elif kernel == "cylindrical":
             raise ValueError("kernel 'cylindrical' needs a CylindricalGrid as force.box")
         self.force, self.kernel, self.dtype, self.chunk = force, kernel, dtype, chunk
+        self.cyl_dtype = jnp.dtype(cyl_dtype)
         self.sym = force.sym
         self.cdtype = jnp.complex64 if dtype == jnp.float32 else jnp.complex128
         # transform precision (1e-5 would give ~2e-4 with nufftax's kernel width rule)
@@ -159,8 +166,8 @@ class Fields(_Pytree):
                 mirror = np.ravel_multi_index(((-k) % N, i, nz - l), box.shape)
                 other = mirror != inside  # the midplane line of plane 0 is its own mirror
                 self.half, self.half_rows = mirror[other], np.flatnonzero(other)
-            # in the precision of the cylindrical solve (``dtype``, as for the box)
-            self.to_box = PointInterpolator(fg, rtz, order, chunk=chunk, dtype=dtype)
+            # in the precision of the cylindrical solve (``cyl_dtype``)
+            self.to_box = PointInterpolator(fg, rtz, order, chunk=chunk, dtype=cyl_dtype)
             self.box_phi = None
             n, n_h = len(inside), 0 if self.half is None else len(self.half)
             src = np.full(box.size, n + n_h, np.int32)
@@ -171,8 +178,8 @@ class Fields(_Pytree):
             self.shape, self.axes, self.K_hat, self._solve = box.shape, None, None, None
             self.solver = CylindricalSolver(box.r_axis, box.z_axis, box.NFP, box.N_phi,
                                             chunk=mode_chunk, S_dtype=np.dtype(S_dtype),
-                                            dtype=dtype)
-            self._points(force, box, dtype, chunk)
+                                            dtype=cyl_dtype)
+            self._points(force, box, cyl_dtype, chunk)
             return
         self.solver = None
         if self.sym and _symmetric_box(box):
@@ -260,7 +267,7 @@ class Fields(_Pytree):
         """J on the box (Cartesian components), shape box.shape + (3,); I = 0 gives
         the part linear in u."""
         if self.cyl:  # cylindrical components on the annulus grid
-            J_flux = self.J_flux(u, self.I if I is None else I).astype(self.dtype)
+            J_flux = self.J_flux(u, self.I if I is None else I).astype(self.cyl_dtype)
             J = self.to_box(J_flux, VECTOR_PARITY)
             if self.half is not None:  # the mirror nodes: (-J_r, J_phi, J_z)
                 J = jnp.concatenate([J, J[self.half_rows] * jnp.asarray([-1.0, 1.0, 1.0], J.dtype)])

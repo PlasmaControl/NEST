@@ -207,6 +207,9 @@ def main():
     ap.add_argument("--dtype", default="float32", choices=["float32", "float64"],
                     help="precision of J and B on the box (and of the dense G): float32 limits "
                          "<|F|> / norm to ~1e-8")
+    ap.add_argument("--cyl-dtype", default="float64", choices=["float32", "float64"],
+                    help="precision of the cylindrical J -> B path (float32 is not accurate at "
+                         "production sizes); --dtype sets main's box")
     ap.add_argument("--dense-batch", type=int, default=8,
                     help="box solves at a time when forming the dense B_plasma (GPU memory)")
     ap.add_argument("--no-check", action="store_true",
@@ -251,7 +254,8 @@ def main():
     for stage, frac in enumerate([a.frac] + list(a.refine)):
         box = make_box(inp, frac, a.grid, sym, a.margin)
         fr = ForceResidual(inp, box, resolution=res(a.colloc))
-        fields = Fields(fr, cur, pre, kernel=a.kernel, dtype=getattr(jnp, a.dtype))
+        fields = Fields(fr, cur, pre, kernel=a.kernel, dtype=getattr(jnp, a.dtype),
+                        cyl_dtype=getattr(jnp, a.cyl_dtype))
         if a.dense:  # B_plasma = G u + B_I; checked against the box solve along a random u
             v = jnp.asarray(np.random.default_rng(0).standard_normal(fields.n_u))
             B_box = np.asarray(fields.B_plasma(v))
