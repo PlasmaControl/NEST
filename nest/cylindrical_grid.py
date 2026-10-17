@@ -137,3 +137,78 @@ def evaluate(grid, Bp, Bz, pts, plane_tol=1e-12, chunk=4096):
             out[s, 0], out[s, 1] = c.real, c.imag
             out[s, 2] = np.einsum("pb,pb->p", Ir @ Pz, Iz)
     return out
+
+
+# ---------------------------------------------------------------- JAX interpolator
+import jax  # noqa: E402
+import jax.numpy as jnp  # noqa: E402
+
+from flux_interp import _Pytree  # noqa: E402
+
+
+def _bary_rows(y, nodes, w):
+    """Barycentric Lagrange rows l_j(y) (n_points, n_nodes), exact at the nodes."""
+    d = y[:, None] - nodes[None, :]
+    hit = d == 0
+    c = w[None, :] / jnp.where(hit, 1.0, d)
+    c = c / jnp.sum(c, axis=1, keepdims=True)
+    return jnp.where(jnp.any(hit, axis=1, keepdims=True), hit.astype(c.dtype), c)
+
+
+class CylindricalInterpolator(_Pytree):
+    """The field of ``CylindricalSolver.field_modes`` at fixed points (r, phi, z).
+
+    Points are grouped by plane (their phi modulo the period): on each plane the
+    exact Fourier synthesis of the modal slabs gives the (r, z) node values, and
+    each point takes the barycentric Chebyshev interpolant of them. The barycentric
+    rows are formed on the fly, plane by plane (``lax.map``), so the cache is only
+    the points' Chebyshev coordinates and the synthesis weights. Linear in the
+    slabs, so JAX's reverse mode (and its transpose) apply. Returns cylindrical
+    components (V_r, V_phi, V_z), shape (n, 3).
+    """
+
+    _dynamic = ("Ep", "Ez", "yr", "yz", "unsort", "nodes_r", "nodes_z", "w_r", "w_z")
+
+    def __init__(self, grid, pts, plane_tol=1e-12):
+        pts = np.asarray(pts, dtype=float)
+        N, NFP = grid.N_phi, grid.NFP
+        period = 2 * np.pi / NFP
+        key = np.round(np.mod(pts[:, 1], period) / plane_tol) * plane_tol
+        uniq, inv = np.unique(key, return_inverse=True)
+        counts = np.bincount(inv)
+        P = int(counts.max())
+        order = np.argsort(inv, kind="stable")
+        # padded slots: plane k, slot s; padding repeats the plane's last point
+        starts = np.concatenate([[0], np.cumsum(counts)[:-1]])
+        slot = np.empty(len(pts), int)
+        slot[order] = np.arange(len(pts)) - np.repeat(starts, counts)
+        pad_idx = np.empty((len(uniq), P), int)
+        for k in range(len(uniq)):
+            idx = order[starts[k]:starts[k] + counts[k]]
+            pad_idx[k] = np.concatenate([idx, np.full(P - counts[k], idx[-1])])
+        self.unsort = jnp.asarray(inv * P + slot, jnp.int32)  # point -> flat padded slot
+        jp = np.fft.fftfreq(N, 1.0 / N)
+        jz = np.arange(N // 2 + 1)
+        wz = np.where(jz == 0, 1.0, 2.0)
+        self.Ep = jnp.asarray(np.exp(1j * np.outer(uniq, jp * NFP)) / N)
+        self.Ez = jnp.asarray(wz * np.exp(1j * np.outer(uniq, jz * NFP)) / N)
+        self.yr = jnp.asarray(grid.r_axis.to_y(pts[pad_idx, 0]))
+        self.yz = jnp.asarray(grid.z_axis.to_y(pts[pad_idx, 2]))
+        self.nodes_r, self.w_r = jnp.asarray(grid.r_axis.y), jnp.asarray(grid.r_axis.w_bary)
+        self.nodes_z, self.w_z = jnp.asarray(grid.z_axis.y), jnp.asarray(grid.z_axis.w_bary)
+        self.n, self.n_planes, self.P = len(pts), len(uniq), P
+
+    def __call__(self, Bp, Bz):
+        planes_c = jnp.einsum("kj,jab->kab", self.Ep, Bp)
+        planes_z = jnp.real(jnp.einsum("kj,jab->kab", self.Ez, Bz))
+
+        def one(args):
+            Pc, Pz, yr, yz = args
+            Ir = _bary_rows(yr, self.nodes_r, self.w_r)
+            Iz = _bary_rows(yz, self.nodes_z, self.w_z)
+            c = jnp.sum((Ir @ Pc.real + 1j * (Ir @ Pc.imag)) * Iz, axis=1)
+            z = jnp.sum((Ir @ Pz) * Iz, axis=1)
+            return jnp.stack([c.real, c.imag, z], axis=-1)
+
+        out = jax.lax.map(one, (planes_c, planes_z, self.yr, self.yz))  # (n_planes, P, 3)
+        return out.reshape(-1, 3)[self.unsort]
