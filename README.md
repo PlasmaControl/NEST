@@ -1,15 +1,12 @@
 # NEST
 
-Fixed-boundary MHD solver with non-nested flux surfaces, starting from a DESC
-free-boundary equilibrium.
+Fixed-boundary MHD solver with non-nested flux surfaces, starting from a DESC free-boundary equilibrium.
 
 # To do
 
 - [x] Fit DESC current density J as a Fourier-Zernike series (`nest/current_fz.py`)
 - [x] Evaluate J on the flux grid G1, a `ConcentricGrid` (`nest/desc_grid.py`)
 - [x] Map J to a uniform Cartesian grid G2 with a 2-D Newton inverse map (`nest/cartesian_grid.py`)
-- [x] Tests vs DESC: fit on G1, current through phi = 0, int |J| dV (`tests/`)
-- [x] Use the free-boundary equilibrium from `desc_input` instead of the precise_QA example
 - [x] Extend to the periodic computational box (step 3), with free-space handling of B (`nest/magnetic_field.py`)
 - [x] FFT of J and B_plasma = i mu0 k x J / |k|^2 (steps 4-5) (`nest/fourier.py`, `nest/magnetic_field.py`)
 - [x] Pressure as a Fourier-Zernike field, optimized with T (`nest/pressure.py`)
@@ -18,7 +15,10 @@ free-boundary equilibrium.
 - [x] B = B_ext + B_plasma and force residual J x B - grad p inside the plasma (`nest/force.py`)
 - [x] Jacobian construction: matrix-free J v and J^T w, explicit columns (`nest/objective.py`, `nest/jacobian.py`)
 - [x] Optimization loop over the J coefficients: Levenberg-Marquardt with a block preconditioner (`nest/optimize.py`, `nest/precondition.py`, `scripts/optimize_qa.py`)
-- [x] Force balance below DESC's own: 2.75e-5 (checked on a finer box) against 4.24e-5, with the pressure free and the stored energy held (`OPTIMIZATION_STATUS.md`)
+
+- [ ] For the dshape tokamak, we need make a correction to the initial B_plasma computed from FFT (intrinsic error due to the grid resolution h). So using a biot-savart calculation for B_plasma from J_DESC. The only error will in the computation of delta_B during the optimization. Eventually the cylindric grid can solve this issue and we don't need to do that.
+- [ ] 
+
 
 # Questions?
 - [ ] Should we raise s in (1-rho^2)^s to 3 or 4?
