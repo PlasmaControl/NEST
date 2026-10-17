@@ -32,8 +32,9 @@ Note: S_m is built on the host CPU; on Modal it is ~4x slower than on an M-serie
 `FreeSpaceAnnulus(cache=...)` / `NEST_S_CACHE`: S_m stored once in float64 under `S_<key>/`
 (`S.npy`, `S_o.npy`, `meta.json`; key = axes, |m| set, z-fold, quadrature rule, `single_layer.S_NUMERICS`) and loaded afterwards. GPU jobs should set `NEST_S_CACHE=/results/cyl/S_cache` and
 find their S_m built beforehand, so the GPU never waits on the host-CPU build. The references
-built on 2026-10-17 are stored under keys of the earlier source-hash scheme; they are re-keyed
-to the S_NUMERICS = 1 scheme on the Volume before use (same entries). See also
+built on 2026-10-17 are stored under keys of the earlier source-hash scheme; under the current
+S_NUMERICS = 1 keys they are NOT found (a run rebuilds) until they are re-keyed on the Volume
+(rename `S_<old>` to `S_<new>`, same entries; not yet done). Compare against them by path. See also
 `docs/cylindrical_grid.md`, "Before a high-resolution run".
 
 - `run_s_ref.sh FRAC JOBS`: `tests/cyl_s_build.py build` on a CPU container (`cpu` 32; memory
