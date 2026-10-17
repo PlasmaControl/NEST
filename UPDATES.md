@@ -2,6 +2,13 @@
 
 One entry per commit, newest first.
 
+## 2026-10-17: Cylindrical grid: S_m setup on the GPU (branch `cylindrical-grid`)
+- `nest/single_layer_jax.py`: the single-layer matrices S_m built on the device (Miller start sweeps per start-length bucket, one recurrence pass per chunk of targets, Lagrange maps and face products on the device). Used automatically on a GPU with x64 (`NEST_S_BACKEND=auto|jax|numpy`).
+- Against the float64 CPU references for precise_QA a/20–a/60: ≤ 3.9e-14 row-relative. S_m at a/60 (16.3 GB) in 30 s on an A100-80GB (41 s on 40 GB), against 141 s on 32 CPU processes (~10 min on the 8 CPUs of a GPU node).
+- `AnnulusPoisson`: per-mode eigendecompositions on threads (`NEST_EIG_THREADS`; BLAS pinned per worker; bitwise equal), a/60 96 s → 14 s on 8 CPUs; `cond_Vr` computed on demand.
+- CPU build: process pool by default on Linux (`NEST_S_JOBS`); S_m cache key by `single_layer.S_NUMERICS` instead of the source of the building code; `tests/cyl_s_build.py grids --eq/--coils`.
+- The precise_QA references on the Modal Volume were re-keyed to the new scheme. Docs: `docs/cylindrical_grid.md`, "Before a high-resolution run"; `tests/cyl_s_gpu.py`, `scripts/modal_cyl/run_s_gpu.sh`.
+
 ## 2026-10-17: Cylindrical-annulus J → B (branch `cylindrical-grid`)
 - New free-space J → B solve on one field period of an annulus: Fourier in φ, Chebyshev in r and z, James' correction per toroidal mode (`nest/cylindrical_bs.py`, `cylindrical_grid.py`, `annulus_freespace.py`, `single_layer.py`, `toroidal_kernel.py`, `annulus_poisson.py`, `chebyshev.py`).
 - `Fields` with a `CylindricalGrid` box, `optimize_qa.py --grid cylindrical`; `DenseFields` works unchanged; main's paths bitwise unchanged (C4).
