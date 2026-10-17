@@ -73,7 +73,7 @@ Banded S_m was measured and dropped: in the nodal basis about a third of the ent
 
 ![error vs memory](cyl_verdict.png)
 
-(a) Exterior B error (rms over 177 converged points 0.15–0.41 a outside the plasma, `results/cyl/b4/exterior_fine.json`) against the pipeline memory of the JᵀW product plus J sampling (model). Filled: measured errors; open/dashed: O(h^p) extrapolation with the fitted orders (cylindrical p = 2.16 from a/10–a/20, box p = 1.71 from a/10–a/15). Dotted: A100 budgets less ~4.5 GB shared. (b) Measured laptop CPU time per JᵀW.
+(Updated after stage D.) (a) Exterior B error (rms over the 171 converged reference points 0.15–0.40 a outside the plasma that lie inside every annulus, `results/cyl/b4/exterior_d1.json`; cylindrical a/30 and a/40 computed on the GPU) against the memory of the JᵀW product plus J sampling (XLA model; cylindrical in float64 with symmetric sampling and z-folded S_m, `memory_f64opt.json`; box float32, `memory.json`). Filled: measured errors; open/dashed: O(h^p) extrapolation with the last measured orders (cylindrical 1.8 from a/30–a/40, box 2.3 from a/10–a/15 on these points; on the earlier 177-point set the box's was 1.7, so its extrapolation is uncertain). ×: box a/40 ran out of memory on an 80 GB A100 (measured). Dotted: A100 budgets less ~10 GB of h-independent production memory. (b) ⟨|F|⟩/norm on each run's own grid against optimizer wall time on one A100-40GB (precise_QA, factors 3 3 2.5, cold start, the same arguments): cylindrical a/20 in float64 (30 iterations) and main's box at a/20 and a/10 (100 iterations).
 
 ## Stage D: GPU results (Modal A100, 2026-10-17; scripts in `scripts/modal_cyl/`)
 
