@@ -121,8 +121,83 @@ class ZFold:
         return ce * y_e[..., self.a_of] + so * y_o[..., self.b_of]
 
 
+def S_key(ap, zsym, n_gl=16, ratio=0.15):
+    """Cache key of the single-layer matrices of ``ap`` (AnnulusPoisson): the axes, the
+    |m| set, the z-fold, the quadrature rule, and the source of the code that builds
+    them (as ``fit_cache``: any change of that code is a new key)."""
+    import hashlib
+    import inspect
+
+    import annulus_poisson
+    import chebyshev
+    import single_layer
+    import toroidal_kernel
+    src = "".join(inspect.getsource(m) for m in (single_layer, toroidal_kernel, chebyshev, annulus_poisson))
+    src += inspect.getsource(ZFold) + inspect.getsource(z_reflection)
+    ax = lambda a: (a.a, a.b, a.n, a.alpha)  # noqa: E731
+    rep = (ax(ap.r_axis), ax(ap.z_axis), tuple(int(m) for m in ap.ms), bool(zsym), int(n_gl), float(ratio),
+           hashlib.sha256(src.encode()).hexdigest())
+    return hashlib.sha256(repr(rep).encode()).hexdigest()[:24]
+
+
+def _S_cache_dir(cache):
+    """The S_m cache directory: ``cache`` if given, else $NEST_S_CACHE; None or 'off': none."""
+    import os
+    where = cache if cache is not None else os.environ.get("NEST_S_CACHE")
+    return None if where in (None, "", "off") else where
+
+
+def save_S(where, key, S, S_o, meta):
+    """S (and S_o when z-folded) in float64 under where/S_<key>/ (atomic: a temporary
+    directory renamed into place). Returns the directory."""
+    import json
+    import os
+    path = os.path.join(where, f"S_{key}")
+    if os.path.isdir(path):
+        return path
+    tmp = f"{path}.tmp{os.getpid()}"
+    os.makedirs(tmp, exist_ok=True)
+    np.save(os.path.join(tmp, "S.npy"), np.asarray(S, np.float64))
+    if S_o is not None:
+        np.save(os.path.join(tmp, "S_o.npy"), np.asarray(S_o, np.float64))
+    with open(os.path.join(tmp, "meta.json"), "w") as f:
+        json.dump(meta, f, indent=1)
+    try:
+        os.replace(tmp, path)
+    except OSError:  # another writer finished first
+        pass
+    return path
+
+
+def load_S(where, key, dtype):
+    """(S, S_o, meta) from where/S_<key>/ in ``dtype`` (cast mode by mode from the
+    float64 files, memory-mapped), or None if absent."""
+    import json
+    import os
+    path = os.path.join(where, f"S_{key}")
+    if not os.path.isfile(os.path.join(path, "meta.json")):
+        return None
+
+    def read(name):
+        f = os.path.join(path, name)
+        if not os.path.exists(f):
+            return None
+        mm = np.load(f, mmap_mode="r")
+        out = np.empty(mm.shape, dtype)
+        for k in range(mm.shape[0]):
+            out[k] = mm[k]
+        return out
+    with open(os.path.join(path, "meta.json")) as f:
+        meta = json.load(f)
+    return read("S.npy"), read("S_o.npy"), meta
+
+
 class FreeSpaceAnnulus:
     """Precomputed per-mode operators for the shifts in ``shifts`` (0, 1 or both).
+
+    ``cache`` (or $NEST_S_CACHE): a directory where the single-layer matrices are stored
+    in float64 after their first build and loaded afterwards (keyed by ``S_key``);
+    None/'off' (the default when the variable is unset) builds them every time.
 
     Parameters
     ----------
@@ -132,7 +207,7 @@ class FreeSpaceAnnulus:
     """
 
     def __init__(self, r_axis, z_axis, NFP, N_phi, shifts=(0,), verbose=False, S_dtype=np.float64,
-                 zsym="auto", **sl_kw):
+                 zsym="auto", cache=None, **sl_kw):
         self.NFP, self.N_phi, self.shifts = int(NFP), int(N_phi), tuple(shifts)
         ms = set()
         for s in self.shifts:
@@ -145,21 +220,45 @@ class FreeSpaceAnnulus:
         if zsym is True and perm is None:
             raise ValueError("zsym=True needs a z axis symmetric about 0")
         self.zfold = None if perm is None else ZFold(perm)
-        if self.zfold is None:
-            self.S = single_layer_matrix(self.ap, self.ap.ms, pts, verbose=verbose, dtype=S_dtype,
-                                         **sl_kw)
-            self.S_o = None
-        else:  # half the rows, folded into the even and odd blocks
-            rows = single_layer_matrix(self.ap, self.ap.ms, pts[self.zfold.rep], verbose=verbose,
-                                       dtype=S_dtype, **sl_kw)
-            self.S, self.S_o = self.zfold.fold(rows)
-            del rows
+        where = _S_cache_dir(cache)
+        self.S_cache = None
+        if where is not None:
+            key = S_key(self.ap, self.zfold is not None, sl_kw.get("n_gl", 16), sl_kw.get("ratio", 0.15))
+            got = load_S(where, key, S_dtype)
+            if got is not None:
+                self.S, self.S_o, _ = got
+                self.S_cache = ("loaded", key)
+        if self.S_cache is None:
+            # with a cache the build is float64 (the stored copy), else in S_dtype
+            build_dtype = np.float64 if where is not None else S_dtype
+            if self.zfold is None:
+                self.S = single_layer_matrix(self.ap, self.ap.ms, pts, verbose=verbose, dtype=build_dtype,
+                                             **sl_kw)
+                self.S_o = None
+            else:  # half the rows, folded into the even and odd blocks
+                rows = single_layer_matrix(self.ap, self.ap.ms, pts[self.zfold.rep], verbose=verbose,
+                                           dtype=build_dtype, **sl_kw)
+                self.S, self.S_o = self.zfold.fold(rows)
+                del rows
+            if where is not None:
+                meta = dict(key=key, r_axis=[r_axis.a, r_axis.b, r_axis.n, r_axis.alpha],
+                            z_axis=[z_axis.a, z_axis.b, z_axis.n, z_axis.alpha], NFP=self.NFP,
+                            N_phi=self.N_phi, shifts=list(self.shifts), ms=[int(m) for m in self.ap.ms],
+                            zsym=self.zfold is not None, n_gl=int(sl_kw.get("n_gl", 16)),
+                            ratio=float(sl_kw.get("ratio", 0.15)), build_s=time.time() - t1)
+                save_S(where, key, self.S, self.S_o, meta)
+                self.S_cache = ("built", key)
+                if np.dtype(S_dtype) != np.float64:
+                    self.S = self.S.astype(S_dtype)
+                    self.S_o = None if self.S_o is None else self.S_o.astype(S_dtype)
         self.timing = {"eig": t1 - t0, "S": time.time() - t1}
         if verbose:
             print(f"  FreeSpaceAnnulus: {len(self.ap.ms)} distinct |m| <= {self.ap.ms.max()}, "
                   f"N_b = {self.ap.n_boundary}{' (z-folded)' if self.zfold else ''}; eig "
                   f"{self.timing['eig']:.1f} s, S {self.timing['S']:.1f} s "
-                  f"({self.S_nbytes / 1e6:.0f} MB)", flush=True)
+                  f"({self.S_nbytes / 1e6:.0f} MB"
+                  + (f"; cache {self.S_cache[0]} S_{self.S_cache[1]}" if self.S_cache else "") + ")",
+                  flush=True)
 
     @property
     def S_nbytes(self):
