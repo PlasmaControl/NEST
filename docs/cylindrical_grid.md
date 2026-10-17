@@ -171,6 +171,51 @@ build and spot-checks the quadrature (default 16 points / ratio 0.15 against 32 
 row-relative to a/60). References for precise_QA a/20–a/60 are on the Modal Volume
 `nest-container-mask` under `/cyl/S_cache` (current keys; `scripts/modal_cyl/README.md`).
 
+## Axisymmetric path (N_φ = 1; gates D3, 2026-10-17)
+
+For an equilibrium with N = 0, `CylindricalGrid.around` uses one plane (N_φ = 1; `axisym=False`
+for the full set of planes). The annulus solve is then two 2-D problems (|m| = 0 for A_z, 1 for
+A_r + i A_φ), and the J basis is axisymmetric too (N = 0), so nothing else changes:
+`optimize_qa --grid cylindrical` (and `--check-grid cylindrical`, `--dense`, `--bext desc --fit force`)
+work as for 3-D. The axisymmetric cylindrical check defaults to 2× finer than the last run.
+
+Gates (`tests/test_cylindrical_axisym.py`, main's free-boundary tokamak `tokamak_L24M24`, all pass):
+D3a N_φ = 1 for N = 0; D3b B_plasma at the collocation points, N_φ = 1 vs 5 planes on the same (r, z)
+axes, 2.4e-14; D3c `Fields` F(x0) (relative to |∇p|) 1.4e-14 and J v 7.2e-15; D3d dense G vs solve
+2.1e-14; D3e B_plasma order 3.3 in h (a/10, a/20 against a/40).
+
+Tokamak L24M24 (a = 1.198 m), basis factors (2, 2, 1) (1,923 unknowns), laptop CPU. Start
+(iteration 0, `--maxiter 0`; DESC's own ⟨|F|⟩/norm is 1.14e-7):
+
+| grid | h | nodes | ⟨\|F\|⟩ / norm at x0 | wall time |
+|---|---|---|---|---|
+| main's box | a/10 | 165×165×55 | 7.69e-5 | 129 s |
+| main's box | a/20 | ~330×330×110 | 1.05e-5 | 1334 s |
+| cylindrical, N_φ = 1 | a/10 | 1×34×47 | 3.93e-5 | 60 s |
+| cylindrical, N_φ = 1 | a/20 | 1×60×87 | 3.35e-6 | 68 s |
+| cylindrical, N_φ = 1 | a/40 | 1×113×165 | 1.00e-6 | 84 s |
+| cylindrical, N_φ = 1 | a/80 | 1×217×323 | 9.45e-7 | 111 s |
+
+Optimization, 30 iterations, `--dense --dtype float64` (default objective: free p, W 10, p ≥ 0),
+checked on a cylindrical grid 2× finer (`results/cyl/axi/ladder/`):
+
+| run | own ⟨\|F\|⟩ / norm, start → end | check, start → end | G build | total |
+|---|---|---|---|---|
+| box a/10 | 7.69e-5 → 2.08e-6 | (cyl a/20) 3.38e-6 → 9.83e-5 | 675 s | 1091 s |
+| cylindrical a/20 | 3.35e-6 → 9.91e-7 | (cyl a/40) 1.04e-6 → 2.17e-6 | 41 s | 420 s |
+| cylindrical a/40 | 1.00e-6 → 1.02e-7 | (cyl a/80) 9.79e-7 → 9.34e-8 | 115 s | 540 s |
+| cylindrical a/80 | 9.45e-7 → 3.89e-8 | (cyl a/160) 9.79e-7 → 3.95e-8 | 475 s | 1540 s |
+
+- At h ≤ a/20 the optimizer fits the grid's B error: the own residual falls and the independent
+  check rises (box a/10 by 30×). From a/40 the run and its check agree, and a/80 ends at 4e-8,
+  below DESC's own 1.14e-7 at L = 24 (its L = 32 reference: 1.3e-8). Always check axisymmetric
+  runs on a finer cylindrical grid (the default with `--check-grid cylindrical`).
+- Cost: S_m has only two modes but is O(n³) in the 2-D grid size (a/80 16 s, a/160 117 s
+  serially on the laptop; a pool or the GPU on Linux). The dense G (one 2-D solve per unknown) and
+  the locate grow with the nodes; iterations with `--dense` take ~8 s on the laptop at any h.
+- For drift studies with the DESC-matched start (`--bext desc --fit force --dense`), use
+  `--dtype float64`: float32 G limits ⟨|F|⟩ / norm to ~1e-8.
+
 ## Verdict (revised after stage D)
 
 The cylindrical grid is validated as more accurate and more economical than main's box, by less than the overnight float32 estimate:
@@ -180,7 +225,7 @@ The cylindrical grid is validated as more accurate and more economical than main
 
 ## Open items
 
-Validation: a float64 GPU memory ladder; a converged (100-iteration) cylindrical run checked on a finer float64 cylindrical grid; an h-ladder at fixed basis (where refining h stops lowering the checked force); NCSX and W7-X (larger predicted gains); the axisymmetric N_φ = 1 path (D3, DSHAPE); combination with the container-mask free boundary.
+Validation: a float64 GPU memory ladder; a converged (100-iteration) cylindrical run checked on a finer float64 cylindrical grid; an h-ladder at fixed basis (where refining h stops lowering the checked force); NCSX and W7-X (larger predicted gains); combination with the container-mask free boundary.
 Optimizations: folding S_m per chunk as it is built (peak host RAM ~2.4× → ~1.1× S_m; the limit at a/60); Chebyshev wall clustering (~2.5× nodes in (r, z); mapped nodes or a z sine transform); mode truncation (if J's φ-spectrum allows); on-the-fly J-sampling weights; low-rank S_m blocks; solve symmetry; mixed precision (limited: 7.7e-5 at a/20).
 
 ## Notes for main
@@ -191,5 +236,5 @@ Optimizations: folding S_m per chunk as it is built (peak host RAM ~2.4× → ~1
 ## Files
 
 `nest/`: chebyshev.py, annulus_poisson.py, toroidal_kernel.py, single_layer.py, annulus_freespace.py (FreeSpaceAnnulus, ZFold), cylindrical_bs.py (CylindricalSolver), cylindrical_grid.py (CylindricalGrid, CylindricalInterpolator); objective.py, force.py, dense.py (cylindrical branches).
-`tests/`: test_cylindrical_bs.py (A1–B3), test_cylindrical_integration.py (C1–C6), cyl_a6.py, cyl_manufactured.py, cyl_b4.py, cyl_g0_probe.py, cyl_memory.py, cyl_measure.py.
+`tests/`: test_cylindrical_bs.py (A1–B3), test_cylindrical_integration.py (C1–C6), test_cylindrical_axisym.py (D3a–D3e), cyl_a6.py, cyl_manufactured.py, cyl_b4.py, cyl_g0_probe.py, cyl_memory.py, cyl_measure.py.
 Results (gitignored): `results/cyl/` (a6.json, b4/, c5/, c6/, memory.json, memory_opt.json, measure/).

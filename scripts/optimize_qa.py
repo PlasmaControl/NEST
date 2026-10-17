@@ -182,8 +182,9 @@ def main():
     ap.add_argument("--check", type=float, default=3,
                     help="independent check grid resolution / resolution of F")
     ap.add_argument("--check-frac", type=int, default=None,
-                    help="box of the independent check, h = a / check-frac (default 2 x the last "
-                         "box, at most a/20 unless that is finer)")
+                    help="grid of the independent check, h = a / check-frac (default: 2 x the last "
+                         "frac, at most a/20 unless the last is finer; axisymmetric with "
+                         "--check-grid cylindrical: always 2 x the last)")
     ap.add_argument("--check-kernel", default="truncated", choices=["hockney", "truncated"])
     for k in ("force", "B", "J", "p", "W", "p2", "pos"):
         ap.add_argument(f"--w-{k}", type=float, default=1.0 if k == "force" else None)
@@ -349,7 +350,10 @@ def main():
     out = None
     if not a.no_check:
         last = ([a.frac] + list(a.refine))[-1]
-        cf = a.check_frac or min(2 * last, max(last, 20))  # a/30 is beyond one A100
+        # a/30 is beyond one A100 for the 3-D box; the axisymmetric cylindrical check (one plane)
+        # is cheap at any h, so it is always 2x finer than the last run
+        axi_check = a.check_grid == "cylindrical" and int(inp.eq.N) == 0
+        cf = a.check_frac or (2 * last if axi_check else min(2 * last, max(last, 20)))
         cbox = make_box(inp, cf, a.check_grid, sym, a.margin)
         out, shape = check(inp, cbox, cur, pre, res(a.check), a.check_kernel,
                            {"start": x0, "end": x})

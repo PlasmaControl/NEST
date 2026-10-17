@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-17: Cylindrical grid: axisymmetric path (branch `cylindrical-grid`)
+- `CylindricalGrid.around` uses one plane (N_phi = 1) for N = 0 equilibria (`axisym=False` to override): the solve is two 2-D problems; `optimize_qa --grid cylindrical`, `--check-grid cylindrical`, `--dense` and `--bext desc --fit force` work unchanged. The axisymmetric cylindrical check defaults to 2x finer than the run.
+- Gates D3a–D3e (`tests/test_cylindrical_axisym.py`): N_phi = 1 equals N_phi = 5 to ~1e-14 (B, F, J v, dense G); B order 3.3 in h.
+- Tokamak L24M24, factors (2, 2, 1), 30 dense float64 iterations on the laptop: cylindrical a/80 reaches 3.9e-8 (checked 4.0e-8 on a/160), below DESC's 1.14e-7; at a/20 and on the box a/10 the optimizer fits the grid's B error (checks rise to 2.2e-6 and 9.8e-5). Start residual at equal h 2-3x below the box's; the box a/20 start takes 22 min, the cylindrical a/80 2 min.
+- S_m CPU build: the block budget counts the Lagrange matrices (axisymmetric a/80 196 s -> 16 s on the laptop). Docs: `docs/cylindrical_grid.md`, "Axisymmetric path".
+
 ## 2026-10-17: Cylindrical grid: S_m setup on the GPU (branch `cylindrical-grid`)
 - `nest/single_layer_jax.py`: the single-layer matrices S_m built on the device (Miller start sweeps per start-length bucket, one recurrence pass per chunk of targets, Lagrange maps and face products on the device). Used automatically on a GPU with x64 (`NEST_S_BACKEND=auto|jax|numpy`).
 - Against the float64 CPU references for precise_QA a/20–a/60: ≤ 3.9e-14 row-relative. S_m at a/60 (16.3 GB) in 30 s on an A100-80GB (41 s on 40 GB), against 141 s on 32 CPU processes (~10 min on the 8 CPUs of a GPU node).
