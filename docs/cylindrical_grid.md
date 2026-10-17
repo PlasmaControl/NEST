@@ -123,52 +123,53 @@ At a/20 the production runs all peak at ~20–21 GB: the h-independent parts (co
 ## Before a high-resolution run: building S_m
 
 The boundary correction needs, for every toroidal mode |m|, a dense single-layer matrix S_m
-(boundary nodes × boundary nodes). They are built on the host CPU when `FreeSpaceAnnulus` is
-constructed (setup of `Fields`), before the first GPU step, and depend only on the grid: a new
-equilibrium or a new h means a new build. Measured for the precise_QA production grids
-(`CylindricalGrid.around(inp, inp.a / frac)`, margin 2, z-folded, float64; Modal CPU container,
-32 processes, `tests/cyl_s_build.py`):
+(boundary nodes × boundary nodes), plus a radial eigendecomposition per |m| (`AnnulusPoisson`).
+Both are computed when `FreeSpaceAnnulus` is constructed (setup of `Fields`), before the first
+optimizer step, and depend only on the grid: a new equilibrium or a new h means a new build.
 
-| h | S_m (float64) | S_m build, 32 processes | eig, serial | peak host RAM |
-|---|---|---|---|---|
-| a/20 | 0.66 GB | 5 s | 3.6 s | 2.1 GB |
-| a/30 | 2.1 GB | 15 s | 9.8 s | 5.3 GB |
-| a/40 | 4.9 GB | 43 s | 25 s | 12 GB |
-| a/50 | 9.6 GB | 80 s | 53 s | 23 GB |
-| a/60 | 16.3 GB | 141 s | 96 s | 39 GB |
+**On a GPU node nothing needs to be prepared.** With JAX on a GPU and `jax_enable_x64` (as in
+`optimize_qa`), S_m is built on the device (`single_layer_jax`; `NEST_S_BACKEND=auto`, the default;
+`jax` / `numpy` to force one) and the eigendecompositions run on CPU threads. Measured for the
+precise_QA production grids (`CylindricalGrid.around(inp, inp.a / frac)`, margin 2, z-folded,
+float64; Modal, 8 CPUs; `tests/cyl_s_gpu.py`, `scripts/modal_cyl/run_s_gpu.sh`):
 
-- Time scales roughly inversely with the number of processes (a/60: 64 rows serial 239 s, on 32
-  processes 32 s) and grows ~h^-2.7. On a GPU node with 8 CPUs expect ~4× the table (a/60 ~10 min,
-  GPU idle meanwhile). 72% of the serial time is the Miller recurrence of the toroidal kernel
-  (`toroidal_kernel.toroidal_Q`), 24% the per-face matrix products.
-- Parallelism: on Linux the build uses the usable CPUs (at most 32) by default; `NEST_S_JOBS=n`
-  overrides (1 = serial). The pool result is bitwise equal to the serial build. On macOS the
-  default is serial.
-- eig: the per-mode radial eigendecompositions of `AnnulusPoisson` (one per |m|) are not cached and
-  are paid on every run, also when S_m is loaded. They now run on threads (`NEST_EIG_THREADS`, default
-  the usable CPUs when BLAS can be held to one thread per call: threadpoolctl, or OMP/OPENBLAS/MKL
-  thread counts of 1); bitwise equal to serial; a/30 on the 8-core laptop 8.8 s → 1.4 s. The table's
-  eig column is the serial time before this change.
-- Memory: peak host RAM ≈ 2.4× S_m (float64 rows plus the folded copy). Plan the node's RAM by
-  the last column; it, not time, is the barrier on workstations at a/50 and finer.
+| h | S_m (float64) | S_m, A100-80GB | S_m, A100-40GB | eig, 8 threads | before: S_m on 32 CPU processes / eig serial | peak host RAM |
+|---|---|---|---|---|---|---|
+| a/20 | 0.66 GB | 4.9 s | 5.3 s | 0.5 s | 5.1 s / 3.6 s | 7 GB |
+| a/30 | 2.1 GB | 8.4 s | 10.1 s | 1.8 s | 15.1 s / 9.8 s | 10 GB |
+| a/40 | 4.9 GB | 12.4 s | 16.6 s | 4.1 s | 42.7 s / 25 s | 17 GB |
+| a/50 | 9.6 GB | 18.9 s | 25.1 s | 8.0 s | 79.6 s / 53 s | 28 GB |
+| a/60 | 16.3 GB | 30.3 s | 40.9 s | 13.7 s | 141 s / 96 s | 46 GB |
 
-**Caching.** Set `NEST_S_CACHE=DIR` (or `FreeSpaceAnnulus(cache=DIR)`): the first run builds S_m
-in float64 under `DIR/S_<key>/` and later runs load it (a/10: build 4.6 s, load 0.4 s). The key
-covers the r and z axes, the |m| set, the z-fold, the quadrature rule and `single_layer.S_NUMERICS`,
-so the cache survives edits that do not change the entries and must be invalidated by bumping
-`S_NUMERICS` when they do. With `verbose`, the setup line ends in `cache built S_<key>` or `cache loaded S_<key>`; check for `loaded` before a long GPU run.
+The device build agrees with the CPU-built float64 references to ≤ 3.9e-14 (max over modes and
+rows of |difference| / max |reference row|; the quadrature's own error is ≤ 3.4e-11). On an 8-CPU
+GPU node the CPU build would take ~4× the 32-process column (a/60 ~10 min). Peak host RAM is the
+float64 rows plus their folded copy (and JAX's host buffers); it, not time, is the limit at a/60.
 
-**Recommended for a/30 and finer, or on GPU nodes with few CPUs:** build first on a many-core
-CPU node, then start the GPU run with the same `NEST_S_CACHE`:
+**Without a GPU** the CPU build is used: on Linux on the usable CPUs (at most 32, process pool;
+`NEST_S_JOBS=n` overrides, 1 = serial; bitwise equal to serial), on macOS serially. It grows ~h^-2.7;
+72% of its time is the Miller recurrence of the toroidal kernel, 24% the per-face products.
+The eigendecompositions use threads (`NEST_EIG_THREADS`, default the usable CPUs when BLAS can be
+held to one thread per call: threadpoolctl, or OMP/OPENBLAS/MKL thread counts of 1; bitwise equal
+to serial).
+
+**Caching (optional).** Set `NEST_S_CACHE=DIR` (or `FreeSpaceAnnulus(cache=DIR)`): the first run
+stores S_m in float64 under `DIR/S_<key>/`, later runs load it (a/60, 16.3 GB from a Modal Volume:
+3.6–12 s). The key covers the r and z axes, the |m| set, the z-fold, the quadrature rule and
+`single_layer.S_NUMERICS`, so the cache survives edits that do not change the entries and must be
+invalidated by bumping `S_NUMERICS` when they do. With `verbose`, the setup line reports
+`S ... s [jax|numpy]` and ends in `cache built S_<key>` or `cache loaded S_<key>`. The eigendecompositions
+are not cached. Worth it for repeated CPU-only runs at a/30 and finer; to prebuild on a many-core
+CPU node:
 
     python tests/cyl_s_build.py grids --fracs 30 40 --grids grids.json --eq EQ.h5 --coils COILS.h5   # needs DESC
     NEST_S_CACHE=DIR python tests/cyl_s_build.py build --grids grids.json --frac 40 --jobs 32 --out DIR
 
 `grids` reproduces `optimize_qa`'s grid (`around(inp, inp.a / frac)`, margin 2); a run with another
-margin or axes gets another key and rebuilds. `build` also checks the pool against the serial build
-and spot-checks the quadrature (default 16 points / ratio 0.15 against 32 / 0.08: ≤ 3.4e-11
-row-relative to a/60). On Modal: `scripts/modal_cyl/run_s_ref.sh` (README there). A GPU build of
-S_m, which would make the cache optional, is in progress (open items).
+margin or axes gets another key and rebuilds. `build` also checks the pool against the serial
+build and spot-checks the quadrature (default 16 points / ratio 0.15 against 32 / 0.08: ≤ 3.4e-11
+row-relative to a/60). References for precise_QA a/20–a/60 are on the Modal Volume
+`nest-container-mask` under `/cyl/S_cache` (current keys; `scripts/modal_cyl/README.md`).
 
 ## Verdict (revised after stage D)
 
@@ -180,7 +181,7 @@ The cylindrical grid is validated as more accurate and more economical than main
 ## Open items
 
 Validation: a float64 GPU memory ladder; a converged (100-iteration) cylindrical run checked on a finer float64 cylindrical grid; an h-ladder at fixed basis (where refining h stops lowering the checked force); NCSX and W7-X (larger predicted gains); the axisymmetric N_φ = 1 path (D3, DSHAPE); combination with the container-mask free boundary.
-Optimizations: a GPU build of S_m (the CPU build and cache are done, see above) and folding per block (peak RAM 2.4× → ~1.1× S_m); Chebyshev wall clustering (~2.5× nodes in (r, z); mapped nodes or a z sine transform); mode truncation (if J's φ-spectrum allows); on-the-fly J-sampling weights; low-rank S_m blocks; solve symmetry; mixed precision (limited: 7.7e-5 at a/20).
+Optimizations: folding S_m per chunk as it is built (peak host RAM ~2.4× → ~1.1× S_m; the limit at a/60); Chebyshev wall clustering (~2.5× nodes in (r, z); mapped nodes or a z sine transform); mode truncation (if J's φ-spectrum allows); on-the-fly J-sampling weights; low-rank S_m blocks; solve symmetry; mixed precision (limited: 7.7e-5 at a/20).
 
 ## Notes for main
 
