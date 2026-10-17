@@ -68,17 +68,19 @@ class CylindricalSolver(_Pytree):
         A precomputation to reuse (shifts 0 and 1).
     S_dtype : float64 or float32
         Storage of the single-layer matrices (the largest precomputed array);
-        products are formed in float64.
+        products are formed in ``dtype``.
+    dtype : float64 or float32
+        Of the operators, the FFTs and the mode solves (float32: complex64 slabs).
     keep_numpy : bool
         Keep the NumPy S_m of ``fs`` (for the NumPy reference solve); by default it
         is released once the JAX copy exists, so only one copy is held.
     """
 
-    _dynamic = ("Vr", "Vr_inv", "lam_r", "ar", "Vz", "Vz_inv", "lam_z", "ez", "S",
+    _dynamic = ("Vr", "Vr_inv", "lam_r", "ar", "Vz", "Vz_inv", "lam_z", "ez", "S", "S_o",
                 "Dr", "Dz", "r", "kz", "kp", "mz", "mp")
 
     def __init__(self, r_axis, z_axis, NFP, N_phi, chunk=16, fs=None, verbose=False,
-                 S_dtype=np.float64, keep_numpy=False):
+                 S_dtype=np.float64, keep_numpy=False, dtype=jnp.float64):
         fs = fs or FreeSpaceAnnulus(r_axis, z_axis, NFP, N_phi, shifts=(0, 1), verbose=verbose,
                                     S_dtype=S_dtype)
         ap = fs.ap
@@ -86,13 +88,17 @@ class CylindricalSolver(_Pytree):
         self.shape = (self.N_phi,) + ap.shape
         self.nr, self.nz = ap.nr, ap.nz
         self.face_sizes = ap.face_sizes
-        f = lambda a: jnp.asarray(a, jnp.float64)  # noqa: E731
+        self.dtype = jnp.dtype(dtype)  # of the operators and the arithmetic (float32: complex64)
+        f = lambda a: jnp.asarray(a, self.dtype)  # noqa: E731
         self.Vr, self.Vr_inv, self.lam_r, self.ar = f(ap.Vr), f(ap.Vr_inv), f(ap.lam_r), f(ap.ar)
         self.Vz, self.Vz_inv, self.lam_z, self.ez = f(ap.Vz), f(ap.Vz_inv), f(ap.lam_z), f(ap.ez)
-        self.S = jnp.asarray(fs.S)  # its own dtype
-        self.S_nbytes = fs.S.nbytes
+        # S_m, or its even block (S_o the odd one) when z-folded; in its own dtype
+        self.S = jnp.asarray(fs.S)
+        self.S_o = None if fs.S_o is None else jnp.asarray(fs.S_o)
+        self.zfold = fs.zfold
+        self.S_nbytes = fs.S_nbytes
         if not keep_numpy:
-            fs.S = None
+            fs.S = fs.S_o = None
         self.Dr, self.Dz, self.r = f(r_axis.D), f(z_axis.D), f(r_axis.s)
         jz = mode_indices(N_phi, real=True)
         jp = mode_indices(N_phi, real=False)
@@ -118,8 +124,14 @@ class CylindricalSolver(_Pytree):
         ur = _along(self.Dr[jnp.array([0, -1])], u, 1)  # (c, 2, n_z + 1)
         uz = _along(self.Dz[jnp.array([0, -1])], u, 2)  # (c, n_r + 1, 2)
         sigma = jnp.concatenate([-ur[:, 0], ur[:, 1], -uz[:, :, 0], uz[:, :, 1]], axis=-1)
-        S = self.S[k].astype(jnp.float64)
-        g = (jnp.einsum("kij,kj->ki", S, sigma.real) + 1j * jnp.einsum("kij,kj->ki", S, sigma.imag))
+        def mv(S, x):
+            return jnp.einsum("kij,kj->ki", S, x.real) + 1j * jnp.einsum("kij,kj->ki", S, x.imag)
+
+        S = self.S[k].astype(self.dtype)
+        if getattr(self, "zfold", None) is None:
+            g = mv(S, sigma)
+        else:
+            g = self.zfold.apply(S, self.S_o[k].astype(self.dtype), sigma, mv, jnp)
         n1, n2 = self.nz + 1, self.nr + 1
         g_in, g_out = g[:, :n1], g[:, n1:2 * n1]
         g_bot, g_top = g[:, 2 * n1:2 * n1 + n2], g[:, 2 * n1 + n2:]
@@ -155,6 +167,7 @@ class CylindricalSolver(_Pytree):
     # ------------------------------------------------------------ fields
     def potential_modes(self, J):
         """FFT-index slabs of A_z (rfft half) and of A_+'s periodic factor (full)."""
+        J = J.astype(getattr(self, "dtype", J.dtype))
         Fz = jnp.fft.rfft(-mu_0 * J[..., 2], axis=0)
         Fp = jnp.fft.fft(-mu_0 * (J[..., 0] + 1j * J[..., 1]), axis=0)
         return self.solve_modes(Fz, self.kz), self.solve_modes(Fp, self.kp)
@@ -182,7 +195,7 @@ class CylindricalSolver(_Pytree):
         return Bp, Bz
 
     def mz_full(self):
-        return jnp.asarray(np.asarray(self.jp) * self.NFP, jnp.float64)
+        return jnp.asarray(np.asarray(self.jp) * self.NFP, getattr(self, "dtype", jnp.float64))
 
     def field(self, J):
         """B on the grid: (B_r, B_phi, B_z), shape J.shape [T] for J [A/m^2]."""

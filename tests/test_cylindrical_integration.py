@@ -73,7 +73,27 @@ def test_C1_grid():
     assert eV < 2e-2 and eI < 2e-2  # staircase / kinked-integrand quadrature at h = a/6
 
 
-def _fields(kernel=None):
+def test_C1b_symmetric_locate():
+    """locate_plasma(sym=True) (Newton on half the planes, mirrors for the rest) against
+    the full inverse map: the same inside nodes, flux coordinates to Newton's tolerance."""
+    from cylindrical_grid import CylindricalGrid
+    c = setup()
+    inp, g = c["inp"], c["grid"]
+    t0 = time.time()
+    gs = CylindricalGrid.around(inp, inp.a / FRAC).locate_plasma(inp, sym=True)
+    t_s = time.time() - t0
+    same = np.array_equal(gs.inside, g.inside)
+    sym_diff = np.setxor1d(gs.inside, g.inside).size
+    common, ia, ib = np.intersect1d(gs.inside, g.inside, return_indices=True)
+    d = gs.rtz[ia] - g.rtz[ib]
+    d[:, 1] = (d[:, 1] + np.pi) % (2 * np.pi) - np.pi
+    print(f"  C1b sym locate {t_s:.0f} s: inside {len(gs.inside):,} vs {len(g.inside):,} "
+          f"(symmetric difference {sym_diff}); max |d rho| {np.abs(d[:, 0]).max():.1e}, "
+          f"|d theta| {np.abs(d[:, 1]).max():.1e}, |d zeta| {np.abs(d[:, 2]).max():.1e}")
+    assert sym_diff <= 1e-4 * len(g.inside) and np.abs(d).max() < 1e-6
+
+
+def _fields(kernel=None, dtype=jnp.float64):
     from force import ForceResidual
     from grid import CartesianGrid
     from objective import Fields
@@ -86,8 +106,7 @@ def _fields(kernel=None):
     key = ("fr", kernel)
     if key not in c:
         c[key] = ForceResidual(inp, box)
-    return Fields(c[key], c["cur"], c["pre"], kernel=kernel or "cylindrical",
-                  dtype=jnp.float64 if kernel else jnp.float32)
+    return Fields(c[key], c["cur"], c["pre"], kernel=kernel or "cylindrical", dtype=dtype)
 
 
 def test_C2_fields():
@@ -123,6 +142,36 @@ def test_C2_fields():
     assert abs(Fc - Fb) / Fb < 0.5  # same physics; they differ by the a/6 discretizations
 
 
+def test_C2b_symmetric_half():
+    """Stellarator-symmetric J sampling (half the inside nodes, mirrored) against the
+    unhalved one: the same B_plasma up to the edge membership of mirror pairs."""
+    from objective import Fields
+    c = setup()
+    f_h = _fields()
+    f_f = Fields(f_h.force, c["cur"], c["pre"], cyl_half=False, dtype=jnp.float64)
+    u = jnp.asarray(f_h.x0[: f_h.n_u])
+    Bh, Bf = np.asarray(f_h.B_plasma(u)), np.asarray(f_f.B_plasma(u))
+    Jh, Jf = np.asarray(f_h.J_box(u)), np.asarray(f_f.J_box(u))
+    e = np.abs(Bh - Bf).max() / np.abs(Bf).max()
+    eJ = np.abs(Jh - Jf).max() / np.abs(Jf).max()
+    print(f"  C2b half: {f_h.to_box.idx.shape[0]:,} interpolated of {f_f.to_box.idx.shape[0]:,} "
+          f"inside nodes; J on the grid {eJ:.1e}, B_plasma {e:.1e}")
+    assert f_h.half is not None and e < 1e-8
+
+
+def test_C2c_float32():
+    """The float32 cylindrical path (J, mode solves, interpolation; main's production
+    precision) against float64: far below the discretization error (~1e-3 at a/6)."""
+    f64, f32 = _fields(), _fields(dtype=jnp.float32)
+    u = jnp.asarray(f64.x0[: f64.n_u])
+    B64, B32 = np.asarray(f64.B_plasma(u)), np.asarray(f32.B_plasma(u))
+    e = np.abs(B32 - B64).max() / np.abs(B64).max()
+    w = f64.force.dV / f64.force.dV.sum()
+    erms = np.sqrt(np.sum(w * np.sum((B32 - B64) ** 2, 1))) / np.abs(B64).max()
+    print(f"  C2c float32 vs float64 B_plasma: max {e:.1e}, rms {erms:.1e}")
+    assert e < 1e-5
+
+
 def test_C3_tangent_adjoint():
     """J v of the fields against jax.jvp of _compute; <J v, w> = <v, J^T w>."""
     f = _fields()
@@ -149,6 +198,40 @@ def test_C3_tangent_adjoint():
     print(f"  C3 tangent vs jax.jvp {e:.1e}; adjoint <Jv, w> vs <v, J^T w> {ea:.1e}; "
           f"ObjectiveFunction J^T w (linear_transpose) vs vjp {elt:.1e}")
     assert e < 1e-12 and ea < 1e-12 and elt < 1e-12
+
+
+def test_C6_dense():
+    """DenseFields through the cylindrical solver: G u + B_I equals the solve for a
+    random u; against the box-built G (VG, a/6) at the discretization level."""
+    import fit_cache  # noqa: F401
+    from boundary_potential import BoundaryPotential
+    from dense import DenseFields
+    from force import ForceResidual
+    from grid import CartesianGrid
+    from objective import Fields
+    c = setup()
+    inp = c["inp"]
+    cur = BoundaryPotential.fit(inp.eq, L=4, M=4, N=2)  # small: one solve per column
+    os.environ["NEST_CACHE"] = "off"
+    fr_c = ForceResidual(inp, c["grid"], resolution=(8, 8, 6))
+    f_c = Fields(fr_c, cur, c["pre"], dtype=jnp.float64)
+    box = CartesianGrid.periodic_box(inp, inp.a / FRAC, odd=True).locate_plasma(inp)
+    f_b = Fields(ForceResidual(inp, box, resolution=(8, 8, 6)), cur, c["pre"], kernel="truncated",
+                 dtype=jnp.float64)
+    v = jnp.asarray(np.random.default_rng(4).standard_normal(f_c.n_u))
+    B_solve = np.asarray(f_c.B_plasma(v))
+    d_c = DenseFields.from_fields(f_c, cur, batch=4, cache=False)
+    d_b = DenseFields.from_fields(f_b, cur, batch=4, cache=False)
+    B_dense = np.asarray(d_c.B_plasma(v))
+    e = np.abs(B_dense - B_solve).max() / np.abs(B_solve).max()
+    # across methods, at the fitted current: single basis functions of this raw basis are
+    # resolved to only ~4% (cylindrical) / ~8% (box) at a/6 against a cylindrical a/10 G
+    # (results/cyl/c6/metrics.txt), so their entries are not a useful comparison
+    Gc, Gb, u0 = np.asarray(d_c.G), np.asarray(d_b.G), np.asarray(cur.u)
+    eb = np.linalg.norm(u0 @ (Gc - Gb)) / np.linalg.norm(u0 @ Gb)
+    print(f"  C6 n_u {f_c.n_u}: dense (cylindrical G) vs solve {e:.1e}; u0^T G cylindrical vs box "
+          f"(a/{FRAC}) {eb:.1e}")
+    assert e < 1e-12 and eb < 3e-2
 
 
 if __name__ == "__main__":

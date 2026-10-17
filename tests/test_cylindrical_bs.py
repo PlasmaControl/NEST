@@ -396,6 +396,26 @@ def test_A5_on_surface():
 
 
 # ------------------------------------------------------------------ A6
+def test_A5b_zfold():
+    """S_m folded into the even/odd blocks of z -> -z (half the storage) applies as the
+    dense S_m, with (n_z = 22) and without (n_z = 23) a boundary node on z = 0."""
+    from annulus_freespace import FreeSpaceAnnulus
+    rng = np.random.default_rng(3)
+    for n_z in (22, 23):
+        ra, za = ChebAxis(0.6, 1.4, 20), ChebAxis(-0.45, 0.45, n_z)
+        dense = FreeSpaceAnnulus(ra, za, 2, 9, shifts=(0, 1), zsym=False)
+        fold = FreeSpaceAnnulus(ra, za, 2, 9, shifts=(0, 1), zsym=True)
+        k = np.arange(len(dense.ap.ms))
+        sig = rng.standard_normal((len(k), dense.ap.n_boundary)) \
+            + 1j * rng.standard_normal((len(k), dense.ap.n_boundary))
+        g_d, g_f = dense.apply_S(k, sig), fold.apply_S(k, sig)
+        e = np.abs(g_f - g_d).max() / np.abs(g_d).max()
+        print(f"  A5b n_z={n_z}: N_b {dense.ap.n_boundary}, even {fold.zfold.n_e}, odd "
+              f"{fold.zfold.n_o}; storage {fold.S_nbytes / dense.S_nbytes:.3f} of dense; "
+              f"max rel diff {e:.1e}")
+        assert e < 1e-13 and fold.S_nbytes < 0.51 * dense.S_nbytes
+
+
 def test_A6_gaussian_charges():
     """Free-space scalar solve against NFP-periodic, z-asymmetric Gaussian charges, both
     mode shifts (the full sweep, to 1e-12, is tests/cyl_a6.py)."""

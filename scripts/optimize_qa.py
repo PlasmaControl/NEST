@@ -65,7 +65,10 @@ def make_box(inp, frac, grid="cartesian", sym=True, margin=2.0):
     cylindrical annulus (``cylindrical_grid``), with the plasma located on it."""
     if grid == "cylindrical":
         from cylindrical_grid import CylindricalGrid
-        return CylindricalGrid.around(inp, inp.a / frac, margin).locate_plasma(inp, verbose=True)
+        g = CylindricalGrid.around(inp, inp.a / frac, margin)
+        zs = g.z_axis
+        sym_z = abs(zs.a + zs.b) <= 1e-12 * max(abs(zs.a), abs(zs.b))
+        return g.locate_plasma(inp, verbose=True, sym=sym and sym_z)
     return CartesianGrid.periodic_box(inp, inp.a / frac, odd=sym).locate_plasma(inp)
 
 

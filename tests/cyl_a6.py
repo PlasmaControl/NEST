@@ -103,7 +103,7 @@ def run_case(n, N_phi, charges=CHARGES, box=BOX, shifts=(0, 1), n_off=300, seed=
     off = np.column_stack([rng.uniform(box["R_in"], box["R_out"], n_off),
                            rng.uniform(0, 2 * np.pi / box["NFP"], n_off),
                            rng.uniform(-box["z0"], box["z0"], n_off)])
-    res = {"n": n, "N_phi": N_phi, "precompute_s": t_pre, "S_MB": fs.S.nbytes / 1e6,
+    res = {"n": n, "N_phi": N_phi, "precompute_s": t_pre, "S_MB": fs.S_nbytes / 1e6,
            "wall_tail": wall_tail(charges, box)}
     for s in shifts:
         src = copies(charges, box["NFP"], s)

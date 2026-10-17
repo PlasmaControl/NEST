@@ -71,9 +71,17 @@ class CylindricalGrid:
             n = np.column_stack([self.r_axis.s[i], self.phi[k], self.z_axis.s[l]])
         return np.column_stack([n[:, 0] * np.cos(n[:, 1]), n[:, 0] * np.sin(n[:, 1]), n[:, 2]])
 
-    def locate_plasma(self, eq, verbose=False, planes=32, **kw):
+    def locate_plasma(self, eq, verbose=False, planes=32, sym=False, **kw):
         """Inside nodes and their flux coordinates, ``planes`` phi-planes per call of
-        ``map_to_flux`` (bounded memory), with one shared Newton guess grid."""
+        ``map_to_flux`` (bounded memory), with one shared Newton guess grid.
+
+        ``sym`` (stellarator symmetry, z-symmetric axis): Newton on planes
+        0..(N_phi - 1) / 2 only; the nodes of the other planes are the mirrors
+        ((-k) mod N_phi, i, n_z - l) of those, with flux coordinates (rho, -theta, -zeta).
+        """
+        zs = self.z_axis
+        if sym and abs(zs.a + zs.b) > 1e-12 * max(abs(zs.a), abs(zs.b)):
+            raise ValueError("sym needs a z-symmetric annulus")
         import time
         from grid import FluxGrid, _as_input
         inp = _as_input(eq)
@@ -81,8 +89,9 @@ class CylindricalGrid:
         guess = kw.pop("guess_grid", None) or FluxGrid.concentric(inp, 2 * L, 2 * M, 2 * N)
         per_plane = self.size // self.N_phi
         inside, rtz, t0 = [], [], time.time()
-        for k0 in range(0, self.N_phi, planes):
-            k1 = min(k0 + planes, self.N_phi)
+        n_planes = (self.N_phi - 1) // 2 + 1 if sym else self.N_phi
+        for k0 in range(0, n_planes, planes):
+            k1 = min(k0 + planes, n_planes)
             idx = np.arange(k0 * per_plane, k1 * per_plane)
             r = map_to_flux(inp, self.cartesian(idx), guess_grid=guess, **kw)
             ok = np.flatnonzero(np.isfinite(r[:, 0]))
@@ -90,9 +99,19 @@ class CylindricalGrid:
             rtz.append(r[ok])
             if verbose:
                 n_in = sum(len(i) for i in inside)
-                print(f"    locate: planes {k1}/{self.N_phi}, {n_in:,} inside, {time.time() - t0:.0f} s",
+                print(f"    locate: planes {k1}/{n_planes}, {n_in:,} inside, {time.time() - t0:.0f} s",
                       flush=True)
-        self.inside, self.rtz = np.concatenate(inside), np.concatenate(rtz)
+        inside, rtz = np.concatenate(inside), np.concatenate(rtz)
+        if sym:  # the mirrors of the nodes on planes 1..(N_phi - 1) / 2
+            k, i, l = np.unravel_index(inside, self.shape)
+            m = k >= 1
+            mi = np.ravel_multi_index(((-k[m]) % self.N_phi, i[m], self.z_axis.n - l[m]), self.shape)
+            mr = np.column_stack([rtz[m, 0], np.mod(-rtz[m, 1], 2 * np.pi),
+                                  np.mod(-rtz[m, 2], 2 * np.pi / self.NFP)])
+            order = np.argsort(np.concatenate([inside, mi]), kind="stable")
+            inside = np.concatenate([inside, mi])[order]
+            rtz = np.concatenate([rtz, mr])[order]
+        self.inside, self.rtz = inside, rtz
         return self
 
     def scatter(self, values, dtype=np.float64):
@@ -169,8 +188,10 @@ class CylindricalInterpolator(_Pytree):
 
     _dynamic = ("Ep", "Ez", "yr", "yz", "unsort", "nodes_r", "nodes_z", "w_r", "w_z")
 
-    def __init__(self, grid, pts, plane_tol=1e-12):
+    def __init__(self, grid, pts, plane_tol=1e-12, dtype=jnp.float64):
         pts = np.asarray(pts, dtype=float)
+        dt = jnp.dtype(dtype)
+        cdt = jnp.complex64 if dt == jnp.float32 else jnp.complex128
         N, NFP = grid.N_phi, grid.NFP
         period = 2 * np.pi / NFP
         key = np.round(np.mod(pts[:, 1], period) / plane_tol) * plane_tol
@@ -190,12 +211,14 @@ class CylindricalInterpolator(_Pytree):
         jp = np.fft.fftfreq(N, 1.0 / N)
         jz = np.arange(N // 2 + 1)
         wz = np.where(jz == 0, 1.0, 2.0)
-        self.Ep = jnp.asarray(np.exp(1j * np.outer(uniq, jp * NFP)) / N)
-        self.Ez = jnp.asarray(wz * np.exp(1j * np.outer(uniq, jz * NFP)) / N)
-        self.yr = jnp.asarray(grid.r_axis.to_y(pts[pad_idx, 0]))
-        self.yz = jnp.asarray(grid.z_axis.to_y(pts[pad_idx, 2]))
-        self.nodes_r, self.w_r = jnp.asarray(grid.r_axis.y), jnp.asarray(grid.r_axis.w_bary)
-        self.nodes_z, self.w_z = jnp.asarray(grid.z_axis.y), jnp.asarray(grid.z_axis.w_bary)
+        self.Ep = jnp.asarray(np.exp(1j * np.outer(uniq, jp * NFP)) / N, cdt)
+        self.Ez = jnp.asarray(wz * np.exp(1j * np.outer(uniq, jz * NFP)) / N, cdt)
+        self.yr = jnp.asarray(grid.r_axis.to_y(pts[pad_idx, 0]), dt)
+        self.yz = jnp.asarray(grid.z_axis.to_y(pts[pad_idx, 2]), dt)
+        self.nodes_r = jnp.asarray(grid.r_axis.y, dt)
+        self.w_r = jnp.asarray(grid.r_axis.w_bary, dt)
+        self.nodes_z = jnp.asarray(grid.z_axis.y, dt)
+        self.w_z = jnp.asarray(grid.z_axis.w_bary, dt)
         self.n, self.n_planes, self.P = len(pts), len(uniq), P
 
     def __call__(self, Bp, Bz):
@@ -220,4 +243,4 @@ class CylindricalInterpolator(_Pytree):
 
         out = jax.lax.scan(one, (planes_c, planes_z),
                            (jnp.arange(self.n_planes), self.yr, self.yz))[1]  # (n_planes, P, 3)
-        return out.reshape(-1, 3)[self.unsort]
+        return out.reshape(-1, 3)[self.unsort].astype(jnp.float64)
