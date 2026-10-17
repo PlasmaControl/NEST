@@ -1,7 +1,7 @@
 """S_m reference builds for the production cylindrical grids (CPU).
 
   grids   (local, needs DESC) the production CylindricalGrid axes of the smooth-current
-          precise_QA (``optimize_qa``'s make_box: around(inp, inp.a / frac), margin 2) for
+          precise_QA, or --eq/--coils (``optimize_qa``'s make_box: around(inp, inp.a / frac), margin 2) for
           --fracs, written to --grids JSON.
   build   (no DESC) for one --frac of that JSON, the S_m of FreeSpaceAnnulus(shifts=(0, 1),
           z-folded) in float64, stored in the S_m cache --cache (the NEST_S_CACHE layout, so
@@ -13,7 +13,7 @@
              row's maximum, per |m| band.
           Writes --out/s_ref_a<frac>.json.
 
-run: python tests/cyl_s_build.py grids --fracs 20 30 40 50 60 70 --grids s_grids.json
+run: python tests/cyl_s_build.py grids --fracs 20 30 40 50 60 70 --grids s_grids.json [--eq EQ.h5 --coils C.h5]
      python tests/cyl_s_build.py build --grids s_grids.json --frac 40 --cache DIR --jobs 32 --out DIR
 """
 import argparse
@@ -39,9 +39,10 @@ def log(msg):
 def step_grids(a):
     from cylindrical_grid import CylindricalGrid
     from desc_input import DESCInput
-    eq = os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_smooth_J",
-                      "precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5")
-    coils = os.path.join(ROOT, "desc_input", "precise_QA_free_boundary", "precise_QA_helical_coils.h5")
+    eq = a.eq or os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_smooth_J",
+                              "precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5")
+    coils = a.coils or os.path.join(ROOT, "desc_input", "precise_QA_free_boundary",
+                                    "precise_QA_helical_coils.h5")
     inp = DESCInput.load(eq, field=coils)
     out = {"equilibrium": os.path.basename(eq), "a": float(inp.a), "grids": {}}
     for f in a.fracs:
@@ -127,6 +128,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("step", choices=["grids", "build"])
     ap.add_argument("--fracs", type=int, nargs="+", default=[20, 30, 40, 50, 60, 70])
+    ap.add_argument("--eq", help="DESC equilibrium .h5 (grids; default: smooth-current precise_QA)")
+    ap.add_argument("--coils", help="coil set .h5 for --eq (grids)")
     ap.add_argument("--frac", type=int)
     ap.add_argument("--grids", default="s_grids.json")
     ap.add_argument("--cache", default=os.environ.get("NEST_S_CACHE"))

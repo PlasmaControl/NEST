@@ -27,6 +27,12 @@ for m and -m, so only |m| enters. The default rule (16 points, grading ratio
 
 import numpy as np
 
+# Version of the S_m numerics (quadrature, kernel, interpolation): part of the S_m cache key
+# (``annulus_freespace.S_key``). Bump it with any change that alters the entries; changes that
+# reproduce them (parallelism, batching, a GPU path) keep it. 1: the 2026-10-17 references
+# (Modal, a/20-a/60 precise_QA, ``tests/cyl_s_build.py``).
+S_NUMERICS = 1
+
 from annulus_poisson import FACES
 from toroidal_kernel import toroidal_Q
 
@@ -96,16 +102,25 @@ def single_layer_matrix(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False, dty
     n_jobs : int or None
         Worker processes over blocks of targets (each row is independent, and a
         block is computed exactly as serially, so the result is bitwise the same).
-        None: the env NEST_S_JOBS, else 1 (serial). Opt-in: not measured faster on
-        the laptop (the serial path batches the Q recurrence over targets instead).
+        None: the env NEST_S_JOBS, else on Linux the usable CPUs (at most 32; bitwise
+        equal to serial, measured on Modal CPU containers a/20-a/60: a/60 in 141 s on 32
+        processes), elsewhere 1 (on macOS the pool was not faster in the sandboxed
+        laptop runs; set NEST_S_JOBS to try).
 
     Returns (len(ms), n_t, ap.n_boundary), of ``dtype`` (float32 halves the largest
     precomputed array; entries are computed in float64 either way).
     """
     import os
+    import sys
     targets = np.atleast_2d(np.asarray(targets, dtype=float))
     if n_jobs is None:
-        n_jobs = int(os.environ.get("NEST_S_JOBS", 1))
+        env = os.environ.get("NEST_S_JOBS")
+        if env is not None:
+            n_jobs = int(env)
+        elif sys.platform.startswith("linux"):
+            n_jobs = min(32, len(os.sched_getaffinity(0)))
+        else:
+            n_jobs = 1
     n_jobs = max(1, min(int(n_jobs), len(targets) // 8))
     if n_jobs > 1:
         import multiprocessing as mp

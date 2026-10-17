@@ -123,20 +123,17 @@ class ZFold:
 
 def S_key(ap, zsym, n_gl=16, ratio=0.15):
     """Cache key of the single-layer matrices of ``ap`` (AnnulusPoisson): the axes, the
-    |m| set, the z-fold, the quadrature rule, and the source of the code that builds
-    them (as ``fit_cache``: any change of that code is a new key)."""
+    |m| set, the z-fold, the quadrature rule, and ``single_layer.S_NUMERICS``, the version
+    of the numerics. Edits that do not change the entries (parallelism, batching,
+    documentation, a GPU path that reproduces them) keep the key, so caches survive them;
+    a change of the entries must bump S_NUMERICS (``tests/cyl_s_build.py`` compares a
+    build against the stored references)."""
     import hashlib
-    import inspect
 
-    import annulus_poisson
-    import chebyshev
-    import single_layer
-    import toroidal_kernel
-    src = "".join(inspect.getsource(m) for m in (single_layer, toroidal_kernel, chebyshev, annulus_poisson))
-    src += inspect.getsource(ZFold) + inspect.getsource(z_reflection)
+    from single_layer import S_NUMERICS
     ax = lambda a: (a.a, a.b, a.n, a.alpha)  # noqa: E731
     rep = (ax(ap.r_axis), ax(ap.z_axis), tuple(int(m) for m in ap.ms), bool(zsym), int(n_gl), float(ratio),
-           hashlib.sha256(src.encode()).hexdigest())
+           "S_NUMERICS", int(S_NUMERICS))
     return hashlib.sha256(repr(rep).encode()).hexdigest()[:24]
 
 
