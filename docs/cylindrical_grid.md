@@ -216,6 +216,49 @@ checked on a cylindrical grid 2× finer (`results/cyl/axi/ladder/`):
 - For drift studies with the DESC-matched start (`--bext desc --fit force --dense`), use
   `--dtype float64`: float32 G limits ⟨|F|⟩ / norm to ~1e-8.
 
+## Mapped nodes (KTE α; 2026-10-17): exact, but not a memory lever
+
+Unmapped Chebyshev–Gauss–Lobatto nodes put the largest spacing (π/2 × the mean) at the middle of
+each axis, so meeting h over the plasma costs up to π/2 per axis (~2.5× in (r, z)). The
+Kosloff–Tal-Ezer map (`ChebAxis(alpha)`, `CylindricalGrid.around(alpha=...)`) spreads the nodes
+towards uniform: at equal h, α = 0.9 / 0.95 / 0.98 / 0.99 needs 1.54 / 1.72 / 1.94 / 2.06× fewer
+(r, z) nodes (a/20 and a/40 axes).
+
+**Solver support.** For α ≳ 0.8 the mapped radial operators have complex eigenpairs at isolated |m|
+(58 of 496 at a/20, α = 0.99), and at some sizes the z operator too (a/15). These are well
+conditioned (κ(V_r) ≤ 56, κ(V_z) ≤ 10), so they are a representation issue only:
+`annulus_poisson._block_eig` uses the real block form (2×2 blocks [[a, b], [−b, a]] on
+(Re v, Im v)) with a closed-form per-pair division, and the shared z operator falls back to a
+complex eigenbasis (the solver's data are complex Fourier coefficients anyway). Gate A2c: block
+reconstruction ≤ 4.5e-15, fast Dirichlet against dense solves ≤ 1.5e-13 (NumPy and JAX), for
+a/20 and a/15 sizes including a complex z basis. Unmapped grids have no pairs and run the
+previous code path (bitwise).
+
+**Accuracy per node (B4, smooth-current precise_QA, interior B against the unmapped a/40 solve):**
+
+| run | nodes | inside nodes | interior rms | max, ρ 0.95–1 |
+|---|---|---|---|---|
+| unmapped a/10 | 1.44M | 101k | 8.8e-4 | 9.4e-3 |
+| unmapped a/15 | 4.50M | 344k | 3.7e-4 | 6.2e-3 |
+| unmapped a/20 | 10.2M | 820k | 2.25e-4 | 5.1e-3 |
+| α 0.95 a/10 | 0.84M | 85k | 1.13e-3 | 7.4e-3 |
+| α 0.95 a/20 | 5.91M | 669k | 2.63e-4 | 5.1e-3 |
+| α 0.99 a/10 | 0.72M | 83k | 1.25e-3 | 8.1e-3 |
+| α 0.99 a/15 | 2.20M | 274k | 4.7e-4 | 5.3e-3 |
+| α 0.99 a/20 | 4.98M | 644k | 2.8e-4 | 4.8e-3 |
+| α 0.99 a/25 | 9.41M | 1.24M | 2.0e-4 | 4.4e-3 |
+
+- At equal h the map halves the nodes but raises the error (a/20: 2.25e-4 → 2.8e-4).
+- At equal accuracy it needs fewer total nodes (rms 3e-4: 1.39×; 2e-4: 1.24×), but more inside
+  nodes (0.84×; 0.76×), and the mapped grids converge more slowly in nodes (rms ∝ nodes^−0.58
+  against ^−0.70), so the advantage shrinks with resolution.
+- Memory at equal accuracy (unmapped a/20 against α 0.99 a/25, 10% more accurate): grid fields
+  0.92×, S_m 0.92×, J sampling (∝ inside nodes) 1.52×. With J sampling the largest term at a/40
+  (4.0 of ~14 GB), there is no net saving (estimate from component scaling, not a measured XLA run).
+- Why: with a 2h margin the plasma spans nearly the whole annulus, so the clustered wall nodes
+  fall in the plasma's edge region, where J's kink sets the error; they were not wasted.
+- Default stays α = 0 (unmapped). The map is available (`alpha`), e.g. for grids with large margins.
+
 ## Verdict (revised after stage D)
 
 The cylindrical grid is validated as more accurate and more economical than main's box, by less than the overnight float32 estimate:
@@ -226,7 +269,7 @@ The cylindrical grid is validated as more accurate and more economical than main
 ## Open items
 
 Validation: a float64 GPU memory ladder; a converged (100-iteration) cylindrical run checked on a finer float64 cylindrical grid; an h-ladder at fixed basis (where refining h stops lowering the checked force); NCSX and W7-X (larger predicted gains); combination with the container-mask free boundary.
-Optimizations: folding S_m per chunk as it is built (peak host RAM ~2.4× → ~1.1× S_m; the limit at a/60); Chebyshev wall clustering (~2.5× nodes in (r, z); mapped nodes or a z sine transform); mode truncation (if J's φ-spectrum allows); on-the-fly J-sampling weights; low-rank S_m blocks; solve symmetry; mixed precision (limited: 7.7e-5 at a/20).
+Optimizations: folding S_m per chunk as it is built (peak host RAM ~2.4× → ~1.1× S_m; the limit at a/60); mode truncation (if J's φ-spectrum allows); on-the-fly J-sampling weights (the J-sampling cache scales with the inside nodes, 4.0 of ~14 GB at a/40, and is now the largest memory lever; the KTE map is not one, see "Mapped nodes"); low-rank S_m blocks; solve symmetry; mixed precision (limited: 7.7e-5 at a/20).
 
 ## Notes for main
 

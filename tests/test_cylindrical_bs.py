@@ -91,9 +91,9 @@ def qa_axes(frac, alpha=0.0, margin=2.0):
 
 def test_A2_eigendecomposition():
     """Interior L_r,m and D_zz: real negative spectra, exact reconstruction, kappa(V) small."""
-    # alpha >= 0.5 gives complex eigenpairs at isolated large |m| (branch crossings of the
-    # non-normal mapped operator: alpha 0.5 at m = 514, 0.9 at m = 434 for the a/20 axis),
-    # so the default is the unmapped axis; checked here to the |m| of a/20 and a/30
+    # unmapped and alpha = 0.5: real spectra to the |m| of a/20 and a/30. Larger alpha gives
+    # complex pairs at isolated |m| (non-normal mapped operator), handled by the real block
+    # form of _block_eig (gate A2c)
     for frac, alpha, m_max in ((20, 0.0, 495), (30, 0.0, 738), (20, 0.5, 495)):
         ra, za, _ = qa_axes(frac, alpha)
         ms = range(0, m_max + 1)
@@ -113,6 +113,59 @@ def test_A2_eigendecomposition():
         assert rec < 1e-11 and recz < 1e-11
         assert ap.cond_Vr.max() < 1e8
 
+
+
+def test_A2c_mapped_blocks():
+    """Mapped axes (KTE alpha = 0.99, a/20 and a/15 precise_QA sizes): the radial operators with
+    complex pairs in the real block form A V = V B, and the fast Dirichlet solve (NumPy and JAX)
+    against a dense solve, for every 10th mode with pairs. At a/15 the shared z operator has
+    complex pairs too (complex z eigenbasis)."""
+    for frac in (20, 15):
+        _mapped_case(frac)
+    # the B4 a/15 grid of the smooth-current precise_QA (around(inp, a/15, alpha=0.99)): its
+    # z operator has complex pairs (|Im lambda| / |lambda| 8e-6, kappa(V_z) 9.5)
+    _mapped_case("15 (B4 axes, complex z)", (ChebAxis(0.6200317834576632, 1.3624337896125451, 71, 0.99),
+                                             ChebAxis(-0.42549896700528533, 0.42549896700528533, 81, 0.99)))
+
+
+def _mapped_case(frac, axes=None):
+    import jax
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+    from cylindrical_bs import CylindricalSolver
+    ra, za = axes or qa_axes(frac, 0.99)[:2]
+    ap = AnnulusPoisson(ra, za, range(0, 496 if frac == 20 else 373))
+    kp = np.flatnonzero(np.any(ap.lam_s != 0, axis=1))
+    kp = np.concatenate([[0], kp])  # m = 0 too (no radial pairs; the z basis)
+    I = slice(1, ra.n)
+    Lz = za.D2[1:-1, 1:-1]
+    sol = CylindricalSolver.__new__(CylindricalSolver)
+    f64 = lambda x: jnp.asarray(x, jnp.float64)  # noqa: E731
+    sol.Vr, sol.Vr_inv, sol.lam_r, sol.lam_s = f64(ap.Vr), f64(ap.Vr_inv), f64(ap.lam_r), f64(ap.lam_s)
+    sol.pair_r, sol.has_pairs = jnp.asarray(ap.pair_r, jnp.int32), True
+    fz = (lambda x: jnp.asarray(x, jnp.complex128)) if ap.z_complex else f64
+    sol.Vz, sol.Vz_inv, sol.lam_z = fz(ap.Vz), fz(ap.Vz_inv), fz(ap.lam_z)
+    rng = np.random.default_rng(1)
+    rec = e_np = e_jx = 0.0
+    for k in kp:
+        m = ap.ms[k]
+        L = (ap.Lr0 - np.diag(m**2 / ap.r**2))[I, I]
+        n = L.shape[0]
+        B = np.diag(ap.lam_r[k])
+        B[np.arange(n), ap.pair_r[k]] += ap.lam_s[k]
+        rec = max(rec, np.abs(L @ ap.Vr[k] - ap.Vr[k] @ B).max() / np.abs(L).max())
+        if k in kp[::10] or k == kp[-1]:  # dense solves for every 10th mode with pairs
+            f = rng.standard_normal(ap.shape)
+            K = np.kron(L, np.eye(za.n - 1)) + np.kron(np.eye(n), Lz)
+            ud = np.linalg.solve(K, f[1:-1, 1:-1].ravel()).reshape(n, za.n - 1)
+            e_np = max(e_np, np.abs(ap.dirichlet(f, k)[1:-1, 1:-1] - ud).max() / np.abs(ud).max())
+            uj = np.asarray(CylindricalSolver._dirichlet(sol, jnp.asarray(f[None, 1:-1, 1:-1] + 0j),
+                                                         jnp.asarray([k])))[0]
+            e_jx = max(e_jx, np.abs(uj - ud).max() / np.abs(ud).max())
+    print(f"  A2c alpha 0.99 a/{frac}: n_r {ra.n} n_z {za.n} (z complex {ap.z_complex}); {len(kp) - 1} of {len(ap.ms)} modes with complex pairs; "
+          f"block recon {rec:.1e}; Dirichlet vs dense: numpy {e_np:.1e}, jax {e_jx:.1e}; "
+          f"kappa(V_r) max {ap.cond_Vr.max():.1f}")
+    assert rec < 1e-12 and e_np < 1e-12 and e_jx < 1e-12  # mapped axes at m = 0: ~1.5e-13
 
 def _manufactured(m, R_in, R_out, z0):
     """u = sin(pi xi) cos(9 r) e^r cos(pi z / 2 z0) sin(8 z + 0.3) (zero on the boundary) and L_m u,

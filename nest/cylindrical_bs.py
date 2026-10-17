@@ -76,7 +76,7 @@ class CylindricalSolver(_Pytree):
         is released once the JAX copy exists, so only one copy is held.
     """
 
-    _dynamic = ("Vr", "Vr_inv", "lam_r", "ar", "Vz", "Vz_inv", "lam_z", "ez", "S", "S_o",
+    _dynamic = ("Vr", "Vr_inv", "lam_r", "lam_s", "pair_r", "ar", "Vz", "Vz_inv", "lam_z", "ez", "S", "S_o",
                 "Dr", "Dz", "r", "kz", "kp", "mz", "mp")
 
     def __init__(self, r_axis, z_axis, NFP, N_phi, chunk=16, fs=None, verbose=False,
@@ -91,7 +91,17 @@ class CylindricalSolver(_Pytree):
         self.dtype = jnp.dtype(dtype)  # of the operators and the arithmetic (float32: complex64)
         f = lambda a: jnp.asarray(a, self.dtype)  # noqa: E731
         self.Vr, self.Vr_inv, self.lam_r, self.ar = f(ap.Vr), f(ap.Vr_inv), f(ap.lam_r), f(ap.ar)
-        self.Vz, self.Vz_inv, self.lam_z, self.ez = f(ap.Vz), f(ap.Vz_inv), f(ap.lam_z), f(ap.ez)
+        # complex-pair blocks of mapped axes (``annulus_poisson._block_eig``); has_pairs is static
+        self.has_pairs = bool(ap.has_pairs)
+        self.lam_s = f(ap.lam_s) if self.has_pairs else None
+        self.pair_r = jnp.asarray(ap.pair_r, jnp.int32) if self.has_pairs else None
+        if ap.z_complex:  # mapped z axis with complex pairs: the complex eigenbasis
+            cdt = jnp.complex128 if self.dtype == jnp.float64 else jnp.complex64
+            fc = lambda a: jnp.asarray(a, cdt)  # noqa: E731
+            self.Vz, self.Vz_inv, self.lam_z = fc(ap.Vz), fc(ap.Vz_inv), fc(ap.lam_z)
+            self.ez = f(ap.ez)
+        else:
+            self.Vz, self.Vz_inv, self.lam_z, self.ez = f(ap.Vz), f(ap.Vz_inv), f(ap.lam_z), f(ap.ez)
         # S_m, or its even block (S_o the odd one) when z-folded; in its own dtype
         self.S = jnp.asarray(fs.S)
         self.S_o = None if fs.S_o is None else jnp.asarray(fs.S_o)
@@ -112,7 +122,13 @@ class CylindricalSolver(_Pytree):
     # ------------------------------------------------------------ per mode
     def _dirichlet(self, FI, k):
         W = _rmul(_lmul(self.Vr_inv[k], FI), self.Vz_inv.T)
-        W = W / (self.lam_r[k][:, :, None] + self.lam_z[None, None, :])
+        if self.has_pairs:
+            a = self.lam_r[k][:, :, None] + self.lam_z[None, None, :]
+            sk = self.lam_s[k][:, :, None]
+            Wp = jnp.take_along_axis(W, jnp.broadcast_to(self.pair_r[k][:, :, None], W.shape), axis=1)
+            W = (a * W - sk * Wp) / (a * a + sk * sk)
+        else:  # (bitwise the unmapped result)
+            W = W / (self.lam_r[k][:, :, None] + self.lam_z[None, None, :])
         return _rmul(_lmul(self.Vr[k], W), self.Vz.T)
 
     def _solve_chunk(self, F, k):

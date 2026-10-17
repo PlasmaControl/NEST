@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-10-17: Cylindrical grid: mapped (KTE) nodes supported; not a memory lever (branch `cylindrical-grid`)
+- `annulus_poisson`: radial eigendecompositions in real block form (complex pairs of mapped operators, `_block_eig`), complex z eigenbasis when the mapped z operator has pairs; `CylindricalSolver` divides per pair. Unmapped grids run the previous path (bitwise). Gate A2c (block reconstruction 4.5e-15, Dirichlet vs dense <= 1.5e-13, NumPy and JAX).
+- `tests/cyl_b4.py cyl --alpha`. B4 on the smooth-current precise_QA: at equal h the map halves the nodes but raises the error (a/20 2.25e-4 -> 2.8e-4); at equal accuracy it needs 1.24-1.39x fewer total nodes but 1.2-1.3x more inside nodes (J sampling), converging more slowly. No net memory saving; default stays alpha = 0. Docs: `docs/cylindrical_grid.md`, "Mapped nodes".
+
 ## 2026-10-17: Cylindrical grid: axisymmetric path (branch `cylindrical-grid`)
 - `CylindricalGrid.around` uses one plane (N_phi = 1) for N = 0 equilibria (`axisym=False` to override): the solve is two 2-D problems; `optimize_qa --grid cylindrical`, `--check-grid cylindrical`, `--dense` and `--bext desc --fit force` work unchanged. The axisymmetric cylindrical check defaults to 2x finer than the run.
 - Gates D3a–D3e (`tests/test_cylindrical_axisym.py`): N_phi = 1 equals N_phi = 5 to ~1e-14 (B, F, J v, dense G); B order 3.3 in h.

@@ -91,6 +91,65 @@ def _real_eig(A, what):
     return lam[order], V[:, order]
 
 
+
+
+def _complex_eig(A, what):
+    """Eigendecomposition of A (real, with complex pairs) in complex arithmetic, ordered by
+    descending real part. Used for the shared z operator of a mapped axis: the solver's data
+    are complex Fourier coefficients anyway."""
+    lam, V = np.linalg.eig(A)
+    if lam.real.max() >= 0:
+        raise RuntimeError(f"{what}: non-negative eigenvalue (real part) {lam.real.max():.3e}")
+    order = np.argsort(lam.real)[::-1]
+    return lam[order], V[:, order]
+
+
+def _block_eig(A, what):
+    """Real block diagonalization A V = V B, for an A with real or complex-pair eigenvalues.
+
+    B is block diagonal: a real eigenvalue a is a 1x1 block; a pair a +- i b (b > 0) is the
+    2x2 block [[a, b], [-b, a]] on the columns (Re v, Im v) of the eigenvector v of a + i b.
+    Returns (a, s, pair, V): a the real parts (descending), s the off-diagonal entries
+    (b on the first column of a pair, -b on the second, 0 for real eigenvalues), pair the
+    partner column (itself for real ones). All arithmetic stays real. Complex pairs come
+    from the non-normality of mapped (KTE) operators; they are well conditioned there
+    (kappa(V) <= ~40 for the production grids to alpha = 0.99)."""
+    lam, W = np.linalg.eig(A)
+    scale = np.abs(lam).max()
+    cx = np.abs(lam.imag) > 1e-10 * scale
+    blocks = []
+    for j in np.flatnonzero(~cx):
+        if np.abs(W[:, j].imag).max() > 1e-10 * np.abs(W[:, j]).max():
+            raise RuntimeError(f"{what}: complex eigenvector of a real eigenvalue")
+        blocks.append((lam[j].real, [W[:, j].real], [0.0]))
+    for j in np.flatnonzero(cx & (lam.imag > 0)):
+        b = lam[j].imag
+        blocks.append((lam[j].real, [W[:, j].real, W[:, j].imag], [b, -b]))
+    if 2 * int(np.sum(cx & (lam.imag > 0))) != int(cx.sum()):
+        raise RuntimeError(f"{what}: unpaired complex eigenvalues")
+    blocks.sort(key=lambda t: -t[0])
+    n = A.shape[0]
+    a, s_, pair, V = np.empty(n), np.empty(n), np.empty(n, np.int64), np.empty((n, n))
+    c = 0
+    for re, cols, ss in blocks:
+        for q, (v, sq) in enumerate(zip(cols, ss)):
+            a[c + q], s_[c + q], V[:, c + q] = re, sq, v
+            pair[c + q] = c + (1 - q if len(cols) == 2 else 0)
+        c += len(cols)
+    if a.max() >= 0:
+        raise RuntimeError(f"{what}: non-negative eigenvalue (real part) {a.max():.3e}")
+    return a, s_, pair, V
+
+
+def _block_divide(W, a, s, pair, axis=-2):
+    """Solve (B + mu) X = W in the eigen coordinates of ``_block_eig``: ``a`` already holds
+    a + mu (broadcast against W), ``s`` the pair entries, ``pair`` the partner rows (along
+    ``axis``). X_k = ((a_k + mu) W_k - s_k W_p(k)) / ((a_k + mu)^2 + s_k^2)."""
+    import numpy as _np
+    Wp = _np.take_along_axis(W, pair, axis=axis)
+    return (a * W - s * Wp) / (a * a + s * s)
+
+
 class AnnulusPoisson:
     """Dirichlet core and boundary operators for the modes |m| in ``ms``.
 
@@ -116,13 +175,22 @@ class AnnulusPoisson:
         I, J = slice(1, nr), slice(1, nz)
         # z: shared by every mode
         Dzz = z_axis.D2
-        self.lam_z, self.Vz = _real_eig(Dzz[J, J], "D_zz")
+        try:
+            self.lam_z, self.Vz = _real_eig(Dzz[J, J], "D_zz")
+            self.z_complex = False
+        except RuntimeError as e:  # complex pairs (mapped z axis): the complex eigenbasis
+            if "complex eigenpairs" not in str(e):
+                raise
+            self.lam_z, self.Vz = _complex_eig(Dzz[J, J], "D_zz")
+            self.z_complex = True
         self.Vz_inv = np.linalg.inv(self.Vz)
         self.ez = Dzz[J][:, [0, nz]]  # (n_z - 1, 2): bot, top columns on interior rows
         # r: per |m|
         Lr0 = r_axis.D2 + r_axis.D / r[:, None]
         K = len(self.ms)
-        self.lam_r = np.empty((K, nr - 1))
+        self.lam_r = np.empty((K, nr - 1))  # real parts of the eigenvalues
+        self.lam_s = np.zeros((K, nr - 1))  # complex pairs: +-b (``_block_eig``), else 0
+        self.pair_r = np.tile(np.arange(nr - 1), (K, 1))  # partner column (itself if real)
         self.Vr = np.empty((K, nr - 1, nr - 1))
         self.Vr_inv = np.empty((K, nr - 1, nr - 1))
         self.ar = np.empty((K, nr - 1, 2))  # in, out columns on interior rows
@@ -130,8 +198,8 @@ class AnnulusPoisson:
         def radial(k):
             m = self.ms[k]
             Lr = Lr0 - np.diag(m**2 / r**2)
-            lam, V = _real_eig(Lr[I, I], f"L_r, m = {m}")
-            self.lam_r[k], self.Vr[k] = lam, V
+            lam, ls, pr, V = _block_eig(Lr[I, I], f"L_r, m = {m}")
+            self.lam_r[k], self.lam_s[k], self.pair_r[k], self.Vr[k] = lam, ls, pr, V
             self.Vr_inv[k] = np.linalg.inv(V)
             self.ar[k] = Lr[I][:, [0, nr]]
 
@@ -145,6 +213,8 @@ class AnnulusPoisson:
             for k in range(K):
                 radial(k)
         self.Lr0 = Lr0
+        # modes whose radial operator has complex pairs (mapped axes); none unmapped
+        self.has_pairs = bool(np.any(self.lam_s != 0))
 
     @property
     def cond_Vr(self):
@@ -175,8 +245,14 @@ class AnnulusPoisson:
         fI = f[..., 1:-1, 1:-1] if f.shape[-2:] == self.shape else f
         k = np.broadcast_to(np.asarray(k), fI.shape[:-2])
         W = np.einsum("...ij,...jl->...il", self.Vr_inv[k], fI) @ self.Vz_inv.T
-        W = W / (self.lam_r[k][..., :, None] + self.lam_z[None, :])
+        if self.has_pairs:
+            W = _block_divide(W, self.lam_r[k][..., :, None] + self.lam_z[None, :], self.lam_s[k][..., :, None],
+                              np.broadcast_to(self.pair_r[k][..., :, None], W.shape))
+        else:  # (bitwise the unmapped result)
+            W = W / (self.lam_r[k][..., :, None] + self.lam_z[None, :])
         uI = np.einsum("...ij,...jl->...il", self.Vr[k], W) @ self.Vz.T
+        if self.z_complex and not np.iscomplexobj(fI):
+            uI = uI.real  # real data: real solution (to rounding) through the complex z basis
         u = np.zeros(fI.shape[:-2] + self.shape, dtype=np.result_type(fI, float))
         u[..., 1:-1, 1:-1] = uI
         return u

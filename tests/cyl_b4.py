@@ -142,7 +142,7 @@ def step_cyl(a):
     base = peak_gb()
     t = np.load(os.path.join(a.dir, "targets.npz"))
     h = inp.a / a.frac
-    g = CylindricalGrid.around(inp, h, a.margin)
+    g = CylindricalGrid.around(inp, h, a.margin, alpha=a.alpha)
     print(f"[cyl a/{a.frac}] {g}; baseline peak {base:.2f} GB", flush=True)
     tm, stage_peak = {}, {}
 
@@ -188,9 +188,9 @@ def step_cyl(a):
     info = dict(frac=a.frac, h=h, grid=repr(g), shape=g.shape, nodes=g.size, inside=len(g.inside),
                 n_modes=len(sol.fs.ap.ms), N_b=sol.fs.ap.n_boundary, S_GB=sol.S_nbytes / 1e9,
                 S_dtype=a.S_dtype, peak_GB=peak_gb(), base_GB=base, stage_peak_GB=stage_peak,
-                times=tm, J=a.J, margin=a.margin)
+                times=tm, J=a.J, margin=a.margin, alpha=a.alpha)
     tag = (f"cyl_a{a.frac}" + ("" if a.J == "exact" else "_lagrange")
-           + ("" if a.margin == 2.0 else f"_m{a.margin:g}"))
+           + ("" if a.margin == 2.0 else f"_m{a.margin:g}") + ("" if a.alpha == 0 else f"_al{a.alpha:g}"))
     np.savez(os.path.join(a.dir, tag + ".npz"), B_in=out["X_in"], B_ext=out["X_ext"])
     json.dump(info, open(os.path.join(a.dir, tag + ".json"), "w"), indent=1)
     print(f"{tag}: inside {len(g.inside):,}; |m| {len(sol.fs.ap.ms)}, N_b {sol.fs.ap.n_boundary}, "
@@ -283,6 +283,7 @@ def main():
     ap.add_argument("--frac", type=int, default=10)
     ap.add_argument("--fracs", type=int, nargs="+", default=[10, 15, 20])
     ap.add_argument("--margin", type=float, default=2.0)
+    ap.add_argument("--alpha", type=float, default=0.0, help="KTE map of the r and z axes")
     ap.add_argument("--chunk", type=int, default=16)
     ap.add_argument("--J", default="exact", choices=["exact", "lagrange"])
     ap.add_argument("--dtype", default="float64", choices=["float64", "float32"])
