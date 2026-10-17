@@ -425,7 +425,7 @@ def test_B1_jax_vs_numpy():
     from scipy.constants import mu_0
     from cylindrical_bs import CylindricalSolver, potential
     ra, za = ChebAxis(0.6, 1.4, 20), ChebAxis(-0.45, 0.45, 22)
-    sol = CylindricalSolver(ra, za, NFP=3, N_phi=15, chunk=4)
+    sol = CylindricalSolver(ra, za, NFP=3, N_phi=15, chunk=4, keep_numpy=True)
     rng = np.random.default_rng(5)
     J = rng.standard_normal(sol.shape + (3,))
     A = np.asarray(potential(sol, jnp.asarray(J)))

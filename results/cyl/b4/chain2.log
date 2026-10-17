@@ -1,0 +1,47 @@
+=== ref --block 10000 21:16:48
+precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5: a = 0.17285 m; BoundaryPotential L, M, N = 48, 48, 35 (90408 free); fit/load 2 s
+  ref: 25/200 targets, 68 s, peak 2.90 GB
+  ref: 50/200 targets, 139 s, peak 2.90 GB
+  ref: 75/200 targets, 213 s, peak 2.90 GB
+  ref: 100/200 targets, 286 s, peak 2.90 GB
+  ref: 125/200 targets, 359 s, peak 2.90 GB
+  ref: 150/200 targets, 429 s, peak 2.90 GB
+  ref: 175/200 targets, 501 s, peak 2.90 GB
+  ref: 200/200 targets, 575 s, peak 2.90 GB
+continuous Biot-Savart at 200 exterior points, L, M, N = (48, 48, 42) vs (32, 32, 28): max diff 1.1e-02; 575 s; peak 2.90 GB
+=== cyl --frac 10 --J lagrange 21:26:32
+precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5: a = 0.17285 m; BoundaryPotential L, M, N = 48, 48, 35 (90408 free); fit/load 2 s
+[cyl a/10] CylindricalGrid(r [0.6085, 1.3740] n 71, z [-0.4370, 0.4370] n 81, N_phi 251, NFP 2: 1.44M nodes); baseline peak 0.69 GB
+[cyl a/10] locate: 116.6 s, peak so far 1.90 GB
+[cyl a/10] J: 66.2 s, peak so far 3.06 GB
+  FreeSpaceAnnulus: 252 distinct |m| <= 251, N_b = 304; eig 0.3 s, S 31.8 s (93 MB)
+[cyl a/10] precompute: 32.1 s, peak so far 3.06 GB
+[cyl a/10] solve_first: 0.6 s, peak so far 3.06 GB
+[cyl a/10] solve: 0.1 s, peak so far 3.06 GB
+[cyl a/10] interp: 0.3 s, peak so far 3.06 GB
+cyl_a10_lagrange: inside 101,117; |m| 252, N_b 304, S 0.09 GB (float32); peak 3.06 GB
+=== cyl --frac 10 --margin 1 21:30:15
+precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5: a = 0.17285 m; BoundaryPotential L, M, N = 48, 48, 35 (90408 free); fit/load 2 s
+[cyl a/10] CylindricalGrid(r [0.6258, 1.3567] n 68, z [-0.4197, 0.4197] n 78, N_phi 247, NFP 2: 1.31M nodes); baseline peak 0.69 GB
+[cyl a/10] locate: 139.1 s, peak so far 1.99 GB
+  J series (103,640 points) chunk 6/6: 103,640/103,640 points, 23s elapsed, ETA 0s
+[cyl a/10] J: 22.6 s, peak so far 2.06 GB
+  FreeSpaceAnnulus: 248 distinct |m| <= 247, N_b = 292; eig 0.3 s, S 29.6 s (85 MB)
+[cyl a/10] precompute: 30.0 s, peak so far 2.06 GB
+[cyl a/10] solve_first: 0.5 s, peak so far 2.06 GB
+[cyl a/10] solve: 0.1 s, peak so far 2.06 GB
+[cyl a/10] interp: 0.3 s, peak so far 2.06 GB
+cyl_a10_m1: inside 103,640; |m| 248, N_b 292, S 0.08 GB (float32); peak 2.06 GB
+=== cyl --frac 10 --margin 4 21:33:34
+precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5: a = 0.17285 m; BoundaryPotential L, M, N = 48, 48, 35 (90408 free); fit/load 2 s
+[cyl a/10] CylindricalGrid(r [0.5739, 1.4085] n 77, z [-0.4716, 0.4716] n 87, N_phi 257, NFP 2: 1.72M nodes); baseline peak 0.69 GB
+[cyl a/10] locate: 100.3 s, peak so far 1.74 GB
+  J series (97,604 points) chunk 5/5: 97,604/97,604 points, 20s elapsed, ETA 0s
+[cyl a/10] J: 20.1 s, peak so far 1.94 GB
+  FreeSpaceAnnulus: 258 distinct |m| <= 257, N_b = 328; eig 0.5 s, S 35.2 s (111 MB)
+[cyl a/10] precompute: 35.7 s, peak so far 1.94 GB
+[cyl a/10] solve_first: 0.6 s, peak so far 1.94 GB
+[cyl a/10] solve: 0.2 s, peak so far 1.94 GB
+[cyl a/10] interp: 0.4 s, peak so far 1.94 GB
+cyl_a10_m4: inside 97,604; |m| 258, N_b 328, S 0.11 GB (float32); peak 1.94 GB
+=== done 21:36:17

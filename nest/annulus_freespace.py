@@ -50,7 +50,8 @@ class FreeSpaceAnnulus:
     shifts : tuple of int
     """
 
-    def __init__(self, r_axis, z_axis, NFP, N_phi, shifts=(0,), verbose=False, **sl_kw):
+    def __init__(self, r_axis, z_axis, NFP, N_phi, shifts=(0,), verbose=False, S_dtype=np.float64,
+                 **sl_kw):
         self.NFP, self.N_phi, self.shifts = int(NFP), int(N_phi), tuple(shifts)
         ms = set()
         for s in self.shifts:
@@ -59,7 +60,7 @@ class FreeSpaceAnnulus:
         self.ap = AnnulusPoisson(r_axis, z_axis, sorted(ms))
         t1 = time.time()
         pts, _ = self.ap.boundary_points()
-        self.S = single_layer_matrix(self.ap, self.ap.ms, pts, verbose=verbose, **sl_kw)
+        self.S = single_layer_matrix(self.ap, self.ap.ms, pts, verbose=verbose, dtype=S_dtype, **sl_kw)
         self.timing = {"eig": t1 - t0, "S": time.time() - t1}
         if verbose:
             print(f"  FreeSpaceAnnulus: {len(self.ap.ms)} distinct |m| <= {self.ap.ms.max()}, "

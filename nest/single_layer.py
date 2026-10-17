@@ -79,7 +79,7 @@ def _panel_rule(nodes, p_star, delta, n_gl, ratio=0.15, eps=1e-11, q=6):
     return p_star + off.ravel(), wts.ravel(), off.ravel()
 
 
-def single_layer_matrix(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False):
+def single_layer_matrix(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False, dtype=np.float64):
     """S_m from the packed face values of sigma to S_m[sigma] at targets.
 
     Parameters
@@ -88,7 +88,8 @@ def single_layer_matrix(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False):
     ms : sequence of int (|m| is used); the result is in this order.
     targets : (n_t, 2) array of (r, z).
 
-    Returns (len(ms), n_t, ap.n_boundary).
+    Returns (len(ms), n_t, ap.n_boundary), of ``dtype`` (float32 halves the largest
+    precomputed array; entries are computed in float64 either way).
     """
     ms = np.asarray(ms)
     am = np.abs(ms)
@@ -97,7 +98,7 @@ def single_layer_matrix(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False):
     geo = _face_geometry(ap)
     sizes = ap.face_sizes
     offs = np.cumsum([0] + [sizes[f] for f in FACES])
-    S = np.zeros((len(ms), len(targets), ap.n_boundary))
+    S = np.zeros((len(ms), len(targets), ap.n_boundary), dtype=dtype)
     for it, (rt, zt) in enumerate(targets):
         rows, cols, lags = [], [], []
         for fi, f in enumerate(FACES):

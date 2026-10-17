@@ -62,14 +62,37 @@ class CylindricalGrid:
         return np.stack([R, P, Z], axis=-1)
 
     def cartesian(self, flat_index=None):
-        n = self.nodes().reshape(-1, 3)
-        n = n if flat_index is None else n[flat_index]
+        """Cartesian positions of all nodes, or of the given flat indices (without
+        forming the full node array)."""
+        if flat_index is None:
+            n = self.nodes().reshape(-1, 3)
+        else:
+            k, i, l = np.unravel_index(flat_index, self.shape)
+            n = np.column_stack([self.r_axis.s[i], self.phi[k], self.z_axis.s[l]])
         return np.column_stack([n[:, 0] * np.cos(n[:, 1]), n[:, 0] * np.sin(n[:, 1]), n[:, 2]])
 
-    def locate_plasma(self, eq, verbose=False, **kw):
-        rtz = map_to_flux(eq, self.cartesian(), verbose=verbose, **kw)
-        ok = np.flatnonzero(np.isfinite(rtz[:, 0]))
-        self.inside, self.rtz = ok, rtz[ok]
+    def locate_plasma(self, eq, verbose=False, planes=32, **kw):
+        """Inside nodes and their flux coordinates, ``planes`` phi-planes per call of
+        ``map_to_flux`` (bounded memory), with one shared Newton guess grid."""
+        import time
+        from grid import FluxGrid, _as_input
+        inp = _as_input(eq)
+        L, M, N = inp.resolution
+        guess = kw.pop("guess_grid", None) or FluxGrid.concentric(inp, 2 * L, 2 * M, 2 * N)
+        per_plane = self.size // self.N_phi
+        inside, rtz, t0 = [], [], time.time()
+        for k0 in range(0, self.N_phi, planes):
+            k1 = min(k0 + planes, self.N_phi)
+            idx = np.arange(k0 * per_plane, k1 * per_plane)
+            r = map_to_flux(inp, self.cartesian(idx), guess_grid=guess, **kw)
+            ok = np.flatnonzero(np.isfinite(r[:, 0]))
+            inside.append(idx[ok])
+            rtz.append(r[ok])
+            if verbose:
+                n_in = sum(len(i) for i in inside)
+                print(f"    locate: planes {k1}/{self.N_phi}, {n_in:,} inside, {time.time() - t0:.0f} s",
+                      flush=True)
+        self.inside, self.rtz = np.concatenate(inside), np.concatenate(rtz)
         return self
 
     def scatter(self, values, dtype=np.float64):

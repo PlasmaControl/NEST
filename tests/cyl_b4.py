@@ -114,16 +114,26 @@ def step_ref(a):
     res = np.maximum([cur.basis.L, cur.basis.M, cur.basis.N], 3 * np.array([eq.L, eq.M, eq.N]))
     res2 = tuple(int(v) for v in np.ceil(2 * res / 3))
     res = tuple(int(v) for v in res)
+    if a.lmn:  # explicit (fine, comparison) resolutions; the 2/3 rule's comparison level
+        res, res2 = tuple(a.lmn[:3]), tuple(a.lmn[3:])  # can under-resolve the basis
+    out_name = a.ref_out
     t0 = time.time()
-    B2 = continuous_biot_savart(eq, cur, t["X_ext"], LMN=res2)
-    B1 = continuous_biot_savart(eq, cur, t["X_ext"], LMN=res)
+    X = t["X_ext"]
+    B1, B2 = np.zeros_like(X), np.zeros_like(X)
+    for i in range(0, len(X), a.ext_chunk):  # in chunks of targets, with progress
+        sl = slice(i, i + a.ext_chunk)
+        B2[sl] = continuous_biot_savart(eq, cur, X[sl], LMN=res2, block=a.block)
+        B1[sl] = continuous_biot_savart(eq, cur, X[sl], LMN=res, block=a.block)
+        print(f"  ref: {min(i + a.ext_chunk, len(X))}/{len(X)} targets, {time.time() - t0:.0f} s, "
+              f"peak {peak_gb():.2f} GB", flush=True)
     dB = np.abs(B1 - B2).max() / np.abs(B1).max()
-    np.savez(os.path.join(a.dir, "ref_ext.npz"), B=B1, B_coarse=B2, LMN=res, LMN2=res2)
+    np.savez(os.path.join(a.dir, out_name), B=B1, B_coarse=B2, LMN=res, LMN2=res2)
     print(f"continuous Biot-Savart at {len(B1)} exterior points, L, M, N = {res} vs {res2}: "
           f"max diff {dB:.1e}; {time.time() - t0:.0f} s; peak {peak_gb():.2f} GB", flush=True)
 
 
 def step_cyl(a):
+    import jax
     import jax.numpy as jnp
     from cartesian_grid import evaluate_chunked
     from cylindrical_bs import CylindricalSolver
@@ -133,50 +143,58 @@ def step_cyl(a):
     t = np.load(os.path.join(a.dir, "targets.npz"))
     h = inp.a / a.frac
     g = CylindricalGrid.around(inp, h, a.margin)
-    tm = {}
+    print(f"[cyl a/{a.frac}] {g}; baseline peak {base:.2f} GB", flush=True)
+    tm, stage_peak = {}, {}
+
+    def done(name, t0):
+        tm[name], stage_peak[name] = time.time() - t0, peak_gb()
+        print(f"[cyl a/{a.frac}] {name}: {tm[name]:.1f} s, peak so far {stage_peak[name]:.2f} GB", flush=True)
+
     t0 = time.time()
-    g.locate_plasma(inp, verbose=False)
-    tm["locate"] = time.time() - t0
+    g.locate_plasma(inp, verbose=True, planes=a.planes)
+    done("locate", t0)
     t0 = time.time()
     if a.J == "exact":
-        Jc = evaluate_chunked(cur.point_evaluator(), g.rtz, 50000)
+        Jc = evaluate_chunked(cur.point_evaluator(), g.rtz, 20000, f"J series ({len(g.rtz):,} points)")
     else:  # main's path for the box: uniform flux grid + cached Lagrange interpolation
         from flux_interp import PointInterpolator, TensorCurrent, TensorGrid
         b = cur.basis
         fg = TensorGrid.uniform(4 * b.L, 2 * (3 * b.M), max(4 * b.N, 8), inp.eq.NFP)
         Jf = TensorCurrent(cur.S, cur._RZ, fg)(jnp.asarray(cur.u), cur.I)
         Jc = np.asarray(PointInterpolator(fg, g.rtz, 4)(Jf))
-    tm["J"] = time.time() - t0
+    done("J", t0)
     J = g.scatter(Jc)
+    del Jc
     t0 = time.time()
-    sol = CylindricalSolver(g.r_axis, g.z_axis, g.NFP, g.N_phi, chunk=a.chunk)
-    tm["precompute"] = time.time() - t0
-    pre_gb = peak_gb()
-    import jax
+    S_dtype = np.float32 if a.S_dtype == "float32" else np.float64
+    sol = CylindricalSolver(g.r_axis, g.z_axis, g.NFP, g.N_phi, chunk=a.chunk, verbose=True,
+                            S_dtype=S_dtype)
+    done("precompute", t0)
     fm = jax.jit(lambda s, x: s.field_modes(x))
     Jd = jnp.asarray(J)
+    del J
     t0 = time.time()
     Bp, Bz = jax.block_until_ready(fm(sol, Jd))
-    tm["solve_first"] = time.time() - t0
+    done("solve_first", t0)
     t0 = time.time()
     Bp, Bz = jax.block_until_ready(fm(sol, Jd))
-    tm["solve"] = time.time() - t0
+    done("solve", t0)
     t0 = time.time()
     out = {}
     for k in ("X_in", "X_ext"):
         P = to_rpz(t[k])
         out[k] = cyl_to_cart(evaluate(g, Bp, Bz, P), P[:, 1])
-    tm["interp"] = time.time() - t0
+    done("interp", t0)
     info = dict(frac=a.frac, h=h, grid=repr(g), shape=g.shape, nodes=g.size, inside=len(g.inside),
-                n_modes=len(sol.fs.ap.ms), N_b=sol.fs.ap.n_boundary, S_GB=sol.fs.S.nbytes / 1e9,
-                peak_GB=peak_gb(), base_GB=base, after_precompute_GB=pre_gb, times=tm, J=a.J,
-                margin=a.margin)
-    tag = f"cyl_a{a.frac}" + ("" if a.J == "exact" else "_lagrange") + ("" if a.margin == 2.0 else f"_m{a.margin:g}")
+                n_modes=len(sol.fs.ap.ms), N_b=sol.fs.ap.n_boundary, S_GB=sol.S_nbytes / 1e9,
+                S_dtype=a.S_dtype, peak_GB=peak_gb(), base_GB=base, stage_peak_GB=stage_peak,
+                times=tm, J=a.J, margin=a.margin)
+    tag = (f"cyl_a{a.frac}" + ("" if a.J == "exact" else "_lagrange")
+           + ("" if a.margin == 2.0 else f"_m{a.margin:g}"))
     np.savez(os.path.join(a.dir, tag + ".npz"), B_in=out["X_in"], B_ext=out["X_ext"])
     json.dump(info, open(os.path.join(a.dir, tag + ".json"), "w"), indent=1)
-    print(f"{tag}: {g}; inside {len(g.inside):,}; |m| {len(sol.fs.ap.ms)}, N_b {sol.fs.ap.n_boundary}, "
-          f"S {info['S_GB']:.2f} GB; times " + ", ".join(f"{k} {v:.1f} s" for k, v in tm.items())
-          + f"; peak {info['peak_GB']:.2f} GB (baseline {base:.2f})", flush=True)
+    print(f"{tag}: inside {len(g.inside):,}; |m| {len(sol.fs.ap.ms)}, N_b {sol.fs.ap.n_boundary}, "
+          f"S {info['S_GB']:.2f} GB ({a.S_dtype}); peak {info['peak_GB']:.2f} GB", flush=True)
 
 
 def step_box(a):
@@ -268,9 +286,16 @@ def main():
     ap.add_argument("--chunk", type=int, default=16)
     ap.add_argument("--J", default="exact", choices=["exact", "lagrange"])
     ap.add_argument("--dtype", default="float64", choices=["float64", "float32"])
+    ap.add_argument("--planes", type=int, default=32, help="phi-planes per inverse-map call")
+    ap.add_argument("--S-dtype", default="float32", choices=["float64", "float32"])
     ap.add_argument("--ext-lo", type=float, default=0.15)
     ap.add_argument("--ext-hi", type=float, default=0.4)
     ap.add_argument("--n-ext", type=int, default=200)
+    ap.add_argument("--ext-chunk", type=int, default=25)
+    ap.add_argument("--lmn", type=int, nargs=6, default=None,
+                    help="L M N of the reference quadrature, then of its comparison")
+    ap.add_argument("--ref-out", default="ref_ext.npz")
+    ap.add_argument("--block", type=int, default=50000)
     ap.add_argument("--ref", default=None)
     ap.add_argument("--dir", default=os.path.join(ROOT, "results", "cyl", "b4"))
     a = ap.parse_args()
