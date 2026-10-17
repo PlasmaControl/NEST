@@ -1,6 +1,6 @@
 # Cylindrical-annulus J → B solver (branch `cylindrical-grid`)
 
-Status 2026-10-17. Stages A–C done locally; B5 (local memory push) done; stage D (GPU) awaits approval (stop point S3).
+Status 2026-10-17 (evening). Stages A–C done locally; B5 done; stage D D1–D2 run on Modal A100s (results and a correction below: **the cylindrical path must run in float64**, now the default).
 Plan and check-list: `docs/cylindrical_grid_plan.md`. Stage reports: `docs/cylindrical_grid_stageA.md`, `docs/cylindrical_grid_B4.md`.
 
 ## What it is
@@ -11,7 +11,7 @@ A_z takes the modes j·NFP and A₊ = e^{iφ}(A_r + iA_φ) the modes j·NFP + 1,
 J reaches the nodes through main's flux-grid `PointInterpolator`; B goes to the collocation points by barycentric (r, z) and exact Fourier (φ) interpolation.
 
 Use: `optimize_qa.py --grid cylindrical` (same `--frac`, `--margin`, check options), or `Fields(force, current, pressure)` with a `CylindricalGrid` box.
-Options: `dtype` (float32 default, as main), `S_dtype` (float32), `cyl_half` (stellarator-symmetric half sampling, default on), `FreeSpaceAnnulus(zsym="auto")` (z-folded S_m).
+Options: `cyl_dtype` (precision of the cylindrical path; **float64 default**, `optimize_qa --cyl-dtype`; float32 is not accurate at production sizes, see "Stage D"), `dtype` (main's box only, float32 default), `S_dtype` (float32 storage of S_m), `cyl_half` (stellarator-symmetric half sampling, default on), `FreeSpaceAnnulus(zsym="auto")` (z-folded S_m).
 `DenseFields` works unchanged. Main's paths are bitwise unchanged (C4).
 
 ## Gates (all pass)
@@ -42,6 +42,7 @@ C5 (precise_QA smooth J, a/6, factors 1, 20 iterations, cg 100; check on the VG 
 Measures: the J → B_plasma pipeline of one optimizer product (J at the sampled nodes → B at main's production collocation, 1.65M points), forward and JᵀW (`jax.linear_transpose`).
 Model: XLA's compiled memory analysis, args + output + temporaries (`tests/cyl_memory.py`); not included are the h-independent collocation-side caches shared by both methods (~4.5 GB at production on the GPU).
 "Optimised" cylindrical = float32 arithmetic, stellarator-symmetric half sampling, z-folded S_m (S_m in parentheses, already inside the JᵀW figure).
+**Superseded:** the float32 column is not usable in production (Stage D); the float64 figures in "Stage D" replace it for the memory comparison.
 
 | h | cylindrical, optimised: JᵀW + sampling (S_m) | cylindrical, float64 unfolded | main's box, float32 | box / cyl optimised |
 |---|---|---|---|---|
@@ -74,20 +75,62 @@ Banded S_m was measured and dropped: in the nodal basis about a third of the ent
 
 (a) Exterior B error (rms over 177 converged points 0.15–0.41 a outside the plasma, `results/cyl/b4/exterior_fine.json`) against the pipeline memory of the JᵀW product plus J sampling (model). Filled: measured errors; open/dashed: O(h^p) extrapolation with the fitted orders (cylindrical p = 2.16 from a/10–a/20, box p = 1.71 from a/10–a/15). Dotted: A100 budgets less ~4.5 GB shared. (b) Measured laptop CPU time per JᵀW.
 
-## Verdict
+## Stage D: GPU results (Modal A100, 2026-10-17; scripts in `scripts/modal_cyl/`)
 
-Yes, it is a big win over the box, in memory, accuracy and time together:
-1. At equal h the cylindrical pipeline needs 5.6–7.2× less memory than main's float32 box (a/10–a/40), is more accurate (B4: 0.6× the exterior error), and is 7.6× (f) / 13× (JᵀW) faster on the laptop CPU.
-2. At equal memory it reaches ~1.9× finer h. Extrapolated to one A100 (budget less 4.5 GB shared): 40 GB → box a/32 (1.3e-04) vs cylindrical a/59 (1.3e-05); 80 GB → box a/40 (8.7e-05; the NUFFT's int32 offsets overflow near a/42) vs cylindrical a/76 (7.2e-06). About 10–12× lower B error per GPU.
-3. On the laptop: cylindrical a/25 (20M nodes) runs JᵀW in 3.5 s at a 2.2 GB process peak; box a/10 already peaks at 2.2 GB (box a/15, model 4.4 GB, was not run: it would swap).
+**J → B pipeline on the GPU** (`tests/cyl_measure.py`, A100-80GB, device peak of the pipeline alone; the cylindrical rows are the float32 path, float64 costs ~1.5–2× more):
 
-Caveats: the GPU numbers are model extrapolations (memory) and O(h^p) extrapolations (error) from three (cylindrical) or two (box) measured sizes; GPU times are unmeasured — the box's FFT path is GPU-friendly, the cylindrical solve is a sequential scan over mode chunks of small batched matmuls. The errors are B_plasma alone, from exact J at the nodes for both methods (B4); in `Fields`, main's Lagrange flux-grid J adds a bias shared by both (1.1e-4 rms at a/10) that is not in these curves. S_m precompute grows ~h^-2.7 on the host CPU (a/25: 195 s measured before batching; batching measured 3× faster at a/15, so a/60 extrapolates to ~12 min).
+| h | main's box (float32): JᵀW / peak | cylindrical (float32 path): JᵀW / peak |
+|---|---|---|
+| a/20 | 0.26 s / 5.5 GB | 0.07 s / 1.26 GB |
+| a/30 | 0.97 s / 21.4 GB | 0.18 s / 3.77 GB |
+| a/40 | out of memory on 80 GB (the kernel build alone reached 43 GB) | 0.33 s / 7.9 GB |
 
-## Proposed GPU jobs (S3: needs approval)
+**Exterior B error, cylindrical, to a/40** (`tests/cyl_b4.py cyl` on the GPU; rms over the 171 converged reference points that lie inside every annulus, `results/cyl/b4/exterior_d1.json`):
 
-1. D1 memory push (A100-80GB, cap 2 h): `cyl_measure.py` ladders, cylindrical a/20, 30, 40, 50, 60, 70 and box a/20, 30, 40, with device peaks and times for f and JᵀW; plus cylindrical B at a/30 and a/40 against the exterior reference (`tests/cyl_b4.py`, reference files shipped) to test the O(h^2.2) extrapolation. Estimate ~1.5 h, dominated by S_m builds (~45 min host CPU).
-2. D2 production (A100-40GB, cap 2 h each, two jobs): precise_QA `optimize_qa --grid cylindrical` at factors 3 3 2.5, colloc 2, maxiter 100, at a/20 and a/30; check on the VG a/20 box with 3× collocation and on cylindrical a/40. Compare with main's production anchor (a/10 box, 16 min on one A100).
-3. D3 DSHAPE axisymmetric: needs local preparation first (N_φ = 1 path, DSHAPE files from branch `optimization`); not proposed yet.
+| a/10 | a/15 | a/20 | a/30 | a/40 |
+|---|---|---|---|---|
+| 5.88e-04 | 2.68e-04 | 1.32e-04 | 5.60e-05 | 3.33e-05 |
+
+Local order 2.1 (a/20–a/30) and 1.8 (a/30–a/40, near the reference's own accuracy). The box on the same points: 9.36e-4 (a/10), 3.67e-4 (a/15). Targets outside an annulus cannot be evaluated by interpolation (six or seven of the 200 at a/30–a/40).
+
+**Production optimizations** (precise_QA smooth J, factors 3 3 2.5, 133,908 unknowns, collocation 65 × 257 × 99, cold start, defaults: free pressure, W 10, p ≥ 0; A100-40GB):
+
+| run | iterations | s / iteration | ⟨\|F\|⟩/norm own grid (it 10 / 20 / 30 / end) | check (3× collocation) | GPU peak (nvidia-smi) |
+|---|---|---|---|---|---|
+| cylindrical a/20, float32 (D2a) | 17 | 14.7 | 1.23e-04 / — / — / 1.16e-04 | 8.55e-05 on VG box a/20 | 19.9 GB |
+| cylindrical a/30, float32 (D2b) | 14 | 30.6 | 1.61e-04 / — / — / 1.63e-04 | 2.02e-04 on cylindrical a/40 (float32, invalid) | 17.8 GB |
+| cylindrical a/20, float64 | 30 | 23.6 | 4.79e-05 / 2.43e-05 / 1.72e-05 / 1.72e-05 | 1.83e-05 on VG box a/20 | 20.5 GB |
+| box a/10 (control) | 100 | 14.1 | 5.66e-05 / 3.61e-05 / 2.76e-05 / 1.48e-05 | 2.11e-05 on VG box a/20 | 19.7 GB |
+| box a/20 (control) | 100 | 43.2 | 5.39e-05 / 2.79e-05 / 1.93e-05 / 9.31e-06 | 9.35e-06 on VG box a/20 | 21.1 GB |
+
+**Float32 correction.** Both float32 cylindrical runs stalled: line-search steps ~0.6, the objective rising, stopped by the stagnation rule after 14–17 iterations. The same a/20 run in float64 steps ~1.0 and tracks (slightly ahead of) the box at equal h. The float32 B error grows ~n² with the Chebyshev order (rms against float64 over the modes: 4.4e-5 at a/6, 8.6e-5 at a/10, 1.7e-4 at a/15, 3.5e-4 at a/20; `results/cyl/c6/f32_vs_h.log`). It comes mostly from the per-mode Dirichlet solve (float64 there: 1.0e-4 at a/20) and from differentiating an A rounded to float32 (whole per-mode solve in float64: 7.7e-5); differentiation in float64 alone does not help (`f32_mixed.log`). The a/6 gates (C2c, 1.6e-6 in the plasma) did not reveal it. The cylindrical path is now float64 by default (`cyl_dtype`, commit f2d00f8).
+
+**Memory with float64** (XLA model, `results/cyl/memory_f64opt.json`; JᵀW product + J sampling, sym half sampling, z-folded S_m in float32):
+
+| h | cylindrical float64 (sym, z-fold) | main's box float32 | box ÷ cylindrical |
+|---|---|---|---|
+| a/10 | 0.42 GB | 1.96 GB | 4.6× |
+| a/15 | 1.16 GB | 4.41 GB | 3.8× |
+| a/20 | 2.53 GB | 8.62 GB | 3.4× |
+| a/30 | 8.01 GB | 29.92 GB | 3.7× |
+| a/40 | 18.51 GB | 75.37 GB | 4.1× |
+| a/60 | 60.88 GB | int32 overflow | — |
+
+At a/20 the production runs all peak at ~20–21 GB: the h-independent parts (collocation side, block preconditioner, the 3× check) dominate there, and the J → B difference shows in the totals only at finer h.
+
+**Lesson for GPU jobs.** The S_m build is NumPy on the host CPU (~4× slower per core on Modal than on the laptop; a/30 ~8 min, a/40 ~20–30 min) and left the GPU idle for most of the ladders. Build S_m (and locate, fits) once on a CPU container, cache it on the Volume keyed by grid, and start GPU jobs after.
+
+## Verdict (revised after stage D)
+
+The cylindrical grid is validated as more accurate and more economical than main's box, by less than the overnight float32 estimate:
+1. Accuracy per h: exterior B error ~0.6× the box's, converging ~O(h²) to a/40 (3.3e-5).
+2. Memory at equal h (float64): 3.4–4.6× less for the J → B product than the float32 box (overnight float32 claim: 5.6–7.2×). On one A100, estimated finest h: about a/60–65 on 80 GB and a/45–48 on 40 GB, against about a/35 and a/30 for the box (the box measured: a/30 21.4 GB, a/40 out of memory). These cylindrical limits are model-based; a float64 GPU ladder has not been measured.
+3. Time: 1.8× less per optimizer iteration than the box at equal h (a/20: 23.6 vs 43.2 s), converging slightly faster per iteration.
+
+## Open items
+
+Validation: a float64 GPU memory ladder; a converged (100-iteration) cylindrical run checked on a finer float64 cylindrical grid; an h-ladder at fixed basis (where refining h stops lowering the checked force); NCSX and W7-X (larger predicted gains); the axisymmetric N_φ = 1 path (D3, DSHAPE); combination with the container-mask free boundary.
+Optimizations: S_m build speed and caching; Chebyshev wall clustering (~2.5× nodes in (r, z); mapped nodes or a z sine transform); mode truncation (if J's φ-spectrum allows); on-the-fly J-sampling weights; low-rank S_m blocks; solve symmetry; mixed precision (limited: 7.7e-5 at a/20).
 
 ## Notes for main
 

@@ -6,8 +6,8 @@ One entry per commit, newest first.
 - New free-space J → B solve on one field period of an annulus: Fourier in φ, Chebyshev in r and z, James' correction per toroidal mode (`nest/cylindrical_bs.py`, `cylindrical_grid.py`, `annulus_freespace.py`, `single_layer.py`, `toroidal_kernel.py`, `annulus_poisson.py`, `chebyshev.py`).
 - `Fields` with a `CylindricalGrid` box, `optimize_qa.py --grid cylindrical`; `DenseFields` works unchanged; main's paths bitwise unchanged (C4).
 - Gates A1–C6 pass (`tests/test_cylindrical_bs.py`, `tests/test_cylindrical_integration.py`).
-- precise_QA: at equal h, 5.6–7.2× less memory than the float32 VG box (JᵀW product + J sampling), ~0.6× its exterior B error, 13× faster JᵀW on the laptop CPU. At equal memory ~1.9× finer h; extrapolated A100-80GB: box a/40 vs cylindrical a/76.
-- Details and the proposed GPU jobs: `docs/cylindrical_grid.md`.
+- precise_QA, cylindrical path in float64 (the default, `cyl_dtype`; float32 is not accurate at production sizes and stalled the GPU optimizations): at equal h 3.4–4.6× less memory than the float32 VG box for the JᵀW product + J sampling (model), ~0.6× its exterior B error (converging ~O(h²) to 3.3e-5 at a/40), and 1.8× less time per optimizer iteration on an A100 (a/20: 23.6 vs 43.2 s). The box cannot reach a/40 on an 80 GB card; cylindrical float64 is estimated at a/60–65.
+- GPU (Modal A100) results, the float32 correction and open items: `docs/cylindrical_grid.md`; job scripts `scripts/modal_cyl/`.
 
 ## 2026-10-14: Axisymmetric tokamak: DESC-matched start, dense model, rank and drift of force balance
 - `desc_input/tokamak_free_boundary/`: a free-boundary tokamak (DSHAPE boundary, p ∝ (1-ρ²)³, I ∝ 1-(1-ρ²)³, ⟨β⟩ 2.4 %, q 1.18 → 7.5) at L = M = 12, 16, 24, 32.

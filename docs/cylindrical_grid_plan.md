@@ -187,8 +187,8 @@ The purpose of the branch is to find out how far the new grid pushes resolution 
 ## Stage D: production-size validation (GPU, needs approval)
 
 - **Stop point S3**: no Modal job before the user approves the job list, sizes and time caps.
-- [ ] D1. **Memory push on one A100**: the finest h that fits for each method (cylindrical against VG box), with B-field error at that h. Instrumented per-stage XLA peak for the full `Fields` f, J v and J^T w. Error against memory and time curves from a/10 up to each method's limit.
-- [ ] D2. precise_QA production `optimize_qa` with the cylindrical backend (a/10-equivalent then refine). Check on the VG a/20 box with 3× collocation and on a finer cylindrical grid. Compare against main's anchor (8.2e-6 on a/20).
+- [~] D1 (run 2026-10-17, partial: box a/20–a/40 and cylindrical float32 a/20–a/40 measured, cylindrical B to a/40; float64 GPU ladder and per-stage breakdown still to do; see `docs/cylindrical_grid.md` "Stage D"). **Memory push on one A100**: the finest h that fits for each method (cylindrical against VG box), with B-field error at that h. Instrumented per-stage XLA peak for the full `Fields` f, J v and J^T w. Error against memory and time curves from a/10 up to each method's limit.
+- [~] D2 (run 2026-10-17: float32 runs stalled, root cause float32; float64 a/20 30 iterations 1.72e-5, check 1.83e-5; box controls a/10, a/20. A converged float64 run with a finer cylindrical check is still to do). precise_QA production `optimize_qa` with the cylindrical backend (a/10-equivalent then refine). Check on the VG a/20 box with 3× collocation and on a finer cylindrical grid. Compare against main's anchor (8.2e-6 on a/20).
 - [ ] D3. DSHAPE axisymmetric (files from branch `optimization`): N_φ = 1, so the solve is two 2-D problems (m = 0 for A_z, m = 1 for A₊). Compare the force floor against the G6-axi box results, including the E2 effect (16 against 32 ζ planes), which the cylindrical solve should not show.
 
 ---
