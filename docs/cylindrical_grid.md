@@ -129,13 +129,13 @@ equilibrium or a new h means a new build. Measured for the precise_QA production
 (`CylindricalGrid.around(inp, inp.a / frac)`, margin 2, z-folded, float64; Modal CPU container,
 32 processes, `tests/cyl_s_build.py`):
 
-| h | S_m (float64) | build, 32 processes | peak host RAM |
-|---|---|---|---|
-| a/20 | 0.66 GB | 5 s | 2.1 GB |
-| a/30 | 2.1 GB | 15 s | 5.3 GB |
-| a/40 | 4.9 GB | 43 s | 12 GB |
-| a/50 | 9.6 GB | 80 s | 23 GB |
-| a/60 | 16.3 GB | 141 s | 39 GB |
+| h | S_m (float64) | S_m build, 32 processes | eig, serial | peak host RAM |
+|---|---|---|---|---|
+| a/20 | 0.66 GB | 5 s | 3.6 s | 2.1 GB |
+| a/30 | 2.1 GB | 15 s | 9.8 s | 5.3 GB |
+| a/40 | 4.9 GB | 43 s | 25 s | 12 GB |
+| a/50 | 9.6 GB | 80 s | 53 s | 23 GB |
+| a/60 | 16.3 GB | 141 s | 96 s | 39 GB |
 
 - Time scales roughly inversely with the number of processes (a/60: 64 rows serial 239 s, on 32
   processes 32 s) and grows ~h^-2.7. On a GPU node with 8 CPUs expect ~4× the table (a/60 ~10 min,
@@ -144,6 +144,11 @@ equilibrium or a new h means a new build. Measured for the precise_QA production
 - Parallelism: on Linux the build uses the usable CPUs (at most 32) by default; `NEST_S_JOBS=n`
   overrides (1 = serial). The pool result is bitwise equal to the serial build. On macOS the
   default is serial.
+- eig: the per-mode radial eigendecompositions of `AnnulusPoisson` (one per |m|) are not cached and
+  are paid on every run, also when S_m is loaded. They now run on threads (`NEST_EIG_THREADS`, default
+  the usable CPUs when BLAS can be held to one thread per call: threadpoolctl, or OMP/OPENBLAS/MKL
+  thread counts of 1); bitwise equal to serial; a/30 on the 8-core laptop 8.8 s → 1.4 s. The table's
+  eig column is the serial time before this change.
 - Memory: peak host RAM ≈ 2.4× S_m (float64 rows plus the folded copy). Plan the node's RAM by
   the last column; it, not time, is the barrier on workstations at a/50 and finer.
 
