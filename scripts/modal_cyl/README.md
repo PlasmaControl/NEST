@@ -26,3 +26,18 @@ Results go to the Volume `nest-container-mask` under `/results/cyl/<job>/` as th
 
 Note: S_m is built on the host CPU; on Modal it is ~4x slower than on an M-series laptop
 (a/30: ~8 min), and grows ~h^-2.7.
+
+## S_m cache and references (CPU containers)
+
+`FreeSpaceAnnulus(cache=...)` / `NEST_S_CACHE`: S_m stored once in float64 under `S_<key>/`
+(`S.npy`, `S_o.npy`, `meta.json`; key = axes, |m| set, z-fold, quadrature rule, source of the
+building code) and loaded afterwards. GPU jobs should set `NEST_S_CACHE=/results/cyl/S_cache` and
+find their S_m built beforehand, so the GPU never waits on the host-CPU build.
+
+- `run_s_ref.sh FRAC JOBS`: `tests/cyl_s_build.py build` on a CPU container (`cpu` 32; memory
+  ~2x the float64 rows: 16 GB to a/30, 24 GB a/40, 32 GB a/50, 48 GB a/60) for the production
+  precise_QA grid of a/FRAC (`s_grids.json` from `tests/cyl_s_build.py grids`, local with DESC).
+  It checks the process pool bitwise against the serial build, builds into
+  `/results/cyl/S_cache`, and spot-checks the quadrature (32 points / ratio 0.08 against the
+  default 16 / 0.15); summary in `/results/cyl/s_ref/s_ref_a<FRAC>.json`.
+  a/20 on 32 processes: S 5 s (0.66 GB float64); pool bitwise; quadrature <= 4.5e-12 to |m| = 495.

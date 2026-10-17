@@ -56,7 +56,6 @@ def check(name, f):
 
 
 if __name__ == "__main__":
-    os.environ["NEST_CACHE"] = os.environ.get("NEST_CACHE", "on")
     out = {}
     out["cyl_f32"] = check("cylindrical float32", T._fields(dtype=jnp.float32))
     out["cyl_f64"] = check("cylindrical float64", T._fields(dtype=jnp.float64))
