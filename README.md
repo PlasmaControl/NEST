@@ -17,7 +17,13 @@ Fixed-boundary MHD solver with non-nested flux surfaces, starting from a DESC fr
 - [x] Optimization loop over the J coefficients: Levenberg-Marquardt with a block preconditioner (`nest/optimize.py`, `nest/precondition.py`, `scripts/optimize_qa.py`)
 
 - [ ] For the dshape tokamak, we need make a correction to the initial B_plasma computed from FFT (intrinsic error due to the grid resolution h). So using a biot-savart calculation for B_plasma from J_DESC. The only error will in the computation of delta_B during the optimization. Eventually the cylindric grid can solve this issue and we don't need to do that.
-- [ ] 
+- [ ] For the dshape tokamak, we need to introduce a specific perturbation and scale it to see how the island grows (look at Matt's paper on islands/other papers for this scaling law).
+- [ ] Add the free-boundary to these two tokamaks tests. See how things change.
+- [ ] For NCSX, do two cases: one with and one without the correction on the initial B_plasma, to see a) how the size of the islands are at the initialization b) if the end result is different. A validation case would be that the final islands are physical if with two very different initializations, the result is the same.
+- [ ] Add the free-boundary NCSX. See how the islands change.
+- [ ] Ultimately for all these cases, we should make sure there is a convergence with the resolution, that is the fields change are getting more and more smaller, reaching zero with the resolution.
+- [ ] Add simple and more complex tests for the FFTs and iFFTs to re-construct precisely J and B.
+- [ ] Look at other solvers like QR/SVD on multiple GPUs (https://github.com/flatironinstitute/jaxmg)
 
 
 # Questions?
