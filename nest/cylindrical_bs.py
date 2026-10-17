@@ -127,10 +127,10 @@ class CylindricalSolver(_Pytree):
         rhs = (FI - ar[:, :, 0, None] * g_in[:, None, 1:-1] - ar[:, :, 1, None] * g_out[:, None, 1:-1]
                - g_bot[:, 1:-1, None] * self.ez[None, :, 0] - g_top[:, 1:-1, None] * self.ez[None, :, 1])
         uI = self._dirichlet(rhs, k)
-        u = jnp.pad(uI, ((0, 0), (1, 1), (1, 1)))
-        u = u.at[:, 0, :].set(g_in).at[:, -1, :].set(g_out)
-        u = u.at[:, 1:-1, 0].set(g_bot[:, 1:-1]).at[:, 1:-1, -1].set(g_top[:, 1:-1])
-        return u
+        # boundary values around the interior by concatenation (transposable, unlike
+        # a scatter): rows r = R_in, R_out are the lateral faces, columns the caps
+        mid = jnp.concatenate([g_bot[:, 1:-1, None], uI, g_top[:, 1:-1, None]], axis=2)
+        return jnp.concatenate([g_in[:, None, :], mid, g_out[:, None, :]], axis=1)
 
     def solve_modes(self, F, k):
         """Free-space u for modal slabs F (K, n_r + 1, n_z + 1) with distinct-|m| indices k."""
@@ -139,7 +139,17 @@ class CylindricalSolver(_Pytree):
         pad = n * c - K
         Fp = jnp.pad(F, ((0, pad), (0, 0), (0, 0))).reshape((n, c) + F.shape[1:])
         kp = jnp.pad(k, (0, pad)).reshape(n, c)
-        out = jax.lax.map(lambda a: self._solve_chunk(a[0], a[1]), (Fp, kp))
+
+        # the linear data as the scan's carry, read chunk by chunk, and only the
+        # constant mode indices scanned over: the form JAX transposes (as in
+        # objective.SpectralInterpolator); checkpointed, so the reverse pass
+        # recomputes a chunk instead of storing it
+        @functools.partial(jax.checkpoint, policy=jax.checkpoint_policies.nothing_saveable)
+        def step(Fc, ik):
+            i, kk = ik
+            return Fc, self._solve_chunk(jax.lax.dynamic_index_in_dim(Fc, i, keepdims=False), kk)
+
+        out = jax.lax.scan(step, Fp, (jnp.arange(n), kp))[1]
         return out.reshape((n * c,) + F.shape[1:])[:K]
 
     # ------------------------------------------------------------ fields
@@ -161,8 +171,8 @@ class CylindricalSolver(_Pytree):
         N = self.N_phi
         jz = np.asarray(self.jz)
         # A_z at every signed j (FFT order): A_z^(-j) = conj A_z^(j)
-        Az_full = jnp.zeros((N,) + Az.shape[1:], Az.dtype).at[jz].set(Az)
-        Az_full = Az_full.at[(-jz[1:]) % N].set(jnp.conj(Az[1:]))
+        # FFT order (0, 1, .., M, -M, .., -1): the negative half is conj A_z^(M..1)
+        Az_full = jnp.concatenate([Az, jnp.conj(Az[1:])[::-1]], axis=0)
         inv_r = (1.0 / self.r)[None, :, None]
         Bp = (1j * _along(self.Dz, Ap, 2)
               - 1j * (_along(self.Dr, Az_full, 1) - self.mz_full()[:, None, None] * inv_r * Az_full))

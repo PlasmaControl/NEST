@@ -138,8 +138,17 @@ def test_C3_tangent_adjoint():
     _, vjp = jax.vjp(lin, v)
     lhs, rhs = float(jnp.sum(lin(v) * w)), float(jnp.sum(v * vjp(w)[0]))
     ea = abs(lhs - rhs) / abs(lhs)
-    print(f"  C3 tangent vs jax.jvp {e:.1e}; adjoint <Jv, w> vs <v, J^T w> {ea:.1e}")
-    assert e < 1e-12 and ea < 1e-12
+    # the optimizer's J^T w is jax.linear_transpose of the tangent (objective._lin_T),
+    # a different mechanism from jax.vjp: it needs the transposable scan form
+    from objective import ForceBalance, ObjectiveFunction
+    obj = ObjectiveFunction([ForceBalance()], f).build()
+    wf = jnp.asarray(rng.standard_normal(obj.dim_f))
+    jtw = obj.vjp_scaled_error(wf, x0)
+    _, vjp_o = jax.vjp(lambda xx: obj.jvp_scaled_error(xx, x0), v)
+    elt = float(jnp.abs(jtw - vjp_o(wf)[0]).max() / jnp.abs(jtw).max())
+    print(f"  C3 tangent vs jax.jvp {e:.1e}; adjoint <Jv, w> vs <v, J^T w> {ea:.1e}; "
+          f"ObjectiveFunction J^T w (linear_transpose) vs vjp {elt:.1e}")
+    assert e < 1e-12 and ea < 1e-12 and elt < 1e-12
 
 
 if __name__ == "__main__":

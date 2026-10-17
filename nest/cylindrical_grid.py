@@ -202,13 +202,22 @@ class CylindricalInterpolator(_Pytree):
         planes_c = jnp.einsum("kj,jab->kab", self.Ep, Bp)
         planes_z = jnp.real(jnp.einsum("kj,jab->kab", self.Ez, Bz))
 
-        def one(args):
-            Pc, Pz, yr, yz = args
+        # planes as the scan's carry and the points' coordinates scanned over (the
+        # form JAX transposes, as in objective.SpectralInterpolator)
+        import functools
+
+        @functools.partial(jax.checkpoint, policy=jax.checkpoint_policies.nothing_saveable)
+        def one(carry, args):
+            Pcs, Pzs = carry
+            k, yr, yz = args
+            Pc = jax.lax.dynamic_index_in_dim(Pcs, k, keepdims=False)
+            Pz = jax.lax.dynamic_index_in_dim(Pzs, k, keepdims=False)
             Ir = _bary_rows(yr, self.nodes_r, self.w_r)
             Iz = _bary_rows(yz, self.nodes_z, self.w_z)
             c = jnp.sum((Ir @ Pc.real + 1j * (Ir @ Pc.imag)) * Iz, axis=1)
             z = jnp.sum((Ir @ Pz) * Iz, axis=1)
-            return jnp.stack([c.real, c.imag, z], axis=-1)
+            return carry, jnp.stack([c.real, c.imag, z], axis=-1)
 
-        out = jax.lax.map(one, (planes_c, planes_z, self.yr, self.yz))  # (n_planes, P, 3)
+        out = jax.lax.scan(one, (planes_c, planes_z),
+                           (jnp.arange(self.n_planes), self.yr, self.yz))[1]  # (n_planes, P, 3)
         return out.reshape(-1, 3)[self.unsort]
