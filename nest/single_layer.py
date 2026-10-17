@@ -79,7 +79,13 @@ def _panel_rule(nodes, p_star, delta, n_gl, ratio=0.15, eps=1e-11, q=6):
     return p_star + off.ravel(), wts.ravel(), off.ravel()
 
 
-def single_layer_matrix(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False, dtype=np.float64):
+def _block(geo_ns, ms, targets, n_gl, ratio, dtype):
+    """One block of targets (process-pool worker; spawn-safe, module level)."""
+    return single_layer_matrix(geo_ns, ms, targets, n_gl, ratio, dtype=dtype, n_jobs=1)
+
+
+def single_layer_matrix(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False, dtype=np.float64,
+                        n_jobs=None):
     """S_m from the packed face values of sigma to S_m[sigma] at targets.
 
     Parameters
@@ -87,19 +93,64 @@ def single_layer_matrix(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False, dty
     ap : AnnulusPoisson
     ms : sequence of int (|m| is used); the result is in this order.
     targets : (n_t, 2) array of (r, z).
+    n_jobs : int or None
+        Worker processes over blocks of targets (each row is independent, and a
+        block is computed exactly as serially, so the result is bitwise the same).
+        None: the env NEST_S_JOBS, else 1 (serial). Opt-in: not measured faster on
+        the laptop (the serial path batches the Q recurrence over targets instead).
 
     Returns (len(ms), n_t, ap.n_boundary), of ``dtype`` (float32 halves the largest
     precomputed array; entries are computed in float64 either way).
     """
+    import os
+    targets = np.atleast_2d(np.asarray(targets, dtype=float))
+    if n_jobs is None:
+        n_jobs = int(os.environ.get("NEST_S_JOBS", 1))
+    n_jobs = max(1, min(int(n_jobs), len(targets) // 8))
+    if n_jobs > 1:
+        import multiprocessing as mp
+        import time
+        from concurrent.futures import ProcessPoolExecutor
+        from types import SimpleNamespace
+        geo_ns = SimpleNamespace(r_axis=ap.r_axis, z_axis=ap.z_axis, face_sizes=dict(ap.face_sizes),
+                                 n_boundary=ap.n_boundary)
+        blocks = np.array_split(np.arange(len(targets)), 4 * n_jobs)
+        S = np.zeros((len(ms), len(targets), ap.n_boundary), dtype=dtype)
+        t0 = time.time()
+        # one BLAS thread per worker (the children inherit the environment at spawn)
+        pin = {k: "1" for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+                                "VECLIB_MAXIMUM_THREADS")}
+        saved = {k: os.environ.get(k) for k in pin}
+        os.environ.update(pin)
+        try:  # processes (spawn: safe with JAX threads); threads where the OS forbids them
+            ex = ProcessPoolExecutor(n_jobs, mp_context=mp.get_context("spawn"))
+            kind = "processes"
+        except (OSError, PermissionError, NotImplementedError):
+            from concurrent.futures import ThreadPoolExecutor
+            ex, kind = ThreadPoolExecutor(n_jobs), "threads"
+        with ex:
+            futs = [(b, ex.submit(_block, geo_ns, np.asarray(ms), targets[b], n_gl, ratio, dtype))
+                    for b in blocks]
+            for k, v in saved.items():  # the workers have started
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+            for i, (b, f) in enumerate(futs):
+                S[:, b] = f.result()
+                if verbose and (i + 1) % max(1, len(futs) // 10) == 0:
+                    print(f"    S_m: {b[-1] + 1}/{len(targets)} targets ({n_jobs} {kind}, "
+                          f"{time.time() - t0:.0f} s)", flush=True)
+        return S
     ms = np.asarray(ms)
     am = np.abs(ms)
     m_max = int(am.max())
-    targets = np.atleast_2d(np.asarray(targets, dtype=float))
     geo = _face_geometry(ap)
     sizes = ap.face_sizes
     offs = np.cumsum([0] + [sizes[f] for f in FACES])
     S = np.zeros((len(ms), len(targets), ap.n_boundary), dtype=dtype)
-    for it, (rt, zt) in enumerate(targets):
+    def geometry(rt, zt):
+        """The quadrature of every face for one target: (rp, d2, w) and the Lagrange maps."""
         rows, cols, lags = [], [], []
         for fi, f in enumerate(FACES):
             axis, (which, c) = geo[f]
@@ -116,17 +167,36 @@ def single_layer_matrix(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False, dty
             rows.append((rp, d2, w))
             lags.append(axis.interp_matrix(l))
             cols.append(slice(offs[fi], offs[fi + 1]))
-        rp = np.concatenate([x[0] for x in rows])
-        d2 = np.concatenate([x[1] for x in rows])
-        w = np.concatenate([x[2] for x in rows])
-        rr = rt * rp
-        Q = toroidal_Q(d2 / (2 * rr), m_max)[am]  # (n_m, n_q)
-        kw = Q * (-0.5 * w * rp / (np.pi * np.sqrt(rr)))[None, :]
-        i0 = 0
-        for col, Lm in zip(cols, lags):
-            nq = Lm.shape[0]
-            S[:, it, col] = kw[:, i0:i0 + nq] @ Lm
-            i0 += nq
-        if verbose and (it + 1) % max(1, len(targets) // 10) == 0:
-            print(f"    S_m: {it + 1}/{len(targets)} targets", flush=True)
+        return (np.concatenate([x[0] for x in rows]), np.concatenate([x[1] for x in rows]),
+                np.concatenate([x[2] for x in rows]), cols, lags)
+
+    # targets in blocks sharing one toroidal_Q call: its recurrences are elementwise, so
+    # this is bitwise the per-target result with the Python loop amortized over the block
+    block_bytes = float(os.environ.get("NEST_S_BLOCK_BYTES", 2e8))
+    it, done = 0, 0
+    while it < len(targets):
+        geos, n_q = [], 0
+        while it < len(targets) and (not geos or 16 * (m_max + 1) * n_q < block_bytes):
+            g = geometry(*targets[it])
+            geos.append((it, g))
+            n_q += len(g[0])
+            it += 1
+        rt_all = np.concatenate([np.full(len(g[0]), targets[j][0]) for j, g in geos])
+        rp_all = np.concatenate([g[0] for _, g in geos])
+        rr_all = rt_all * rp_all
+        Q_all = toroidal_Q(np.concatenate([g[1] for _, g in geos]) / (2 * rr_all), m_max)[am]
+        q0 = 0
+        for j, (rp, d2, w, cols, lags) in geos:
+            nq = len(rp)
+            Q, rr = Q_all[:, q0:q0 + nq], rr_all[q0:q0 + nq]
+            q0 += nq
+            kw = Q * (-0.5 * w * rp / (np.pi * np.sqrt(rr)))[None, :]
+            i0 = 0
+            for col, Lm in zip(cols, lags):
+                nq_f = Lm.shape[0]
+                S[:, j, col] = kw[:, i0:i0 + nq_f] @ Lm
+                i0 += nq_f
+        if verbose and (it - done) and (it * 10 // len(targets) > done * 10 // len(targets)):
+            print(f"    S_m: {it}/{len(targets)} targets", flush=True)
+        done = it
     return S
