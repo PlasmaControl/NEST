@@ -38,6 +38,48 @@ import numpy as np
 FACES = ("in", "out", "bot", "top")
 
 
+def _n_threads(K):
+    """Threads for the per-mode eigendecompositions: $NEST_EIG_THREADS, else the usable CPUs
+    (at most 32, at most one per 8 modes) when BLAS can be held to one thread per call
+    (threadpoolctl, or OMP/OPENBLAS/MKL/VECLIB thread counts of 1 in the environment), else 1:
+    with multithreaded BLAS calls the threads oversubscribe (a/30 on 8 cores: 36 s against 9 s
+    serial; pinned: 1.3 s against 6.4 s)."""
+    import os
+    env = os.environ.get("NEST_EIG_THREADS")
+    if env is not None:
+        return max(1, int(env))
+    pinned = any(os.environ.get(k) == "1" for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                                                   "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"))
+    if not pinned:
+        try:
+            import threadpoolctl  # noqa: F401
+        except ImportError:
+            return 1
+    try:
+        n = len(os.sched_getaffinity(0))
+    except AttributeError:
+        n = os.cpu_count() or 1
+    return max(1, min(32, n, K // 8))
+
+
+def _pin_worker():
+    try:
+        from threadpoolctl import threadpool_limits
+        threadpool_limits(1)
+    except ImportError:
+        pass
+
+
+def _blas_single_thread():
+    """Context limiting BLAS/LAPACK to one thread per caller (threadpoolctl if available)."""
+    try:
+        from threadpoolctl import threadpool_limits
+        return threadpool_limits(1)
+    except ImportError:
+        import contextlib
+        return contextlib.nullcontext()
+
+
 def _real_eig(A, what):
     lam, V = np.linalg.eig(A)
     if np.max(np.abs(lam.imag) / np.abs(lam)) > 1e-10 or np.max(np.abs(V.imag)) > 1e-10:
@@ -84,15 +126,33 @@ class AnnulusPoisson:
         self.Vr = np.empty((K, nr - 1, nr - 1))
         self.Vr_inv = np.empty((K, nr - 1, nr - 1))
         self.ar = np.empty((K, nr - 1, 2))  # in, out columns on interior rows
-        self.cond_Vr = np.empty(K)
-        for k, m in enumerate(self.ms):
+
+        def radial(k):
+            m = self.ms[k]
             Lr = Lr0 - np.diag(m**2 / r**2)
             lam, V = _real_eig(Lr[I, I], f"L_r, m = {m}")
             self.lam_r[k], self.Vr[k] = lam, V
             self.Vr_inv[k] = np.linalg.inv(V)
             self.ar[k] = Lr[I][:, [0, nr]]
-            self.cond_Vr[k] = np.linalg.cond(V)
+
+        n_threads = _n_threads(K)
+        if n_threads > 1:  # independent modes; LAPACK releases the GIL
+            from concurrent.futures import ThreadPoolExecutor
+            # the limit in each worker too: OpenMP thread counts (OpenMP OpenBLAS) are per thread
+            with _blas_single_thread(), ThreadPoolExecutor(n_threads, initializer=_pin_worker) as ex:
+                list(ex.map(radial, range(K)))
+        else:
+            for k in range(K):
+                radial(k)
         self.Lr0 = Lr0
+
+    @property
+    def cond_Vr(self):
+        """2-norm condition numbers of the radial eigenvector matrices (computed on demand:
+        an SVD per mode, ~1/4 of the setup if done eagerly)."""
+        if not hasattr(self, "_cond_Vr"):
+            self._cond_Vr = np.array([np.linalg.cond(V) for V in self.Vr])
+        return self._cond_Vr
 
     # ------------------------------------------------------------ operators
     def k_of(self, m):
