@@ -38,7 +38,7 @@ Rms of |B − B_ref| / max|B_ref|, volume-weighted inside:
    - Outside, it is about 0.5×, and converges at about O(h²): 5.5e-4 → 2.5e-4 → 1.2e-4.
    - Inside, both are limited by the kink at ρ = 1. All maximum errors (≈ 1%) sit in ρ 0.95–1.
 2. **About 7× fewer points at equal h** (4.5M against 32.3M at a/15). Cylindrical a/10, with 22× fewer points, matches box a/15 outside the plasma (5.5e-4 against 4.8e-4).
-3. **The references agree with each other.** The box's distance from cylindrical a/20 (1.23e-3 and 5.1e-4) equals its error measured earlier on main against VG a/30 (1.4e-3 and 5.2e-4).
+3. **The references agree with each other.** The box's distance from cylindrical a/20 (1.23e-3 and 5.1e-4) is close to its error measured earlier on main against VG a/30 (1.4e-3 and 5.2e-4; within 14% and 2%).
 4. **Interior convergence is irregular.** a/10 → a/15 → a/20 does not follow a clean power law, as is typical for a kink on a non-aligned grid. The cylindrical a/20 interior error is bracketed between 1.5e-4 and 5.3e-4 by an O(h²) argument; point 3 favours the low end.
 
 ## Checks

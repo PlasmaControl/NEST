@@ -18,7 +18,7 @@ Options: `dtype` (float32 default, as main), `S_dtype` (float32), `cyl_half` (st
 
 | Gate | Result |
 |---|---|
-| A1–A5 | Chebyshev operators; κ(V_r) ≤ 4 for \|m\| ≤ 738; Q_{m−½} vs mpmath 5e-11 at m = 1000; S_m vs a 3-D integral 4e-15 |
+| A1–A5 | Chebyshev operators; κ(V_r) ≤ 4 for \|m\| ≤ 738; Q_{m−½} vs mpmath 5e-11 at m = 1000; S_m vs a 3-D integral 4.3e-15 |
 | A5b | z-folded S_m vs dense 2e-15, storage exactly ½ |
 | A6 | scalar free-space solve vs Gaussian charges 1.1e-12 (n = 96, N_φ = 251) |
 | B1–B3 | JAX vs NumPy 1e-15; manufactured field 1.8e-12; div B 1e-15; adjoint 4e-15; `check_grads` |

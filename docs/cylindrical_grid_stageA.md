@@ -19,9 +19,9 @@ All gates run with `python tests/test_cylindrical_bs.py` (about 75 s locally); t
 |---|---|---|
 | A1 operators | Polynomials exact (D 1e-12 at n = 128); sin(5x)eˣ to 1e-13 by n = 32 | ✓ |
 | A2 eigen | Unmapped: real negative spectra for all \|m\| ≤ 738 (a/30 size); reconstruction ≤ 6e-15; **κ(V_r) ≤ 4** | ✓ |
-| A3 Dirichlet | Eigen against dense solve: residual ≤ 4e-16, forward difference within κ·eps (κ(A) ≈ 4e5). Manufactured u: 6e-9 at n = 16 → 1e-14 at n = 24, for m from 0 to 400. σ self-converges to 1e-13. | ✓ (criterion (a) amended, see below) |
-| A4 Q_{m−½} | Against mpmath ≤ 2e-15 for m ≤ 5. Worst is 5e-11 at m = 1000, χ − 1 = 1e-12 (forward range). Switch continuous to 7e-14; k_m against the t-integral ≤ 2e-14 | ✓ |
-| A5 S_m | Against the 3-D surface integral ≤ 4e-15 (**sign and 2π confirmed**); on the surface against adaptive quad ≤ 2e-12 to m = 300; corner rows identical; panel rule converged to 2e-12 | ✓ (entry criterion amended) |
+| A3 Dirichlet | Eigen against dense solve: residual ≤ 4e-16, forward difference within κ·eps (κ(A) ≈ 4e5). Manufactured u: 6e-9 at n = 16 → ≤ 5e-15 at n = 24 (rounding level; ≤ 1.2e-14 at n = 32–64), for m from 0 to 400. σ self-converges to 1e-13. | ✓ (criterion (a) amended, see below) |
+| A4 Q_{m−½} | Against mpmath ≤ 3e-15 for m ≤ 5. Worst is 5e-11 at m = 1000, χ − 1 = 1e-12 (forward range). Switch continuous to 7e-14; k_m against the t-integral ≤ 2e-14 | ✓ |
+| A5 S_m | Against the 3-D surface integral ≤ 4.3e-15 (**sign and 2π confirmed**); on the surface against adaptive quad ≤ 2e-12 to m = 300; corner rows identical; panel rule converged to 2e-12 | ✓ (entry criterion amended) |
 | A6 free space | Gaussian charges, both shifts: **1.1e-12 at n = 96, N_φ = 251**, converging spectrally (figure below); g on ∂Ω at the same level | ✓ |
 
 ![A6 convergence](a6_convergence.png)
@@ -36,7 +36,7 @@ All gates run with `python tests/test_cylindrical_bs.py` (about 75 s locally); t
 ## Amended criteria (recorded, not hidden)
 
 - A3(a): "≤ 1e-11 relative" was replaced by backward error ≤ 1e-14 plus a forward difference within 10 κ(A) eps. Random data with κ(A) ≈ 4e5 cannot meet 1e-11 in any backward-stable solver.
-- A5(iii): entry stability 1e-13 became 1e-11. The floor at high m is Q's recurrence accuracy near χ = 1 (gate A4).
+- A5(iii): entry stability (plan 1e-13) became 1e-11. In the test, the bound on the entry change `dp` moved 1e-12 → 1e-11; its other bound (`dc` < 1e-13) is unchanged. The floor at high m is Q's recurrence accuracy near χ = 1 (gate A4).
 
 ## Cost at the real precise_QA sizes (laptop CPU, NumPy)
 
