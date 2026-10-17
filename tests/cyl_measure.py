@@ -148,7 +148,7 @@ def box(frac, rng):
     src = np.full(size, n_all, np.int32)
     src[inside] = np.arange(n_all)
     src = jnp.asarray(src)
-    rows = jnp.asarray(rng.choice(n_in, n_all - n_in, replace=False))
+    rows = jnp.asarray(rng.choice(n_in, n_all - n_in, replace=n_all - n_in > n_in))  # odd n_all
 
     def fwd(K_hat, sp, src, J):
         J = jnp.concatenate([J, J[rows] * jnp.asarray([-1.0, 1.0, 1.0], f32)])
