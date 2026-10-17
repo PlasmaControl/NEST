@@ -108,8 +108,8 @@ def single_layer_matrix_jax(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False,
     am = np.abs(ms)
     m_max = int(am.max())
     n_m, n_t = len(ms), len(targets)
-    if m_max < 2:
-        raise ValueError("m_max >= 2 expected")
+    if m_max < 1:
+        raise ValueError("m_max >= 1 expected")
     geo = _face_geometry(ap)
     sizes = ap.face_sizes
     offs = np.cumsum([0] + [sizes[f] for f in FACES])

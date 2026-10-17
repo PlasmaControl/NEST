@@ -190,11 +190,14 @@ def single_layer_matrix(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False, dty
     block_bytes = float(os.environ.get("NEST_S_BLOCK_BYTES", 2e8))
     it, done = 0, 0
     while it < len(targets):
-        geos, n_q = [], 0
-        while it < len(targets) and (not geos or 16 * (m_max + 1) * n_q < block_bytes):
+        geos, n_q, n_lag = [], 0, 0
+        # the block's Q (16 (m_max + 1) bytes per point) and Lagrange matrices (8 bytes per
+        # entry; they dominate when few modes are built, e.g. axisymmetric |m| <= 1)
+        while it < len(targets) and (not geos or 16 * (m_max + 1) * n_q + 8 * n_lag < block_bytes):
             g = geometry(*targets[it])
             geos.append((it, g))
             n_q += len(g[0])
+            n_lag += sum(L.size for L in g[4])
             it += 1
         rt_all = np.concatenate([np.full(len(g[0]), targets[j][0]) for j, g in geos])
         rp_all = np.concatenate([g[0] for _, g in geos])

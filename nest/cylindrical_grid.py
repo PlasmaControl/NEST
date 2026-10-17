@@ -31,15 +31,26 @@ class CylindricalGrid:
         self.inside = self.rtz = None
 
     @classmethod
-    def around(cls, eq, h, margin=2.0, alpha=0.0, extent=None):
-        """Grid with spacing at most h over the plasma, walls margin h beyond it."""
+    def around(cls, eq, h, margin=2.0, alpha=0.0, extent=None, axisym=None):
+        """Grid with spacing at most h over the plasma, walls margin h beyond it.
+
+        ``axisym`` (default: the equilibrium has N = 0): one plane, N_phi = 1. The solve is
+        then exactly two 2-D problems (|m| = 0 for A_z, 1 for A_r + i A_phi), the same as on
+        N_phi > 1 planes for an axisymmetric J (gate D3a), at a cost independent of phi.
+        Valid only when J is axisymmetric (a current basis with N = 0)."""
         R_min, R_max, Z_min, Z_max = extent or plasma_extent(eq)
         d = margin * h
         ra = ChebAxis.for_spacing(R_min - d, R_max + d, R_min, R_max, h, alpha)
         za = ChebAxis.for_spacing(Z_min - d, Z_max + d, Z_min, Z_max, h, alpha)
-        NFP = int(eq.NFP if hasattr(eq, "NFP") else eq.eq.NFP)
-        N_phi = int(np.ceil(2 * np.pi * (R_max + d) / (NFP * h)))
-        N_phi += 1 - N_phi % 2
+        e = eq.eq if hasattr(eq, "eq") else eq
+        NFP = int(e.NFP)
+        if axisym is None:
+            axisym = int(e.N) == 0
+        if axisym:
+            N_phi = 1
+        else:
+            N_phi = int(np.ceil(2 * np.pi * (R_max + d) / (NFP * h)))
+            N_phi += 1 - N_phi % 2
         g = cls(ra, za, NFP, N_phi)
         g.h, g.margin = h, margin
         return g
