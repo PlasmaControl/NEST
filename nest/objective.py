@@ -99,6 +99,11 @@ class Fields(_Pytree):
         Of J and B on the box and of the non-uniform FFT.
     chunk : int
         Points per chunk of the interpolations.
+    j_compact : bool, optional
+        J sampling (flux grid -> box points) with the stencils formed per chunk from the
+        points' stencil coordinates (25 bytes per point) instead of cached (64 indices,
+        weights and signs, 1280 bytes per point in float64); the same values to rounding.
+        Default: on for the cylindrical path, off for main's box (unchanged).
     """
 
     # arrays passed to the jitted functions as inputs (not compiled in as constants)
@@ -107,7 +112,7 @@ class Fields(_Pytree):
 
     def __init__(self, force, current, pressure, kernel="hockney", flux_grid=None, order=4,
                  dtype=jnp.float32, chunk=65536, share=None, S_dtype=jnp.float32, mode_chunk=16,
-                 cyl_half=True, cyl_dtype=jnp.float64):
+                 cyl_half=True, cyl_dtype=jnp.float64, j_compact=None):
         eq, box = force.inp.eq, force.box
         from cylindrical_grid import CylindricalGrid
         self.cyl = isinstance(box, CylindricalGrid)
@@ -167,7 +172,8 @@ class Fields(_Pytree):
                 other = mirror != inside  # the midplane line of plane 0 is its own mirror
                 self.half, self.half_rows = mirror[other], np.flatnonzero(other)
             # in the precision of the cylindrical solve (``cyl_dtype``)
-            self.to_box = PointInterpolator(fg, rtz, order, chunk=chunk, dtype=cyl_dtype)
+            self.to_box = PointInterpolator(fg, rtz, order, chunk=chunk, dtype=cyl_dtype,
+                                            compact=True if j_compact is None else bool(j_compact))
             self.box_phi = None
             n, n_h = len(inside), 0 if self.half is None else len(self.half)
             src = np.full(box.size, n + n_h, np.int32)
@@ -194,7 +200,7 @@ class Fields(_Pytree):
             other = mirror != inside  # points on y = z = 0 are their own mirror
             self.half, self.half_rows = mirror[other], np.flatnonzero(other)
         # in the precision of the box fields (J on the box is stored in it)
-        self.to_box = PointInterpolator(fg, rtz, order, chunk=chunk, dtype=dtype)
+        self.to_box = PointInterpolator(fg, rtz, order, chunk=chunk, dtype=dtype, compact=bool(j_compact))
         self.box_phi = jnp.asarray(rtz[:, 2])
         # J on the box as one gather: each box point takes a row of [J at the
         # interpolated points; their mirrors; 0] (a scatter onto a zero box would
