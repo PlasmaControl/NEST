@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-10-18: Compact J sampling (branch `cylindrical-grid`)
+- `PointInterpolator(compact=True)`: the 4x4x4 Lagrange stencil formed per chunk from the points' stencil coordinates (25 bytes per point against 1280); values to rounding (<= 7e-16). `Fields(j_compact=...)`, `optimize_qa --j-sampling compact|cached`; default compact on the cylindrical grid, main's box unchanged.
+- GPU (A100, production precise_QA, 5 iterations): no time cost (a/20 22.8 vs 23.0 s/it, a/30 51.1 vs 52.4), peak memory -0.48 GiB at a/20 and -1.63 GiB at a/30 (the cache size); the J -> B model drops 1.26x at a/40. Docs: `docs/cylindrical_grid.md`, "Compact J sampling".
+
 ## 2026-10-17: Cylindrical grid: mapped (KTE) nodes supported; not a memory lever (branch `cylindrical-grid`)
 - `annulus_poisson`: radial eigendecompositions in real block form (complex pairs of mapped operators, `_block_eig`), complex z eigenbasis when the mapped z operator has pairs; `CylindricalSolver` divides per pair. Unmapped grids run the previous path (bitwise). Gate A2c (block reconstruction 4.5e-15, Dirichlet vs dense <= 1.5e-13, NumPy and JAX).
 - `tests/cyl_b4.py cyl --alpha`. B4 on the smooth-current precise_QA: at equal h the map halves the nodes but raises the error (a/20 2.25e-4 -> 2.8e-4); at equal accuracy it needs 1.24-1.39x fewer total nodes but 1.2-1.3x more inside nodes (J sampling), converging more slowly. No net memory saving; default stays alpha = 0. Docs: `docs/cylindrical_grid.md`, "Mapped nodes".

@@ -259,6 +259,36 @@ previous code path (bitwise).
   fall in the plasma's edge region, where J's kink sets the error; they were not wasted.
 - Default stays α = 0 (unmapped). The map is available (`alpha`), e.g. for grids with large margins.
 
+## Compact J sampling (2026-10-18): the cache was memory, not speed
+
+J on the grid points comes from the flux-grid J by tensor-product Lagrange interpolation
+(`PointInterpolator`, 4 points per direction). The cache stored the whole 4×4×4 stencil per
+point (64 int32 indices, 64 weights, 64 signs: 1280 bytes in float64). Only the inverse map that
+gives each node's (ρ, θ, ζ) is expensive (Newton, minutes at fine h); the stencil follows from
+three coordinates in a few dozen operations. `PointInterpolator(compact=True)` stores those
+coordinates and the point's symmetry sign (25 bytes) and forms the stencil per chunk inside the
+jitted apply, with the same arithmetic (values to rounding, ≤ 7e-16; not bitwise, as XLA fuses the
+weights into the gather). `Fields(j_compact=...)`, `optimize_qa --j-sampling compact|cached`:
+default compact on the cylindrical grid, cached (unchanged) on main's box.
+
+GPU (A100-40GB, production precise_QA: factors 3, 3, 2.5, float64 cylindrical, cold start, defaults;
+`scripts/modal_cyl/run_jc.sh`, 5 iterations each; nvidia-smi peak with the platform allocator):
+
+| h | J sampling | s / iteration | peak GPU memory | ⟨\|F\|⟩ / norm after 5 |
+|---|---|---|---|---|
+| a/20 | cached | 23.0 | 6.79 GiB | 1.240e-4 |
+| a/20 | compact | 22.8 | 6.31 GiB | 1.242e-4 |
+| a/30 | cached | 52.4 | 11.63 GiB | 1.239e-4 |
+| a/30 | compact | 51.1 | 10.00 GiB | 1.239e-4 |
+
+- No time cost (a/20: iterations 3–5; its compact iteration 2 took 46 s once, a one-time compile).
+- The saving is the cache: 0.52 GB at a/20, 1.75 GB at a/30, as predicted (0.53, 1.71 GB). It grows
+  like the inside nodes (h⁻³): in the XLA model of the J → B program (float64, `memory_f64opt.json`)
+  the totals drop 1.21× at a/20, 1.25× at a/30, 1.26× at a/40 (18.5 → 14.7 GB) and 1.27× at a/60
+  (60.9 → 48.0 GB), moving the estimated finest h on one A100-80GB from ~a/60–65 to ~a/65–70
+  (model, not measured).
+- Main's box path could use the same option (`--j-sampling compact`); its default is unchanged.
+
 ## Verdict (revised after stage D)
 
 The cylindrical grid is validated as more accurate and more economical than main's box, by less than the overnight float32 estimate:
@@ -269,7 +299,7 @@ The cylindrical grid is validated as more accurate and more economical than main
 ## Open items
 
 Validation: a float64 GPU memory ladder; a converged (100-iteration) cylindrical run checked on a finer float64 cylindrical grid; an h-ladder at fixed basis (where refining h stops lowering the checked force); NCSX and W7-X (larger predicted gains); combination with the container-mask free boundary.
-Optimizations: folding S_m per chunk as it is built (peak host RAM ~2.4× → ~1.1× S_m; the limit at a/60); mode truncation (if J's φ-spectrum allows); on-the-fly J-sampling weights (the J-sampling cache scales with the inside nodes, 4.0 of ~14 GB at a/40, and is now the largest memory lever; the KTE map is not one, see "Mapped nodes"); low-rank S_m blocks; solve symmetry; mixed precision (limited: 7.7e-5 at a/20).
+Optimizations: folding S_m per chunk as it is built (peak host RAM ~2.4× → ~1.1× S_m; the limit at a/60); mode truncation (if J's φ-spectrum allows); on-the-fly J-sampling weights for main's box (done for the cylindrical grid, "Compact J sampling"; the KTE map is not a lever, see "Mapped nodes"); low-rank S_m blocks; solve symmetry; mixed precision (limited: 7.7e-5 at a/20).
 
 ## Notes for main
 
