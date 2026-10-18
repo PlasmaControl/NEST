@@ -277,7 +277,7 @@ class PointInterpolator(_Pytree):
         s_t = np.mod(rtz[:, 1], 2 * np.pi) / d_t
         s_z = (rtz[:, 2] if grid.sym else np.mod(rtz[:, 2], 2 * np.pi / grid.NFP)) / d_z
         self.compact = bool(compact)
-        if self.compact:
+        if self.compact:  # (attributes of the cached form are None)
             self.idx = self.w = self.sign = None
             self.s = jnp.asarray(np.stack([s_r, s_t, s_z], axis=1), jnp.float64)
             self.sign_pt = jnp.asarray(sign_pt.astype(np.int8))
@@ -369,6 +369,10 @@ class PointInterpolator(_Pytree):
         w = (wr[:, :, None, None] * wt[:, None, :, None] * wz[:, None, None, :]).reshape(n, -1)
         sign = (sign * sign_pt.astype(self.dtype)[:, None, None, None]).reshape(n, -1)
         return idx, w.astype(self.dtype), sign
+
+    @property
+    def n_points(self):
+        return int((self.s if self.compact else self.idx).shape[0])
 
     @property
     def nbytes(self):

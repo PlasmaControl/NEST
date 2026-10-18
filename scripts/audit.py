@@ -174,8 +174,8 @@ def audit(frac, kernel="hockney", sym=True, colloc=None):
     groups = {"collocation: J factors + geometry": fields.J_col,
               "collocation: p factors": fields.p_col.f,
               "flux grid: J factors + geometry": fields.J_flux,
-              f"box interpolation ({fields.to_box.idx.shape[0]:,} points x "
-              f"{fields.to_box.idx.shape[1]})": fields.to_box,
+              f"box interpolation ({fields.to_box.n_points:,} points x "
+              f"{fields.to_box.order ** 3})": fields.to_box,
               "kernel K_hat": fields.K_hat, "B_ext, angles, weights": [fields.B_ext, fields.t, fields.sw],
               "DESC targets": fields.desc}
     for k, v in groups.items():

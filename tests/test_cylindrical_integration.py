@@ -156,7 +156,7 @@ def test_C2b_symmetric_half():
     Jh, Jf = np.asarray(f_h.J_box(u)), np.asarray(f_f.J_box(u))
     e = np.abs(Bh - Bf).max() / np.abs(Bf).max()
     eJ = np.abs(Jh - Jf).max() / np.abs(Jf).max()
-    print(f"  C2b half: {f_h.to_box.idx.shape[0]:,} interpolated of {f_f.to_box.idx.shape[0]:,} "
+    print(f"  C2b half: {f_h.to_box.n_points:,} interpolated of {f_f.to_box.n_points:,} "
           f"inside nodes; J on the grid {eJ:.1e}, B_plasma {e:.1e}")
     assert f_h.half is not None and e < 1e-8
 
