@@ -4,8 +4,8 @@ The normal matrix A = J^T J of the force balance is far from diagonal: the
 unknowns of one Fourier mode (every radial l of a and b, and chi, of the
 current potential) are nearly collinear in J-space, so the Jacobi scaling
 leaves a condition number of ~1e7 already at the equilibrium resolution
-(``scripts/spectrum.py``). The diagonal blocks of A over the groups of
-unknowns sharing (|m|, |n|) bring it to ~1e4 (``scripts/precond_test.py``).
+(``scripts/diagnostics/spectrum.py``). The diagonal blocks of A over the groups of
+unknowns sharing (|m|, |n|) bring it to ~1e4 (``scripts/diagnostics/precond_test.py``).
 
 A's blocks would cost one J v per unknown. Instead they are taken from the
 local part of the residual, which is cheap column by column:

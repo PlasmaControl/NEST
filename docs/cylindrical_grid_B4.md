@@ -1,6 +1,6 @@
 # Cylindrical-annulus J → B, stage B report (stop point S2)
 
-Branch `cylindrical-grid`. Gates B1–B3 are in `tests/test_cylindrical_bs.py`. B4 is `tests/cyl_b4.py` (steps `targets`, `ref`, `cyl`, `box`, `analyze`), with results in `results/cyl/b4/` (`analysis.json`, `exterior_fine.json`, one json per run).
+Branch `cylindrical-grid`. Gates B1–B3 are in `tests/test_cylindrical_bs.py`. B4 is `tests/checks/cyl_b4.py` (steps `targets`, `ref`, `cyl`, `box`, `analyze`), with results in `results/cyl/b4/` (`analysis.json`, `exterior_fine.json`, one json per run).
 
 ## B1–B3 (exact tests)
 

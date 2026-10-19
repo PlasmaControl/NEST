@@ -21,7 +21,7 @@ For an axisymmetric J = curl T (BoundaryPotential, N = 0) the plasma field split
 Accuracy is spectral in (n_gamma, n_s) for targets inside the plasma; check it by
 doubling them (``plasma_field`` with two resolutions).  The radial rule sets it near the edge:
 (256, 48) is off by ~7e-9 of rms B at rho > 0.8, (512, 48) the same, (256, 96) at round-off
-against (1024, 192) (tests/floor_fixes.py); hence the default n_s = 96.
+against (1024, 192) (tests/checks/floor_fixes.py); hence the default n_s = 96.
 
 Speed: the quadrature nodes depend on the target (n_gamma n_s = 12288 per target), and
 evaluating the Fourier-Zernike bases of J and of the equilibrium there dominated

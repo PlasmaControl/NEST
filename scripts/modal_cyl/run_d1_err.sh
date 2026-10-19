@@ -5,6 +5,6 @@ log "commit $(cat /work/commit.txt)"
 cp /work/b4_targets.npz "$V/targets.npz"
 st=0
 for f in 30 40; do
-  run b4_cyl_a$f tests/cyl_b4.py cyl --frac $f --dir "$V" || { st=$?; log "stops at a/$f"; break; }
+  run b4_cyl_a$f tests/checks/cyl_b4.py cyl --frac $f --dir "$V" || { st=$?; log "stops at a/$f"; break; }
 done
 finish; exit $st

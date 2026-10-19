@@ -471,8 +471,8 @@ def test_A5b_zfold():
 
 def test_A6_gaussian_charges():
     """Free-space scalar solve against NFP-periodic, z-asymmetric Gaussian charges, both
-    mode shifts (the full sweep, to 1e-12, is tests/cyl_a6.py)."""
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    mode shifts (the full sweep, to 1e-12, is tests/checks/cyl_a6.py)."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "checks"))
     from cyl_a6 import run_case
     r, _ = run_case(64, 151)
     for s in (0, 1):
@@ -514,7 +514,7 @@ def test_B1_jax_vs_numpy():
 def _b2_case(n, N_phi, NFP=3):
     _jax64()
     import jax.numpy as jnp
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "checks"))
     from cyl_manufactured import fields, wall_values
     from cylindrical_bs import CylindricalSolver, field, potential
     ra, za = ChebAxis(0.6, 1.4, n), ChebAxis(-0.45, 0.45, n)

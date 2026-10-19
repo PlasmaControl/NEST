@@ -9,7 +9,7 @@ export PYTHONPATH=/work/src/repo/nest:/work/src/repo/tests:${PYTHONPATH:-}
 export PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NEST_EIG_THREADS=${NEST_EIG_THREADS:-8}
 echo "[$(date +%H:%M:%S)] commit $(cat /work/commit.txt); fracs $FRACS; $(awk '/MemTotal/{print int($2/1048576)}' /proc/meminfo) GB" | tee -a /work/out/log.txt
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | tee -a /work/out/log.txt
-( cd /work/src/repo && /opt/conda/bin/python -u tests/cyl_s_gpu.py --grids /work/s_grids.json --fracs $FRACS \
+( cd /work/src/repo && /opt/conda/bin/python -u tests/checks/cyl_s_gpu.py --grids /work/s_grids.json --fracs $FRACS \
     --ref /results/cyl/S_cache --refjson /results/cyl/s_ref --out /work/out "$@" ) 2>&1 \
     | grep --line-buffered -v -i warning | tee -a /work/out/log.txt
 st=${PIPESTATUS[0]}

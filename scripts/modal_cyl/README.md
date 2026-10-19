@@ -14,11 +14,11 @@ Results go to the Volume `nest-container-mask` under `/results/cyl/<job>/` as th
 (logs, per-size JSONs, `optimize_qa` iterates), and to `out/` at the end.
 `common_cyl.sh` puts `nest/` and `tests/` on PYTHONPATH (`runpy` does not add the script's directory).
 
-- `run_d1_mem.sh`: GPU memory model (`tests/cyl_memory.py`, compile only) and measured ladders
-  (`tests/cyl_measure.py`, one process per size, device `peak_bytes_in_use`), cylindrical a/20-a/70.
+- `run_d1_mem.sh`: GPU memory model (`tests/checks/cyl_memory.py`, compile only) and measured ladders
+  (`tests/checks/cyl_measure.py`, one process per size, device `peak_bytes_in_use`), cylindrical a/20-a/70.
   Default BFC allocator (the platform allocator reports no peak). A100-80GB.
 - `run_d1_box.sh`: the same for main's VG box, a/20-a/40. A100-80GB.
-- `run_d1_err.sh`: `tests/cyl_b4.py cyl` at a/30 and a/40 (exact J) at the B4 targets
+- `run_d1_err.sh`: `tests/checks/cyl_b4.py cyl` at a/30 and a/40 (exact J) at the B4 targets
   (`b4_targets.npz` = `results/cyl/b4/targets.npz`). A100-40GB.
 - `run_d2.sh TAG <optimize_qa args>`: production `optimize_qa`, e.g.
   `--grid cylindrical --frac 20 --factors 3 3 2.5 --colloc 2 --check 3 --check-frac 20 --check-grid cartesian
@@ -39,15 +39,15 @@ a/50 `S_f7ef3567a93962fccf73b4d2`, a/60 `S_12c07916956f437409ff858f`. The keys i
 are the old ones. See also `docs/cylindrical_grid.md`, "Before a high-resolution run". See also
 `docs/cylindrical_grid.md`, "Before a high-resolution run".
 
-- `run_s_ref.sh FRAC JOBS`: `tests/cyl_s_build.py build` on a CPU container (`cpu` 32; memory
+- `run_s_ref.sh FRAC JOBS`: `tests/checks/cyl_s_build.py build` on a CPU container (`cpu` 32; memory
   ~2x the float64 rows: 16 GB to a/30, 24 GB a/40, 32 GB a/50, 48 GB a/60) for the production
-  precise_QA grid of a/FRAC (`s_grids.json` from `tests/cyl_s_build.py grids`, local with DESC).
+  precise_QA grid of a/FRAC (`s_grids.json` from `tests/checks/cyl_s_build.py grids`, local with DESC).
   It checks the process pool bitwise against the serial build, builds into
   `/results/cyl/S_cache`, and spot-checks the quadrature (32 points / ratio 0.08 against the
   default 16 / 0.15); summary in `/results/cyl/s_ref/s_ref_a<FRAC>.json`.
   a/20 on 32 processes: S 5 s (0.66 GB float64); pool bitwise; quadrature <= 4.5e-12 to |m| = 495.
 
-- `run_s_gpu.sh "FRACS" [--rekey]` (GPU container, e.g. `gpu` A100, `cpu` 8, memory 64 GB): `tests/cyl_s_gpu.py`,
+- `run_s_gpu.sh "FRACS" [--rekey]` (GPU container, e.g. `gpu` A100, `cpu` 8, memory 64 GB): `tests/checks/cyl_s_gpu.py`,
   the device S_m build (`single_layer_jax`) of each a/FRAC, timed, with the threaded eigendecompositions,
   compared mode by mode with the reference on the Volume (tolerance 5e-12 row-relative); `--rekey` renames
   a passing reference to the current key. 2026-10-17: a/20-a/60 agree to <= 3.9e-14; S_m a/60 30 s on an

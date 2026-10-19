@@ -88,7 +88,7 @@ At a/20 the caches are about 4.9 GB, the largest being the J factors and geometr
 - Per-iteration saves and a time budget (`--time-limit`) were added, so a time-out no longer loses the result.
 
 ### The 1.8e-4 plateau is a floor of the fixed-pressure problem, not the solver
-`scripts/spectrum.py` forms JᵀJ exactly at a smaller resolution and takes exact Gauss–Newton steps.
+`scripts/diagnostics/spectrum.py` forms JᵀJ exactly at a smaller resolution and takes exact Gauss–Newton steps.
 
 | Setup (potential L, M, N = 16, 16, 14; 4,910 unknowns) | Exact least-squares floor ⟨\|F\|⟩/norm |
 |---|---|
@@ -167,7 +167,7 @@ At the fixed-pressure optimum (1.09e-4), F splits along b = B/|B| into two parts
 - F_par = −b·∇p, which no current can change, is 8.5e-5: most of the total.
 - F_perp, the part J balances, is 4.8e-5, already at DESC's level.
 
-The pressure was frozen to DESC's profile, so its isosurfaces were DESC's flux surfaces. DESC's own field lies on them exactly (b_DESC·∇p ≈ 1e-17). The self-consistent coil-plus-plasma field differs from DESC's B by about 2e-3, and its field lines cross those surfaces, mostly in the core (`scripts/decompose_opt.py`).
+The pressure was frozen to DESC's profile, so its isosurfaces were DESC's flux surfaces. DESC's own field lies on them exactly (b_DESC·∇p ≈ 1e-17). The self-consistent coil-plus-plasma field differs from DESC's B by about 2e-3, and its field lines cross those surfaces, mostly in the core (`scripts/stellarator/decompose_opt.py`).
 
 A finer box (a/20) and the truncated kernel do not lower this floor; a larger potential basis (205k unknowns) lowers it only to 9.5e-5.
 
@@ -207,11 +207,11 @@ Running: the same optimization continued on the a/20 box, to bring down the erro
 
 Every radial band is below 1.1e-5.
 
-### Validation (`scripts/validate_opt.py`)
+### Validation (`scripts/stellarator/validate_opt.py`)
 - **Current:** the net toroidal current through two cross-sections equals I to 4e-15, and J = 0 on the LCFS.
 - **Exact J:** F with J evaluated exactly at the box points agrees with the objective's interpolated J to 0.2% (Hockney–Eastwood: 2.584e-5 vs 2.589e-5).
 - **Force split:** F_par = 5.9e-6 and F_perp = 4.6e-6, against 1.3e-4 and 4.5e-4 at the start.
-- **Field lines:** the Poincaré plot (`figures/freeP20_poincare.png`) shows nested surfaces lying on DESC's flux surfaces. The field of the start (fits) does not: its surfaces are shifted and the edge is partly chaotic.
+- **Field lines:** the Poincaré plot (`figures/precise_QA/freeP20_poincare.png`) shows nested surfaces lying on DESC's flux surfaces. The field of the start (fits) does not: its surfaces are shifted and the edge is partly chaotic.
 - **Pressure:** a ±2% change, lower on the inboard side and higher on the outboard side.
 - **Pressure sign:** p < 0 at 3,228 of 663k points, all at ρ ≥ 0.95, min −2.6e-4 of max p. Fixed for later runs by `PressurePositivity`, a one-sided penalty on min(p, 0) whose derivative uses the active set. The preconditioner leaves it out.
 
@@ -223,7 +223,7 @@ Every radial band is below 1.1e-5.
   - Gram matrices are accumulated over sequential radial slabs, with an optimization barrier;
   - each block's table columns are gathered outside the Gram program, so XLA keeps no copies of the full tables.
 
-### Test suite (`scripts/time_tests.py`, one A100)
+### Test suite (`scripts/diagnostics/time_tests.py`, one A100)
 All 12 test files pass, in 29 min. `test_reconstruction` needs the platform allocator for its a/30 box; the runner now sets it.
 
 | Test | Time |
@@ -276,4 +276,4 @@ DESC's ι crosses 1/2 at ρ ≈ 0.6, so a 4-island (m, n) = (4, 2) chain is expe
 - **Without a current constraint the chain disappears.** Force balance does not fix the current profile, and the optimizer lifts the ι minimum to 0.510, so ι never reaches 1/2.
 - **Scaling the pressure does not bring it back.** At fixed coils, 1.5–2.5× the pressure pushes ι up to 0.55–0.8. This happens with I(ρ) held (`--fix-I`) and with `--w-J 1e-3`. p and J stay on DESC's domain while the field shifts against it.
 - **`--w-J 1e-3` at the original pressure keeps it, as for NCSX.** ι stays within 0.015 of DESC's and the chain stays. On a/10 the force error is 2.35e-5 (3.31e-5 on the a/20 check); refined to a/20 it is 2.13e-5, against DESC's 4.24e-5. The current stays within 5 % of DESC's.
-- **Shape of the chain.** Islands at ρ ≈ 0.58–0.74 with a clean separatrix, centred at θ/π = 0.37, 0.82, 1.18, 1.63. Figure: `figures/precise_QA_wJ1_a20_poincare_flux.png`, with lines started inside the islands (`poincare.py --island-lines 12`).
+- **Shape of the chain.** Islands at ρ ≈ 0.58–0.74 with a clean separatrix, centred at θ/π = 0.37, 0.82, 1.18, 1.63. Figure: `figures/precise_QA/precise_QA_wJ1_a20_poincare_flux.png`, with lines started inside the islands (`poincare.py --island-lines 12`).

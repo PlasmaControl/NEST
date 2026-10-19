@@ -1,7 +1,7 @@
 # Cylindrical-annulus J → B, stage A report (stop point S1)
 
 Branch `cylindrical-grid`, commits 7279bda (A1) … 0893e08 (A6). Plan: `docs/cylindrical_grid_plan.md`.
-All gates run with `python tests/test_cylindrical_bs.py` (about 75 s locally); the full A6 sweep runs with `python tests/cyl_a6.py`, which writes `results/cyl/a6.json`.
+All gates run with `python tests/test_cylindrical_bs.py` (about 75 s locally); the full A6 sweep runs with `python tests/checks/cyl_a6.py`, which writes `results/cyl/a6.json`.
 
 ## New code (NumPy reference, opt-in, nothing in main's paths touched)
 

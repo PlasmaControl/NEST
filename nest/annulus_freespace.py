@@ -152,7 +152,7 @@ def S_key(ap, zsym, n_gl=16, ratio=0.15):
     |m| set, the z-fold, the quadrature rule, and ``single_layer.S_NUMERICS``, the version
     of the numerics. Edits that do not change the entries (parallelism, batching,
     documentation, a GPU path that reproduces them) keep the key, so caches survive them;
-    a change of the entries must bump S_NUMERICS (``tests/cyl_s_build.py`` compares a
+    a change of the entries must bump S_NUMERICS (``tests/checks/cyl_s_build.py`` compares a
     build against the stored references)."""
     import hashlib
 

@@ -435,7 +435,7 @@ def main():
     # finer box (and the truncated kernel; always with the given field as B_ext):
     # the optimum can otherwise fit the discretization error of B on the
     # optimization box (J on the box as in the
-    # objective: the same as evaluating it exactly there, scripts/diagnose_opt.py)
+    # objective: the same as evaluating it exactly there, scripts/stellarator/diagnose_opt.py)
     # saved first: the check is the most memory-hungry step
     np.savez(a.out + ".npz", x=np.asarray(x), x0=np.asarray(x0), u=np.asarray(u),
              c_p=np.asarray(c_p), free=free, p_scale=a.p_scale)

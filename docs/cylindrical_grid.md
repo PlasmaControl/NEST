@@ -40,7 +40,7 @@ C5 (precise_QA smooth J, a/6, factors 1, 20 iterations, cg 100; check on the VG 
 ## B5: memory and time
 
 Measures: the J → B_plasma pipeline of one optimizer product (J at the sampled nodes → B at main's production collocation, 1.65M points), forward and JᵀW (`jax.linear_transpose`).
-Model: XLA's compiled memory analysis, args + output + temporaries (`tests/cyl_memory.py`); not included are the h-independent collocation-side caches shared by both methods (~4.5 GB at production on the GPU).
+Model: XLA's compiled memory analysis, args + output + temporaries (`tests/checks/cyl_memory.py`); not included are the h-independent collocation-side caches shared by both methods (~4.5 GB at production on the GPU).
 "Optimised" cylindrical = float32 arithmetic, stellarator-symmetric half sampling, z-folded S_m (S_m in parentheses, already inside the JᵀW figure).
 **Superseded:** the float32 column is not usable in production (Stage D); the float64 figures in "Stage D" replace it for the memory comparison.
 
@@ -54,7 +54,7 @@ Model: XLA's compiled memory analysis, args + output + temporaries (`tests/cyl_m
 | a/60 | 29.09 + 7.90 = **36.99 GB** (8.29) | 82.50 GB | int32 overflow | — |
 | a/80 | 68.32 + 18.55 = **86.87 GB** (19.45) | — | int32 overflow | — |
 
-Measured (`tests/cyl_measure.py`, laptop CPU, process peak RSS including ~0.3 GB JAX runtime, synthetic J of production size):
+Measured (`tests/checks/cyl_measure.py`, laptop CPU, process peak RSS including ~0.3 GB JAX runtime, synthetic J of production size):
 
 | run | grid | nodes | J rows | build peak | fwd peak | JᵀW peak | fwd | JᵀW |
 |---|---|---|---|---|---|---|---|---|
@@ -77,7 +77,7 @@ Banded S_m was measured and dropped: in the nodal basis about a third of the ent
 
 ## Stage D: GPU results (Modal A100, 2026-10-17; scripts in `scripts/modal_cyl/`)
 
-**J → B pipeline on the GPU** (`tests/cyl_measure.py`, A100-80GB, device peak of the pipeline alone; the cylindrical rows are the float32 path, float64 costs ~1.5–2× more):
+**J → B pipeline on the GPU** (`tests/checks/cyl_measure.py`, A100-80GB, device peak of the pipeline alone; the cylindrical rows are the float32 path, float64 costs ~1.5–2× more):
 
 | h | main's box (float32): JᵀW / peak | cylindrical (float32 path): JᵀW / peak |
 |---|---|---|
@@ -85,7 +85,7 @@ Banded S_m was measured and dropped: in the nodal basis about a third of the ent
 | a/30 | 0.97 s / 21.4 GB | 0.18 s / 3.77 GB |
 | a/40 | out of memory on 80 GB (the kernel build alone reached 43 GB) | 0.33 s / 7.9 GB |
 
-**Exterior B error, cylindrical, to a/40** (`tests/cyl_b4.py cyl` on the GPU; rms over the 171 converged reference points that lie inside every annulus, `results/cyl/b4/exterior_d1.json`):
+**Exterior B error, cylindrical, to a/40** (`tests/checks/cyl_b4.py cyl` on the GPU; rms over the 171 converged reference points that lie inside every annulus, `results/cyl/b4/exterior_d1.json`):
 
 | a/10 | a/15 | a/20 | a/30 | a/40 |
 |---|---|---|---|---|
@@ -131,7 +131,7 @@ optimizer step, and depend only on the grid: a new equilibrium or a new h means 
 `optimize_qa`), S_m is built on the device (`single_layer_jax`; `NEST_S_BACKEND=auto`, the default;
 `jax` / `numpy` to force one) and the eigendecompositions run on CPU threads. Measured for the
 precise_QA production grids (`CylindricalGrid.around(inp, inp.a / frac)`, margin 2, z-folded,
-float64; Modal, 8 CPUs; `tests/cyl_s_gpu.py`, `scripts/modal_cyl/run_s_gpu.sh`):
+float64; Modal, 8 CPUs; `tests/checks/cyl_s_gpu.py`, `scripts/modal_cyl/run_s_gpu.sh`):
 
 | h | S_m (float64) | S_m, A100-80GB | S_m, A100-40GB | eig, 8 threads | before: S_m on 32 CPU processes / eig serial | peak host RAM |
 |---|---|---|---|---|---|---|
@@ -162,8 +162,8 @@ invalidated by bumping `S_NUMERICS` when they do. With `verbose`, the setup line
 are not cached. Worth it for repeated CPU-only runs at a/30 and finer; to prebuild on a many-core
 CPU node:
 
-    python tests/cyl_s_build.py grids --fracs 30 40 --grids grids.json --eq EQ.h5 --coils COILS.h5   # needs DESC
-    NEST_S_CACHE=DIR python tests/cyl_s_build.py build --grids grids.json --frac 40 --jobs 32 --out DIR
+    python tests/checks/cyl_s_build.py grids --fracs 30 40 --grids grids.json --eq EQ.h5 --coils COILS.h5   # needs DESC
+    NEST_S_CACHE=DIR python tests/checks/cyl_s_build.py build --grids grids.json --frac 40 --jobs 32 --out DIR
 
 `grids` reproduces `optimize_qa`'s grid (`around(inp, inp.a / frac)`, margin 2); a run with another
 margin or axes gets another key and rebuilds. `build` also checks the pool against the serial

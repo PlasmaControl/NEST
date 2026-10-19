@@ -30,7 +30,7 @@ import numpy as np
 # Version of the S_m numerics (quadrature, kernel, interpolation): part of the S_m cache key
 # (``annulus_freespace.S_key``). Bump it with any change that alters the entries; changes that
 # reproduce them (parallelism, batching, a GPU path) keep it. 1: the 2026-10-17 references
-# (Modal, a/20-a/60 precise_QA, ``tests/cyl_s_build.py``).
+# (Modal, a/20-a/60 precise_QA, ``tests/checks/cyl_s_build.py``).
 S_NUMERICS = 1
 
 from annulus_poisson import FACES

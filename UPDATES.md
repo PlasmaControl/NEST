@@ -2,6 +2,13 @@
 
 One entry per commit, newest first.
 
+## 2026-10-19: Repository cleanup: scripts, tests and figures in subfolders
+- `scripts/`: the drivers stay at the top (`optimize_qa.py`, `optimize_fb.py`); `dshape/` (the axisymmetric tokamak study), `stellarator/` (precise_QA, NCSX, QH, CTH-like), `diagnostics/`, `modal_cyl/` (unchanged). Moved scripts find the repository one level higher; sibling imports from their own folder.
+- Removed the DSHAPE scripts of the Cartesian-box and corrected-B_plasma runs, or superseded: gs_box_convergence, gs_bphi_check, gs_axisym_check, gs_check_norms, gs_force_fit, gs_x0_force, gs_plots, gs_plot_drift, gs_plot_null64, gs_nullspace, gs_plot_J_fit, gs_poincare, gs_edge_J (-> gs_edge_zoom), gs_cyl_convergence (-> gs_ladder), gs_long_run, gs_newton, gs_dense_plot (read gs_long_run's output).
+- `tests/checks/`: the accuracy and convergence studies (cyl_*, convergence_b_plasma, axisym_tables, exact_G, floor_fixes); unit tests stay in `tests/`.
+- `figures/`: `dshape/` (the h ladder, comparison with DESC, Poincare, edge J and force), `precise_QA/`, `ncsx/`, `qh/`, `cth/`; removed the figures of the L24 corrected-B_plasma runs (gs_fdrift*, gs_drift, gs_null*, gs_J_fit_L24, gs_weights) and the uncut edge plot. The DSHAPE scripts write to `figures/dshape/`.
+- References in docstrings, README, docs and the modal_cyl scripts follow the new paths (earlier UPDATES entries keep the old ones). README: a "Repository layout" section.
+
 ## 2026-10-19: DSHAPE (axisymmetric, no perturbation) on the cylindrical annulus: h ladder to the exact limit
 - Free-boundary DSHAPE (DESC L = M = 32, coils' field), basis x2 (L = M = 64, edge power 3), J fitted to J_DESC as the start, collocation 2 (L_basis + L_DESC) = 97 x 385, w_J 1e-3 toward the start J over the whole volume; each point converged with the exact LM; checked with the exact field on a common 81 x 321 grid.
 - Exact axisymmetric B_plasma (`nest/axisym_field.py`): ring-current quadrature in polar coordinates about each target, with c/rho, R, Z tabulated exactly as Chebyshev(rho) x Fourier(theta) (one matrix product per node block; ~20-30x faster at the same accuracy). n_s = 96 by default: n_s = 48 was off by ~7e-9 of rms B near the edge, (256, 96) is at round-off against (1024, 192).

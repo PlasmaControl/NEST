@@ -170,7 +170,7 @@ The purpose of the branch is to find out how far the new grid pushes resolution 
 - [x] done
 
 ### C4. G0: main paths unchanged
-- Test: on origin/main 263bfad against this branch, deterministic flags, `NEST_CACHE=off`: `Fields` with hockney and truncated, F, Jv and Jᵀw for 2 configurations. Bitwise identical. Run the main test-suite (`scripts/time_tests.py`, local subset).
+- Test: on origin/main 263bfad against this branch, deterministic flags, `NEST_CACHE=off`: `Fields` with hockney and truncated, F, Jv and Jᵀw for 2 configurations. Bitwise identical. Run the main test-suite (`scripts/diagnostics/time_tests.py`, local subset).
 - False pass: comparing with caches on can reuse the old result. Covered by `NEST_CACHE=off`.
 - [x] done
 
