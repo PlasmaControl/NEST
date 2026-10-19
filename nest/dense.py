@@ -18,7 +18,8 @@ force on the collocation points,
 
     min_u  |sw (J(u) - J_DESC) x B_DESC / norm|^2 + eps^2 |sw (J(u) - J_DESC) / rms J_DESC|^2,
 
-sw = sqrt(dV / V), i.e. the force objective's own weights. With B(x0) = B_DESC
+sw = sqrt(dV / V), i.e. the force objective's own weights; eps = inf drops the first
+term (J fitted to J_DESC alone). With B(x0) = B_DESC
 (``optimize_qa.py --bext desc``) and the pressure fit exact, F_NEST(x0) - F_DESC =
 (J(u) - J_DESC) x B_DESC on the points, so the first term is exactly the
 difference of NEST's starting force residual from DESC's; the second (eps small)
@@ -54,8 +55,14 @@ def _key(fields, current):
         src += "".join(inspect.getsource(m) for m in (
             annulus_freespace, annulus_poisson, chebyshev, cylindrical_bs, cylindrical_grid,
             single_layer, toroidal_kernel))
+        import single_layer_fast
+        src += inspect.getsource(single_layer_fast)
         geo = tuple(round(float(v), 9) for v in (box.r_axis.a, box.r_axis.b, box.z_axis.a,
                                                    box.z_axis.b))
+        src += f"S {getattr(getattr(fields, 'solver', None), 'S', np.zeros(0)).dtype}"  # its precision
+        if getattr(fields, "node_rtz", None) is not None:  # J at the nodes from the basis (node_current)
+            import node_current
+            src += "direct J at the nodes" + inspect.getsource(node_current)
         parts = (fit_cache._file_hash(f.inp.path), (b.L, b.M, b.N, current.edge_power, b.sym),
                  f.tgrid.shape, tuple(np.round(np.asarray(f.tgrid.rho), 14)), box.shape, geo,
                  box.NFP, fields.kernel, str(fields.dtype), hashlib.sha256(src.encode()).hexdigest())
@@ -70,6 +77,19 @@ def _key(fields, current):
     return hashlib.sha256(repr(parts).encode()).hexdigest()[:24]
 
 
+def _key_exact(fields, current):
+    """Hash of what the exact G depends on: no box."""
+    import axisym_field
+    import boundary_potential
+    f, b = fields.force, current.basis
+    src = "".join(inspect.getsource(m) for m in (axisym_field, boundary_potential))
+    parts = (fit_cache._file_hash(f.inp.path), (b.L, b.M, b.N, current.edge_power, b.sym, float(current.I)),
+             f.tgrid.shape, tuple(np.round(np.asarray(f.tgrid.rho), 14)),
+             hashlib.sha256(np.round(np.asarray(fields.phi), 14).tobytes()).hexdigest(), str(fields.dtype),
+             hashlib.sha256(src.encode()).hexdigest())
+    return hashlib.sha256(repr(parts).encode()).hexdigest()[:24]
+
+
 class DenseFields(Fields):
     """``Fields`` with B_plasma(u) = G u + B_I (see the module docstring).
 
@@ -79,7 +99,10 @@ class DenseFields(Fields):
     _dynamic = Fields._dynamic + ("G", "B_I")
 
     @classmethod
-    def from_fields(cls, fields, current, batch=8, cache=True, verbose=True, save_every=300):
+    def from_fields(cls, fields, current, batch=8, cache=True, verbose=True, save_every=300,
+                    method="box"):
+        """``method``: "box" (one solve of ``fields``' box per column) or "exact" (the
+        exact axisymmetric field, axisym_field.plasma_field_matrix: no box; N = 0 only)."""
         obj = object.__new__(cls)
         for k, v in vars(fields).items():
             if k != "_aux":
@@ -87,12 +110,41 @@ class DenseFields(Fields):
         where = os.environ.get("NEST_CACHE", os.path.join(ROOT, ".cache"))
         path = None
         if cache and where != "off" and getattr(fields.force.inp, "path", None):
-            path = os.path.join(where, f"DenseG_{_key(fields, current)}.npz")
+            name = f"DenseG_{_key(fields, current)}" if method == "box" else f"DenseGx_{_key_exact(fields, current)}"
+            path = os.path.join(where, name + ".npz")
         n_u, t0 = fields.n_u, time.time()
+        if method not in ("box", "exact"):
+            raise ValueError(f"method {method!r}")
         if path and os.path.exists(path):
             with np.load(path) as d:
                 G, B_I = d["G"], d["B_I"]
             how = "from the cache"
+        elif method == "exact":
+            from axisym_field import plasma_field, plasma_field_matrix
+            from cartesian_grid import cylindrical_to_cartesian
+            rtz = np.asarray(fields.force.rtz)
+            Gc = plasma_field_matrix(current, rtz, verbose=verbose)  # (n_u, n, 3), (R, phi, Z)
+            c, s_ = np.cos(np.asarray(fields.phi)), np.sin(np.asarray(fields.phi))
+            BR = Gc[..., 0].copy()
+            Gc[..., 0] = BR * c - Gc[..., 1] * s_
+            Gc[..., 1] = BR * s_ + Gc[..., 1] * c
+            del BR
+            G = Gc.reshape(n_u, -1).astype(np.dtype(fields.dtype), copy=False)
+            B_I = np.asarray(cylindrical_to_cartesian(plasma_field(current, rtz, u=np.zeros(n_u)),
+                                                      np.asarray(fields.phi)))
+            if path:
+                os.makedirs(where, exist_ok=True)
+                tmp = path + f".{os.getpid()}.tmp.npz"
+                np.savez(tmp, G=G, B_I=B_I)
+                os.replace(tmp, path)
+            # against plasma_field itself (same quadrature, u at once): a random u, 256 points
+            rng = np.random.default_rng(0)
+            v, sub = rng.standard_normal(n_u), rng.choice(len(rtz), min(256, len(rtz)), replace=False)
+            ref = np.asarray(cylindrical_to_cartesian(plasma_field(current, rtz[sub], u=v),
+                                                      np.asarray(fields.phi)[sub]))
+            got = (v @ G).reshape(-1, 3)[sub] + B_I[sub]
+            how = (f"exact axisymmetric field (against plasma_field, random u: "
+                   f"{np.abs(got - ref).max() / np.abs(ref).max():.1e})")
         else:
             solve = jax.jit(jax.vmap(lambda e, fl: fl.B_plasma(e, 0.0), in_axes=(0, None)))
             G = np.empty((n_u, len(fields.phi) * 3), dtype=np.dtype(fields.dtype))
@@ -145,6 +197,32 @@ class DenseFields(Fields):
         return B + (I / self.I) * self.B_I
 
 
+def j_target(run, fields, x0, inp=None):
+    """The w_J term's target J at ``fields``' collocation points (Cartesian), from a run's
+    arguments: J(x0) with j_target "start", J of another run's start with j_target_from
+    (that run's own basis: a common target for runs with different bases; exact in any
+    basis that contains it), else None (J_DESC)."""
+    src = run.get("j_target_from")
+    if src:
+        import json
+
+        from boundary_potential import BoundaryPotential
+        from cartesian_grid import cylindrical_to_cartesian
+        from desc_input import DESCInput
+        sa = json.load(open(src + "_iter.json"))["args"]
+        inp = inp or DESCInput.load(sa["eq"], field=sa["coils"])
+        ep = sa.get("edge_power", 2)
+        cs = fit_cache.fit(BoundaryPotential, inp, factors=tuple(sa["factors"]),
+                           **({"edge_power": ep} if ep != 2 else {}))
+        us = np.load(src + "_iter.npz")["x0"][: cs.n_free]
+        rtz = np.asarray(fields.force.rtz)
+        Jc = jax.jit(cs.with_u(us).point_evaluator(inp.eq))(*(jnp.asarray(rtz[:, i]) for i in range(3)))
+        return jnp.asarray(cylindrical_to_cartesian(np.asarray(Jc), np.asarray(fields.phi)))
+    if run.get("j_target") == "start":
+        return fields.compute(x0)["J"]
+    return None
+
+
 def J_columns(force, current):
     """J at the collocation points of ``force`` (a ``ForceResidual``; Cartesian
     components) for each unit u: (n_u, n_points, 3), and the net-current part
@@ -176,12 +254,16 @@ def force_matched_u(force, current, eps=1e-2, desc=None, cols=None):
     norm = force.norm
     rmsJ = float(np.sqrt(np.sum(w * np.sum(J_D**2, 1))))
     n_u = A.shape[0]
-    # rows: the force difference, then eps x the current difference
-    AF = (sw * np.cross(A, B_D[None])).reshape(n_u, -1).T / norm
-    yF = (sw * np.cross(J_D - J_I, B_D)).ravel() / norm
-    AJ = eps * (sw * A).reshape(n_u, -1).T / rmsJ
-    yJ = eps * (sw * (J_D - J_I)).ravel() / rmsJ
-    u = np.linalg.lstsq(np.vstack([AF, AJ]), np.concatenate([yF, yJ]), rcond=None)[0]
+    # rows: the force difference, then eps x the current difference (eps = inf: the
+    # current alone, a plain fit of J to J_DESC on the points)
+    AJ = (sw * A).reshape(n_u, -1).T / rmsJ
+    yJ = (sw * (J_D - J_I)).ravel() / rmsJ
+    if np.isinf(eps):
+        u = np.linalg.lstsq(AJ, yJ, rcond=None)[0]
+    else:
+        AF = (sw * np.cross(A, B_D[None])).reshape(n_u, -1).T / norm
+        yF = (sw * np.cross(J_D - J_I, B_D)).ravel() / norm
+        u = np.linalg.lstsq(np.vstack([AF, eps * AJ]), np.concatenate([yF, eps * yJ]), rcond=None)[0]
 
     def score(v):
         dJ = np.einsum("i,ipc->pc", v, A) + J_I - J_D

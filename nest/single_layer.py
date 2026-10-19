@@ -99,6 +99,7 @@ def single_layer_matrix(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False, dty
     ap : AnnulusPoisson
     ms : sequence of int (|m| is used); the result is in this order.
     targets : (n_t, 2) array of (r, z).
+    (|m| <= 1, the axisymmetric case: ``single_layer_fast``, unless NEST_S_FAST=0.)
     n_jobs : int or None
         Worker processes over blocks of targets (each row is independent, and a
         block is computed exactly as serially, so the result is bitwise the same).
@@ -113,6 +114,10 @@ def single_layer_matrix(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False, dty
     import os
     import sys
     targets = np.atleast_2d(np.asarray(targets, dtype=float))
+    if np.abs(np.asarray(ms)).max() <= 1 and os.environ.get("NEST_S_FAST", "1") != "0":
+        # axisymmetric (|m| <= 1): regular rule on the device + near corrections
+        from single_layer_fast import single_layer_matrix_fast
+        return single_layer_matrix_fast(ap, ms, targets, n_gl, ratio, dtype=dtype, verbose=verbose)
     if n_jobs is None:
         env = os.environ.get("NEST_S_JOBS")
         if env is not None:

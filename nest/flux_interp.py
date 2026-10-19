@@ -132,7 +132,47 @@ class TensorFactors(_Pytree):
         return jnp.einsum("iqc,kq->ikc", PC, self.F[dz]).reshape(n_r, n_t, n_z, -1)
 
 
-def separable_factors(sep, grid, pol=((0, 0), (1, 0), (0, 1)), tor=(0, 1)):
+class FactoredFactors(_Pytree):
+    """``TensorFactors`` of a ``Separable`` without the (n_rho n_theta) x n_p tables.
+
+    On a tensor grid the poloidal functions P_p = Z_l^|m|(rho) T_m(theta) are products
+    themselves, so sum_p C[p, q, c] P_p is a radial contraction over l (per m) followed
+    by an angular one over m, with tables (n_rho, n_m, n_l) and (n_theta, n_m) only:
+    O(n_rho n_m n_l + n_rho n_theta n_m) memory instead of n_rho n_theta n_p (at L = M = 96
+    with sin and cos in theta, 50 GB on a 384 x 576 grid against ~60 MB). Same values
+    and call as ``TensorFactors`` (up to rounding).
+    """
+
+    _dynamic = ("Z", "T", "F", "mi", "li")
+
+    def __init__(self, sep, grid, pol=((0, 0), (1, 0), (0, 1)), tor=(0, 1)):
+        from desc.basis import zernike_radial
+        self.grid = grid
+        lm = np.asarray(sep.lm)
+        ms, mi = np.unique(lm[:, 1], return_inverse=True)
+        ls, li = np.unique(lm[:, 0], return_inverse=True)
+        self.n_m, self.n_l = len(ms), len(ls)
+        self.mi, self.li = jnp.asarray(mi.ravel()), jnp.asarray(li.ravel())
+        rho = jnp.asarray(grid.rho)
+        self.Z, self.T = {}, {}
+        for dr in sorted({d[0] for d in pol}):
+            z = zernike_radial(rho[:, None], lm[:, 0], lm[:, 1], dr=dr)  # (n_rho, n_p)
+            self.Z[dr] = jnp.zeros((len(grid.rho), self.n_m, self.n_l)).at[:, self.mi, self.li].set(z)
+        for dt in sorted({d[1] for d in pol}):
+            self.T[dt] = jnp.asarray(fourier(jnp.asarray(grid.theta)[:, None], ms, dt=dt))
+        self.F = {d: jnp.asarray(sep.toroidal(jnp.asarray(grid.zeta), d)) for d in tor}
+
+    def __call__(self, C, dr=0, dt=0, dz=0):
+        """sum_pq C[p, q, c] P_p F_q (or a derivative), shape grid.shape + (n_c,)."""
+        Cg = jnp.zeros((self.n_m, self.n_l) + C.shape[1:], C.dtype).at[self.mi, self.li].set(C)
+        A = jnp.einsum("iml,mlqc->imqc", self.Z[dr], Cg)
+        PC = jnp.einsum("jm,imqc->ijqc", self.T[dt], A)
+        return jnp.einsum("ijqc,kq->ijkc", PC, self.F[dz])
+
+
+def separable_factors(sep, grid, pol=((0, 0), (1, 0), (0, 1)), tor=(0, 1), factored=False):
+    if factored:
+        return FactoredFactors(sep, grid, pol, tor)
     return TensorFactors(sep.poloidal, sep.toroidal, grid, pol, tor)
 
 
@@ -172,10 +212,10 @@ class TensorCurrent(_Pytree):
 
     _dynamic = ("geo", "ab", "chi", "w", "h0r", "rho2")
 
-    def __init__(self, S, RZ, grid, geometry=None):
+    def __init__(self, S, RZ, grid, geometry=None, factored=False):
         self.S, self.grid = S, grid
         self.geo = geometry or TensorGeometry(RZ, grid)
-        self.ab = separable_factors(S.ab, grid)
+        self.ab = separable_factors(S.ab, grid, factored=factored)
 
         def chi_pol(R, T, dr, dt):
             return _h(S, R, dr)[:, S.chi_abs] * fourier(T[:, None], S.chi_m, dt=dt)
@@ -207,11 +247,11 @@ class TensorPressure(_Pytree):
 
     _dynamic = ("geo", "f", "wk", "wkr")
 
-    def __init__(self, P, k, RZ, grid, geometry=None):
+    def __init__(self, P, k, RZ, grid, geometry=None, factored=False):
         self.P, self.k, self.grid = P, k, grid
         self.wk = self.wkr = None
         self.geo = geometry or TensorGeometry(RZ, grid)
-        self.f = separable_factors(P, grid)
+        self.f = separable_factors(P, grid, factored=factored)
         if k is not None:
             rho = grid.rho[:, None, None]
             self.wk = jnp.asarray((1 - rho**2) ** (k + 1))

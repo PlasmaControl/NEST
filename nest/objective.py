@@ -95,6 +95,10 @@ class Fields(_Pytree):
         the potential's basis (half the zeta range with symmetry).
     order : int
         Lagrange order of the interpolation to the box points.
+    factored : bool
+        The series on the tensor grids by radial-then-angular contractions
+        (``flux_interp.FactoredFactors``) instead of cached (points x modes) tables:
+        needed at large 3-D bases (x3 with N >= 1), same values.
     dtype : float32 or float64
         Of J and B on the box and of the non-uniform FFT.
     chunk : int
@@ -112,7 +116,7 @@ class Fields(_Pytree):
 
     def __init__(self, force, current, pressure, kernel="hockney", flux_grid=None, order=4,
                  dtype=jnp.float32, chunk=65536, share=None, S_dtype=jnp.float32, mode_chunk=16,
-                 cyl_half=True, cyl_dtype=jnp.float64, j_compact=None):
+                 cyl_half=True, cyl_dtype=jnp.float64, j_compact=None, factored=False):
         eq, box = force.inp.eq, force.box
         from cylindrical_grid import CylindricalGrid
         self.cyl = isinstance(box, CylindricalGrid)
@@ -133,9 +137,9 @@ class Fields(_Pytree):
         # collocation points (force.tgrid, C order)
         cgrid = force.tgrid
         geo = force.geo  # the same R, Z series on the same grid
-        self.J_col = TensorCurrent(current.S, current._RZ, cgrid, geo)
+        self.J_col = TensorCurrent(current.S, current._RZ, cgrid, geo, factored=factored)
         P = Separable([pressure.basis], [pressure.c], pressure.basis.NFP)
-        self.p_col = TensorPressure(P, pressure.edge_order, current._RZ, cgrid, geo)
+        self.p_col = TensorPressure(P, pressure.edge_order, current._RZ, cgrid, geo, factored=factored)
         self.phi = jnp.asarray(force.phi)
         self.sw = jnp.asarray(np.sqrt(force.dV / force.dV.sum()))  # sqrt(dV / V)
         self.B_ext = jnp.asarray(force.B_ext)
@@ -152,7 +156,7 @@ class Fields(_Pytree):
         b = current.basis
         fg = flux_grid or TensorGrid.uniform(4 * b.L, 2 * (3 * b.M), max(4 * b.N, 8), eq.NFP,
                                              sym=self.sym)
-        self.J_flux = TensorCurrent(current.S, current._RZ, fg)
+        self.J_flux = TensorCurrent(current.S, current._RZ, fg, factored=factored)
         self.half = self.half_rows = None
         inside, rtz = np.asarray(box.inside), np.asarray(box.rtz)
         if self.cyl:  # the annulus: J in cylindrical components at the inside nodes
@@ -520,9 +524,21 @@ class FieldError(_Objective):
 
 
 class CurrentError(_Objective):
-    """J - J_desc, normalized by rms |J_desc|."""
+    """J - J_desc, normalized by rms |J_desc|; with ``rho_max``, only at the points
+    with rho < rho_max (J left free near the edge)."""
 
     name, quantity = "J", "J"
+
+    def __init__(self, weight=1.0, target=None, normalization=None, rho_max=None):
+        super().__init__(weight, target, normalization)
+        self.rho_max = rho_max
+
+    def build(self, fields):
+        super().build(fields)
+        if self.rho_max is not None:
+            inner = np.asarray(fields.force.rtz)[:, 0] < self.rho_max
+            self._sw = self._sw * jnp.asarray(inner, dtype=self._sw.dtype)
+        return self
 
     def _default_normalization(self, fields):
         return fields.rms["J"]
@@ -561,6 +577,64 @@ class PressureEnergy(_Objective):
 
     def compute(self, f):
         return jnp.sum(self._sw**2 * f["p"])[None]
+
+    def compute_scaled_tangent(self, e):
+        return self.weight * e / self.normalization
+
+
+class CurrentMoments(_Objective):
+    """Global moments of the toroidal current held at their targets (DESC's by default),
+    not J pointwise: with w = dV / V and J_phi at the collocation points,
+
+        I_p   = V / (2 pi) sum w J_phi / R           (net toroidal current)
+        R_geo = sum w J_phi / sum w J_phi / R         (current centroid, area-weighted)
+        Z_geo = sum w Z J_phi / R / sum w J_phi / R
+        V_eff / V = (sum w J_phi)^2 / sum w J_phi^2   (inverse participation ratio: peaking)
+
+    four residuals (m - target) / scale with scales (|I_p|, a, a, V_eff / V) of the target.
+    ``which`` selects a subset (e.g. ("R", "Z", "V")). Nonlinear in J: the tangent is the
+    JVP of the moments in J."""
+
+    name, quantity = "moments", "J"
+    local_columns = False  # global sums of J: not a pointwise block (``precondition``)
+    KEYS = ("I", "R", "Z", "V")
+
+    def __init__(self, weight=1.0, target=None, normalization=None, which=KEYS):
+        super().__init__(weight, target, normalization)
+        self.which = tuple(which)
+
+    def build(self, fields):
+        f = fields.force
+        self._R = jnp.asarray(np.asarray(f.geo.R).ravel())
+        self._Z = jnp.asarray(np.asarray(f.geo.Z).ravel())
+        self._ph = jnp.asarray(f.phi)
+        self._sw = fields.sw
+        self._V = float(np.asarray(f.dV).sum())
+        if self.target is None:
+            self.target = self._moments(jnp.asarray(fields.desc["J"]))
+        self.target = jnp.asarray(self.target)
+        if self.normalization is None:
+            t = np.asarray(self.target)
+            scale = {"I": abs(t[self.which.index("I")]) if "I" in self.which else 1.0,
+                     "R": float(fields.force.inp.a), "Z": float(fields.force.inp.a),
+                     "V": abs(t[self.which.index("V")]) if "V" in self.which else 1.0}
+            self.normalization = jnp.asarray([scale[k] for k in self.which])
+        self.dim_f = len(self.which)
+        return self
+
+    def _moments(self, J):
+        w = self._sw**2
+        Jp = -J[:, 0] * jnp.sin(self._ph) + J[:, 1] * jnp.cos(self._ph)
+        s0, s1 = jnp.sum(w * Jp / self._R), jnp.sum(w * Jp)
+        m = {"I": self._V / (2 * np.pi) * s0, "R": s1 / s0, "Z": jnp.sum(w * self._Z * Jp / self._R) / s0,
+             "V": s1**2 / jnp.sum(w * Jp**2)}
+        return jnp.stack([m[k] for k in self.which])
+
+    def compute(self, f):
+        return self._moments(f["J"])
+
+    def tangent(self, d, base):
+        return jax.jvp(self._moments, (base["J"],), (d["J"],))[1]
 
     def compute_scaled_tangent(self, e):
         return self.weight * e / self.normalization

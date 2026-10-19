@@ -31,8 +31,13 @@ class CylindricalGrid:
         self.inside = self.rtz = None
 
     @classmethod
-    def around(cls, eq, h, margin=2.0, alpha=0.0, extent=None, axisym=None):
+    def around(cls, eq, h, margin=2.0, alpha=0.0, extent=None, axisym=None, N_phi=None):
         """Grid with spacing at most h over the plasma, walls margin h beyond it.
+
+        ``N_phi`` (odd): that many planes instead of the arc spacing h, for a J whose
+        toroidal harmonics are known to be |n| <= (N_phi - 1) / 2 (the solve is then exact
+        mode by mode, as for ``axisym``), e.g. a 3-D perturbation of an axisymmetric
+        equilibrium.
 
         ``axisym`` (default: the equilibrium has N = 0): one plane, N_phi = 1. The solve is
         then exactly two 2-D problems (|m| = 0 for A_z, 1 for A_r + i A_phi), the same as on
@@ -46,7 +51,9 @@ class CylindricalGrid:
         NFP = int(e.NFP)
         if axisym is None:
             axisym = int(e.N) == 0
-        if axisym:
+        if N_phi is not None:
+            N_phi = int(N_phi)
+        elif axisym:
             N_phi = 1
         else:
             N_phi = int(np.ceil(2 * np.pi * (R_max + d) / (NFP * h)))
@@ -93,6 +100,26 @@ class CylindricalGrid:
         zs = self.z_axis
         if sym and abs(zs.a + zs.b) > 1e-12 * max(abs(zs.a), abs(zs.b)):
             raise ValueError("sym needs a z-symmetric annulus")
+        # cached on disk (<repository>/.cache/CylLocate_<hash>.npz, NEST_CACHE=off disables):
+        # keyed by the equilibrium file and the grid
+        import hashlib
+        import os
+        cache = None
+        where = os.environ.get("NEST_CACHE", os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), ".cache"))
+        path_eq = getattr(eq, "path", None)
+        if where != "off" and path_eq is not None and not kw:
+            import fit_cache
+            key = repr((fit_cache._file_hash(path_eq), round(self.r_axis.a, 12), round(self.r_axis.b, 12),
+                        self.r_axis.n, round(self.z_axis.a, 12), round(self.z_axis.b, 12), self.z_axis.n,
+                        self.NFP, self.N_phi, bool(sym)))
+            cache = os.path.join(where, "CylLocate_" + hashlib.sha256(key.encode()).hexdigest()[:24] + ".npz")
+            if os.path.exists(cache):
+                with np.load(cache) as f:
+                    self.inside, self.rtz = f["inside"], f["rtz"]
+                if verbose:
+                    print(f"    locate: {len(self.inside):,} inside (cached)", flush=True)
+                return self
         import time
         from grid import FluxGrid, _as_input
         inp = _as_input(eq)
@@ -123,6 +150,11 @@ class CylindricalGrid:
             inside = np.concatenate([inside, mi])[order]
             rtz = np.concatenate([rtz, mr])[order]
         self.inside, self.rtz = inside, rtz
+        if cache is not None:
+            os.makedirs(where, exist_ok=True)
+            tmp = cache + f".{os.getpid()}.tmp.npz"
+            np.savez(tmp, inside=inside, rtz=rtz)
+            os.replace(tmp, cache)
         return self
 
     def scatter(self, values, dtype=np.float64):

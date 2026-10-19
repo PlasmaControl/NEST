@@ -4,7 +4,8 @@ For a run of optimize_qa.py --bext desc (tokamak, L = M = 24):
 
 1. F on a finer collocation grid (--check x the resolution of F) and a finer box
    (h = a / --check-frac), with B_ext = B_DESC - B_plasma(x0) recomputed on that
-   box (B(x0) = B_DESC at the new points): <|F|> / norm overall and by rho at the
+   box (B(x0) = B_DESC at the new points) for a --bext desc run, else the coils'
+   field there: <|F|> / norm overall and by rho at the
    start x0 and the end x, and DESC's own (J_DESC x B_DESC - grad p_DESC).
 2. DESC's error: DESC at higher resolution (--ref, e.g. L = M = 32) at the same
    physical points (mapped to its flux coordinates by Newton), and the volume rms
@@ -40,6 +41,7 @@ import fit_cache  # noqa: E402
 from boundary_potential import BoundaryPotential  # noqa: E402
 from cartesian_grid import cylindrical_to_cartesian  # noqa: E402
 from desc_input import DESCInput  # noqa: E402
+from boxes import make_box  # noqa: E402
 from force import ForceResidual  # noqa: E402
 from grid import CartesianGrid, map_to_flux  # noqa: E402
 from objective import Fields  # noqa: E402
@@ -79,7 +81,22 @@ def main():
     ap.add_argument("--check", type=float, default=3, help="collocation / resolution of F")
     ap.add_argument("--check-frac", type=int, default=30)
     ap.add_argument("--ref", default=REF)
+    ap.add_argument("--check-grid", default="cartesian", choices=["cartesian", "cylindrical"],
+                    help="grid of the check's B_plasma (the start and end are also evaluated with "
+                         "the accurate axisymmetric field with --accurate)")
+    ap.add_argument("--accurate", action="store_true",
+                    help="B_plasma at the check points by the accurate axisymmetric field (no grid)")
     ap.add_argument("--slab", type=int, default=16, help="radii of the check grid at a time")
+    ap.add_argument("--grid-res", type=int, nargs=3, default=None,
+                    help="the check grid's (L, M, N) for every run alike (a common grid for "
+                         "comparing runs; default: --check x the run's resolution of F)")
+    ap.add_argument("--quad", type=int, nargs=2, default=(256, 96),
+                    help="with --accurate: the exact field's quadrature (n_gamma, n_s); doubling it "
+                         "tests the quadrature the exact-G runs share with the default check")
+    ap.add_argument("--tag", default="", help="suffix of the output names (check_<run><tag>.json)")
+    ap.add_argument("--save", action="store_true",
+                    help="also save the points and the fields of DESC L24, the reference, the "
+                         "start and the end (results/gs/fields_<run>.npz), for gs_ladder.py")
     ap.add_argument("--chunk", type=int, default=16384,
                     help="points per chunk of the box interpolations (GPU memory)")
     a = ap.parse_args()
@@ -91,26 +108,32 @@ def main():
     x0, x1 = jnp.asarray(st["x0"]), jnp.asarray(st["x"])
     inp = DESCInput.load(args["eq"], field=args["coils"])
     eq = inp.eq
-    cur = fit_cache.fit(BoundaryPotential, inp, factors=tuple(args["factors"]))
+    ep = args.get("edge_power", 2)
+    cur = fit_cache.fit(BoundaryPotential, inp, factors=tuple(args["factors"]),
+                        **({"edge_power": ep} if ep != 2 else {}))
     pre = fit_cache.fit(Pressure, inp, factors=tuple(args["factors"]), edge_order=2)
     b = cur.basis
     res = lambda f: tuple(int(round(f * (u + v))) for u, v in ((b.L, eq.L), (b.M, eq.M), (b.N, eq.N)))  # noqa: E731
-    box = CartesianGrid.periodic_box(inp, inp.a / a.check_frac, odd=bool(eq.sym)).locate_plasma(inp)
+    box = make_box(inp, a.check_frac, a.check_grid, bool(eq.sym), args.get("margin", 2.0))
     # the check grid in radial slices of --slab radii (GPU memory); the box side (flux
     # grid, box interpolation, kernel) is built once and shared
-    n_r = res(a.check)[0] // 2 + 1
+    grid_res = tuple(a.grid_res) if a.grid_res else res(a.check)
+    n_r = grid_res[0] // 2 + 1
     keys = ("x", "phi", "dV", "rtz")
     G = {k: [] for k in keys}
     desc, f0, f1 = {}, {}, {}
     base = norm = None
     for i in range(0, n_r, a.slab):
-        fr = ForceResidual(inp, box, resolution=res(a.check), rho_slice=slice(i, i + a.slab))
-        fr.B_ext = np.zeros((len(fr.rtz), 3))  # replaced below: the coil field is not needed
+        fr = ForceResidual(inp, box, resolution=grid_res, rho_slice=slice(i, i + a.slab))
+        trick = args.get("bext") == "desc"
+        if trick:  # replaced below: the coil field is not needed
+            fr.B_ext = np.zeros((len(fr.rtz), 3))
         fields = Fields(fr, cur, pre, kernel=args["kernel"], dtype=jnp.float64, chunk=a.chunk,
                         share=base)
         base = fields if base is None else base
         d = {k: np.asarray(v) for k, v in fr.desc_fields().items()}
-        fields.B_ext = jnp.asarray(d["B"]) - fields.compute(x0)["B_plasma"]
+        if trick:  # else the coils' field (the run's own B_ext) at these points
+            fields.B_ext = jnp.asarray(d["B"]) - fields.compute(x0)["B_plasma"]
         for out_, x_ in ((f0, x0), (f1, x1)):
             for k, v in fields.compute(x_).items():
                 out_.setdefault(k, []).append(np.asarray(v))
@@ -125,6 +148,20 @@ def main():
         gc.collect()
     desc, f0, f1 = ({k: np.concatenate(v) for k, v in dd.items()} for dd in (desc, f0, f1))
     G = {k: np.concatenate(v) for k, v in G.items()}
+    if args.get("bplasma") == "axisym" or a.accurate:  # B from the coils and the accurate plasma field, no box
+        from axisym_field import plasma_field_cached
+        n_u = cur.n_free
+        for ff, xx in ((f0, x0), (f1, x1)):
+            t1 = time.time()
+            B_pl = np.asarray(cylindrical_to_cartesian(
+                plasma_field_cached(cur, G["rtz"], u=np.asarray(xx[:n_u]), n_gamma=a.quad[0], n_s=a.quad[1]),
+                G["phi"]))
+            B_coil = ff["B"] - ff["B_plasma"]
+            box_err = np.sqrt(np.sum(G["dV"] * np.sum((ff["B_plasma"] - B_pl) ** 2, 1)) / np.sum(G["dV"]))
+            ff["B_plasma"], ff["B"] = B_pl, B_coil + B_pl
+            ff["F"] = np.cross(ff["J"], ff["B"]) - ff["grad_p"]
+            print(f"accurate axisymmetric B_plasma on the check grid: {time.time() - t1:.0f} s; the "
+                  f"box's (a/{a.check_frac}) differs by {box_err:.2e} T rms", flush=True)
     pk, tot = peak()
     print(f"device {jax.devices()[0].device_kind}: peak memory used (nvidia-smi) {pk:.1f} GB "
           f"of {tot:.1f} GB", flush=True)
@@ -142,7 +179,7 @@ def main():
                 "bins": {f"{x:g}-{y:g}": avg((r > x) & (r <= y)) for x, y in zip(edges[:-1], edges[1:])}}
 
     F_D = metrics(np.cross(desc["J"], desc["B"]) - desc["grad(p)"])
-    rows = {"DESC L24 (J_D x B_D - grad p_D)": F_D, "NEST start x0": metrics(f0["F"]),
+    rows = {"DESC (J_D x B_D - grad p_D)": F_D, "NEST start x0": metrics(f0["F"]),
             "NEST end x": metrics(f1["F"])}
     bins = list(F_D["bins"])
     print(f"\n1. <|F|> / norm on the check grid and box:\n{'':34s} {'all':>9s} "
@@ -207,7 +244,17 @@ def main():
             dv = states[s1]["B"][m] - R["B"][m]
             vals.append(np.sqrt(np.sum(G["dV"][m] * np.sum(dv**2, 1)) / np.sum(G["dV"][m])) / rmsv(R["B"]))
         print(f"   {s1:24s} " + " ".join(f"{v:9.2e}" for v in vals))
-    name = os.path.join(ROOT, "results", "gs", f"check_{os.path.basename(a.run)}.json")
+    if a.save:
+        fname = os.path.join(ROOT, "results", "gs", f"fields_{os.path.basename(a.run)}{a.tag}.npz")
+        np.savez(fname, x=G["x"], dV=G["dV"], rtz=G["rtz"], ok=ok, norm=norm,
+                 grid_res=np.array(grid_res), check_frac=a.check_frac,
+                 **{f"{tag}_{q}": dd[q] for tag, dd in (("desc", desc), ("start", f0), ("end", f1))
+                    for q in ("J", "B", "p")},
+                 **{f"{tag}_F": dd["F"] for tag, dd in (("start", f0), ("end", f1))},
+                 desc_F=np.cross(desc["J"], desc["B"]) - desc["grad(p)"],
+                 **{f"ref_{q}": R[q] for q in ("J", "B", "p")})
+        print(f"saved {fname}")
+    name = os.path.join(ROOT, "results", "gs", f"check_{os.path.basename(a.run)}{a.tag}.json")
     with open(name, "w") as fo:
         json.dump({"args": vars(a), "force": rows, "diff": out}, fo, indent=1)
     print(f"saved {name}; total {time.time() - t0:.0f} s")

@@ -139,7 +139,10 @@ def single_layer_matrix_jax(ap, ms, targets, n_gl=16, ratio=0.15, verbose=False,
     P = [_round_up(max(len(p[fi][0]) for p in per_all), 256) for fi in range(len(FACES))]
     t_host = time.time() - t0
     # targets per chunk: ~5 arrays (m_max + 1, T * sum(P)) on the device
-    T = int(max(1, min(n_t, mem_bytes / (5 * 8 * (m_max + 1) * sum(P)))))
+    # and the Lagrange matrices of a face, (T, P_f, n_f), with its weighted product (x3): at a/320
+    # these, not the recurrences, set the chunk (70 GB requested before they were counted)
+    lag = max(P[fi] * sizes[f] for fi, f in enumerate(FACES))
+    T = int(max(1, min(n_t, mem_bytes / (5 * 8 * (m_max + 1) * sum(P)), mem_bytes / (3 * 8 * (lag + n_m * P[0])))))
     t_dev = 0.0
     for c0 in range(0, n_t, T):
         per = per_all[c0:c0 + T]

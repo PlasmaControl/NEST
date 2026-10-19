@@ -123,7 +123,7 @@ def _u_block_gram(obj, B, pot_struct, k_max, max_bytes=5e8, batch=8):
     tc = fields.J_col
     n_r, n_t, n_z = tc.grid.shape
     scale = [(o.quantity, o.weight / o.normalization) for o in obj.objectives
-             if o.quantity in ("F", "J")]
+             if o.quantity in ("F", "J") and getattr(o, "local_columns", True)]
     rows = 3 * n_t * n_z * len(scale)  # residual rows per radius
     per = min(n_r, max(1, int(max_bytes // (4 * k_max * rows))))
     n_s, pad = _radial_slabs(n_r, per)

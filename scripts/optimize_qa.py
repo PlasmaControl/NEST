@@ -23,6 +23,7 @@ the force-matched fit, dense.py); --dense precomputes B_plasma(u) as a matrix (c
 """
 
 import argparse
+import functools
 import gc
 import json
 import os
@@ -46,10 +47,12 @@ from boundary_potential import BoundaryPotential  # noqa: E402
 from desc_input import DESCInput  # noqa: E402
 from force import ForceResidual  # noqa: E402
 from grid import CartesianGrid  # noqa: E402
-from objective import (CurrentError, FieldError, Fields, ForceBalance,  # noqa: E402
+from objective import (CurrentError, CurrentMoments, FieldError, Fields, ForceBalance,  # noqa: E402
                        ObjectiveFunction, PressureEnergy, PressureError,
                        PressurePositivity, PressureSquare, _cartesian)
-from dense import DenseFields, force_matched_u  # noqa: E402
+from axisym_field import plasma_field_cached  # noqa: E402
+from cartesian_grid import cylindrical_to_cartesian  # noqa: E402
+from dense import DenseFields, force_matched_u, j_target  # noqa: E402
 from optimize import levenberg_marquardt  # noqa: E402
 from precondition import BlockPreconditioner, mode_groups, mode_labels  # noqa: E402
 from pressure import Pressure  # noqa: E402
@@ -186,8 +189,10 @@ def main():
                          "frac, at most a/20 unless the last is finer; axisymmetric with "
                          "--check-grid cylindrical: always 2 x the last)")
     ap.add_argument("--check-kernel", default="truncated", choices=["hockney", "truncated"])
-    for k in ("force", "B", "J", "p", "W", "p2", "pos"):
+    for k in ("force", "B", "J", "p", "W", "p2", "pos", "M"):
         ap.add_argument(f"--w-{k}", type=float, default=1.0 if k == "force" else None)
+    ap.add_argument("--moments", nargs="+", default=["I", "R", "Z", "V"],
+                    help="with --w-M: the current moments held (I_p, R_geo, Z_geo, V_eff/V)")
     ap.add_argument("--fix-I", action="store_true",
                     help="hold the enclosed toroidal current I(rho) (its zeta average) at the "
                          "start's: the a_l00 coefficients fixed")
@@ -196,10 +201,28 @@ def main():
     ap.add_argument("--bext", default="field", choices=["field", "desc"],
                     help="B_ext at the collocation points: the given field, or B_DESC - "
                          "B_plasma(x0) on this box (x0 then has no box error in B)")
-    ap.add_argument("--fit", default="T", choices=["T", "force"],
+    ap.add_argument("--bplasma", default="box", choices=["box", "axisym"],
+                    help="axisym: B_ext += B_plasma,accurate(x0) - B_plasma,box(x0), with the accurate "
+                         "axisymmetric field of axisym_field.py (the box then only carries the "
+                         "change from x0)")
+    ap.add_argument("--correct-passes", type=int, default=0,
+                    help="with --bplasma axisym: recompute the correction at the end state and "
+                         "optimize again, this many times (defect correction)")
+    ap.add_argument("--j-target-from", default=None,
+                    help="w_J's target: J of this run's start (results/gs/NAME, in its own basis), the "
+                         "same function for every basis (e.g. the x1 J-fit for a basis ladder)")
+    ap.add_argument("--j-target", default="desc", choices=["desc", "start"],
+                    help="target of the w_J term: J_DESC, or the start's J(x0) (a pure "
+                         "regularizer: zero with zero gradient at x0)")
+    ap.add_argument("--fit", default="T", choices=["T", "force", "J"],
                     help="start: the fit of T, or the force-matched fit of u (dense.py): "
                          "F_NEST(x0) - F_DESC minimized on the collocation points (with "
-                         "--bext desc)")
+                         "--bext desc), or J fitted to J_DESC on the collocation points")
+    ap.add_argument("--edge-power", type=int, default=2,
+                    help="s of the potential's window (1 - rho^2)^s: J = O((1 - rho)^(s - 1)) "
+                         "at the LCFS")
+    ap.add_argument("--w-J-rho", type=float, default=None,
+                    help="the w_J term only at rho < this (J free near the edge)")
     ap.add_argument("--fit-eps", type=float, default=1e-3,
                     help="weight of |J - J_DESC| in the force-matched fit")
     ap.add_argument("--dense", action="store_true",
@@ -215,6 +238,16 @@ def main():
                     help="J at the grid points from the flux grid: stencils formed per chunk "
                          "(compact, 25 bytes per point) or cached (1280 bytes per point); the same "
                          "values to rounding. Default: compact on the cylindrical grid, cached on the box")
+    ap.add_argument("--S-dtype", default="float32", choices=["float32", "float64"],
+                    help="storage of the cylindrical solver's single-layer matrices: float32 rounds S at "
+                         "~6e-8 and floors B_plasma at ~1.2e-9 of rms B (gs_cyl_floor2.py); float64 removes it")
+    ap.add_argument("--j-nodes", default="flux", choices=["flux", "direct"],
+                    help="cylindrical grid: J at the annulus nodes interpolated from the flux grid, or "
+                         "the basis evaluated at every node (node_current.py: no interpolation error)")
+    ap.add_argument("--dense-g", default="box", choices=["box", "exact"],
+                    help="with --dense: G from one box solve per column, or from the exact "
+                         "axisymmetric field (axisym_field.plasma_field_matrix: no box error, "
+                         "N = 0 only; the box is then only built, use a small --frac)")
     ap.add_argument("--dense-batch", type=int, default=8,
                     help="box solves at a time when forming the dense B_plasma (GPU memory)")
     ap.add_argument("--no-check", action="store_true",
@@ -231,13 +264,16 @@ def main():
     for k in ("W", "pos"):
         if getattr(a, f"w_{k}") is None:
             setattr(a, f"w_{k}", 10.0 if a.free == "all" else 0.0)
-    for k in ("B", "J", "p", "p2"):
+    for k in ("B", "J", "p", "p2", "M"):
         if getattr(a, f"w_{k}") is None:
             setattr(a, f"w_{k}", 0.0)
 
     t0 = time.time()
     inp = DESCInput.load(a.eq, field=a.coils)
-    cur = fit_cache.fit(BoundaryPotential, inp, factors=tuple(a.factors))
+    # edge_power s: J = O((1 - rho)^(s - 1)) at the LCFS (passed only when not the default 2,
+    # so that the cached fits keep their keys)
+    cur = fit_cache.fit(BoundaryPotential, inp, factors=tuple(a.factors),
+                        **({"edge_power": a.edge_power} if a.edge_power != 2 else {}))
     pre = fit_cache.fit(Pressure, inp, factors=tuple(a.factors), edge_order=2)
     sym = bool(inp.eq.sym)
     eq = inp.eq
@@ -245,9 +281,10 @@ def main():
     b = cur.basis
     res = lambda f: tuple(int(round(f * (u + v))) for u, v in ((b.L, eq.L), (b.M, eq.M), (b.N, eq.N)))
     weights = {"force": a.w_force, "B": a.w_B, "J": a.w_J, "p": a.w_p, "W": a.w_W,
-               "p2": a.w_p2, "pos": a.w_pos}
+               "p2": a.w_p2, "pos": a.w_pos, "M": a.w_M}
     classes = {"force": ForceBalance, "B": FieldError, "J": CurrentError, "p": PressureError,
-               "W": PressureEnergy, "p2": PressureSquare, "pos": PressurePositivity}
+               "W": PressureEnergy, "p2": PressureSquare, "pos": PressurePositivity,
+               "M": functools.partial(CurrentMoments, which=tuple(a.moments))}
     x = None
     if a.start is not None:  # its pressure rescaled from the scale it was run at
         st = np.load(a.start)
@@ -260,19 +297,23 @@ def main():
         box = make_box(inp, frac, a.grid, sym, a.margin)
         fr = ForceResidual(inp, box, resolution=res(a.colloc))
         fields = Fields(fr, cur, pre, kernel=a.kernel, dtype=getattr(jnp, a.dtype),
-                        cyl_dtype=getattr(jnp, a.cyl_dtype),
-                        j_compact=None if a.j_sampling is None else a.j_sampling == "compact")
+                        cyl_dtype=getattr(jnp, a.cyl_dtype), S_dtype=getattr(jnp, a.S_dtype),
+                        **({} if a.j_sampling is None else {"j_compact": a.j_sampling == "compact"}))
+        if a.j_nodes == "direct" and a.grid == "cylindrical":  # J at the annulus nodes from the basis
+            from node_current import NodeFields
+            fields = NodeFields.from_fields(fields, cur, box)
         if a.dense:  # B_plasma = G u + B_I; checked against the box solve along a random u
             v = jnp.asarray(np.random.default_rng(0).standard_normal(fields.n_u))
             B_box = np.asarray(fields.B_plasma(v))
-            fields = DenseFields.from_fields(fields, cur, batch=a.dense_batch)
+            fields = DenseFields.from_fields(fields, cur, batch=a.dense_batch, method=a.dense_g)
             err = np.linalg.norm(np.asarray(fields.B_plasma(v)) - B_box) / np.linalg.norm(B_box)
-            print(f"  dense B_plasma against the box solve, random u: {err:.1e}", flush=True)
-        if a.fit == "force":  # x0 = (force-matched u, the pressure fit)
+            print(f"  dense B_plasma against the box solve, random u: {err:.1e}"
+                  + (" (the box's own error: G is exact)" if a.dense_g == "exact" else ""), flush=True)
+        if a.fit in ("force", "J"):  # x0 = (force-matched u or J fit, the pressure fit)
             if u_force is None:
-                u_force, sc = force_matched_u(fr, cur, eps=a.fit_eps,
+                u_force, sc = force_matched_u(fr, cur, eps=a.fit_eps if a.fit == "force" else np.inf,
                                               desc={k: np.asarray(v) for k, v in fields.desc.items()})
-                print("force-matched start: <|(J - J_DESC) x B_DESC|> / norm (= F_NEST - F_DESC "
+                print(f"{a.fit}-fitted start: <|(J - J_DESC) x B_DESC|> / norm (= F_NEST - F_DESC "
                       f"at x0 with --bext desc) {sc['given fit']['F - F_DESC']:.2e} (fit of T) -> "
                       f"{sc['force fit']['F - F_DESC']:.2e}; rms J - J_DESC "
                       f"{sc['given fit']['J - J_DESC']:.2e} -> {sc['force fit']['J - J_DESC']:.2e}",
@@ -285,7 +326,26 @@ def main():
             print(f"B_ext = B_DESC - B_plasma(x0): replaces the field's, which missed B_DESC by "
                   f"{np.sqrt(np.sum(w * np.sum(B_err**2, 1))) / fields.rms['B']:.2e} (rms)",
                   flush=True)
-        obj = ObjectiveFunction([(classes[k](w, scale=a.p_scale) if k in ("W", "p2") else classes[k](w))
+        if a.bplasma == "axisym":  # the box's error in B_plasma(x0) removed (coils' field kept)
+            B_acc = np.asarray(cylindrical_to_cartesian(plasma_field_cached(
+                cur, np.asarray(fr.rtz), u=np.asarray(fields.x0[: fields.n_u])), np.asarray(fr.phi)))
+            B_box = np.asarray(fields.compute(fields.x0)["B_plasma"])
+            w = np.asarray(fields.sw) ** 2
+            err = lambda v: np.sqrt(np.sum(w * np.sum(v**2, 1))) / fields.rms["B"]  # noqa: E731
+            print(f"B_plasma(x0): box against accurate {err(B_box - B_acc):.2e}; B(x0) - B_DESC "
+                  f"{err(np.asarray(fields.B_ext) + B_box - np.asarray(fields.desc['B'])):.2e} -> "
+                  f"{err(np.asarray(fields.B_ext) + B_acc - np.asarray(fields.desc['B'])):.2e}",
+                  flush=True)
+            B_coil, B_corr = np.asarray(fields.B_ext), B_acc - B_box
+            fields.B_ext = jnp.asarray(B_coil + B_corr)
+        J_start = j_target(vars(a), fields, fields.x0, inp)
+        if a.j_target_from:
+            print(f"w_J target: J of {a.j_target_from}'s start (its own basis); against J(x0) here "
+                  f"{float(jnp.linalg.norm(J_start - fields.compute(fields.x0)['J']) / jnp.linalg.norm(J_start)):.2e}",
+                  flush=True)
+        obj = ObjectiveFunction([(classes[k](w, scale=a.p_scale) if k in ("W", "p2") else
+                                  classes[k](w, target=J_start, rho_max=a.w_J_rho) if k == "J" else
+                                  classes[k](w))
                                  for k, w in weights.items() if w > 0], fields).build()
         free = np.ones(obj.dim_x, bool) if a.free == "all" else np.arange(obj.dim_x) < fields.n_u
         if a.fix_I:  # 2pi <T_theta>_(theta, zeta) = I h_0 + 2pi rho^2 f <a>: only a_l00 enter
@@ -309,17 +369,22 @@ def main():
             m0 = fr.metrics(np.asarray(fields.compute(x0)["F"]))
 
         ref = {k: np.asarray(v) for k, v in fields.compute(x0).items()} if a.track else None
+        d_start = None
         if a.track and not hist:
-            print("drift " + json.dumps(drift(fields, x, x0, ref)), flush=True)
+            d_start = drift(fields, x, x0, ref)
+            print("drift " + json.dumps(d_start), flush=True)
 
         def save(x, h, frac=frac):  # every iteration, so that a time-out keeps the last x
             if a.track:
+                if d_start is not None and "drift" not in h[0]:  # the start (iteration 0)
+                    h[0]["drift"] = d_start
                 h[-1]["drift"] = drift(fields, x, x0, ref)
                 print("drift " + json.dumps(h[-1]["drift"]), flush=True)
             if a.keep_iterates:
                 xs.append(np.asarray(x))
             np.savez(a.out + "_iter.npz", x=np.asarray(x), x0=np.asarray(x0), free=free,
-                     p_scale=a.p_scale, **({"xs": np.array(xs)} if a.keep_iterates else {}))
+                     p_scale=a.p_scale, **({"xs": np.array(xs)} if a.keep_iterates else {}),
+                     **({"B_ext": np.asarray(fields.B_ext)} if a.bplasma == "axisym" else {}))
             with open(a.out + "_iter.json", "w") as f:
                 json.dump({"args": vars(a), "box": frac, "history": hist + h}, f, indent=1)
 
@@ -331,6 +396,28 @@ def main():
                                    cg_tol=a.cg_tol, callback=save, time_limit=a.time_limit,
                                    precond=P, ftol=a.ftol)
         hist += [dict(e, box=frac) for e in h]
+        for k in range(a.correct_passes if a.bplasma == "axisym" else 0):
+            # defect correction: the box error removed again, now at the current x (the box only
+            # carries the change from here), then the same optimization from x
+            B_acc = np.asarray(cylindrical_to_cartesian(plasma_field_cached(
+                cur, np.asarray(fr.rtz), u=np.asarray(x[: fields.n_u])), np.asarray(fr.phi)))
+            B_box = np.asarray(fields.compute(x)["B_plasma"])
+            w = np.asarray(fields.sw) ** 2
+            err = lambda v: np.sqrt(np.sum(w * np.sum(v**2, 1))) / fields.rms["B"]  # noqa: E731
+            F_old = obj.report(jnp.asarray(x))["<|F|>/norm"]
+            fields.B_ext = jnp.asarray(B_coil + B_acc - B_box)
+            obj = ObjectiveFunction(obj.objectives, fields).build()
+            print(f"[correction pass {k + 1}] B_plasma(x): box against accurate {err(B_box - B_acc):.2e}; "
+                  f"since the last correction {err(B_box + np.asarray(B_corr) - B_acc):.2e}; <|F|>/norm "
+                  f"{F_old:.3e} -> {obj.report(jnp.asarray(x))['<|F|>/norm']:.3e} with it", flush=True)
+            B_corr = B_acc - B_box
+            if a.precond == "block":
+                P = BlockPreconditioner(obj, x, mode_groups(mode_labels(fields, cur, pre), free),
+                                        structure=cur.S)
+            x, h = levenberg_marquardt(obj, x0=x, free=free, maxiter=a.maxiter, cg_maxiter=a.cg,
+                                       cg_tol=a.cg_tol, callback=save, time_limit=a.time_limit,
+                                       precond=P, ftol=a.ftol)
+            hist += [dict(e, box=frac, correction_pass=k + 1) for e in h]
         m1 = fr.metrics(np.asarray(fields.compute(x)["F"]))
         print(f"force error <|F|> / norm by rho on box {stage + 1} (h = a/{frac}), start -> end:")
         for k in m0["bins"]:
