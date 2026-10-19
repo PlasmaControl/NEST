@@ -25,6 +25,10 @@ Fixed-boundary MHD solver with non-nested flux surfaces, starting from a DESC fr
 - [ ] Add simple and more complex tests for the FFTs and iFFTs to re-construct precisely J and B.
 - [ ] Look at other solvers like QR/SVD on multiple GPUs (https://github.com/flatironinstitute/jaxmg)
 
+# WIP
+- [ ] DSHAPE without any perturbation: same x2 fit, x2 basis (L=M=64, edge power 3) 3,331 unknowns: 2,242 for J and 1,089 for p, collocation grid is 2 × (L_basis + L_DESC) which is 97 × 385 = 37,345 points, a/20 to a/240, |F|² + (1e-3)^2 |J − J_fit|^2 + p^22/2 in the whole volume, N=0, the evaluation grid 81 × 321 = 26,001 points with J and p from the end coefficients and B = B_coil + exact B_plasma (Biot-Savart). 
+- [ ] 
+  
 
 # Questions?
 - [ ] Should we raise s in (1-rho^2)^s to 3 or 4?
