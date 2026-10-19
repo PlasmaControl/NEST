@@ -17,7 +17,7 @@ Fixed-boundary MHD solver with non-nested flux surfaces, starting from a DESC fr
 
 # To do
 
-- [x] Fit DESC current density J as a Fourier-Zernike series (`nest/current_fz.py`)
+- [x] Fit DESC current density J as a Fourier-Zernike series (`nest/boundary_potential.py`)
 - [x] Evaluate J on the flux grid G1, a `ConcentricGrid` (`nest/desc_grid.py`)
 - [x] Map J to a uniform Cartesian grid G2 with a 2-D Newton inverse map (`nest/cartesian_grid.py`)
 - [x] Extend to the periodic computational box (step 3), with free-space handling of B (`nest/magnetic_field.py`)

@@ -1,7 +1,7 @@
 """Step 1 of NEST: evaluate the current density on the flux-aligned grid G1.
 
-J is stored as a Fourier-Zernike series (see ``current_fz.CurrentFZ``) and
-evaluated from it; the geometry X(rho, theta, zeta) comes from the DESC
+J comes from any current with ``evaluate(grid)`` (e.g. ``boundary_potential.
+BoundaryPotential``); the geometry X(rho, theta, zeta) comes from the DESC
 equilibrium.
 
 """

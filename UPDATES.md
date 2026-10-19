@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-10-19: Remove the legacy step-2 driver and CurrentFZ
+- `nest/run_step2.py` (the first J-on-the-box driver, unused) and `nest/current_fz.py` (the first Fourier-Zernike J, replaced by `boundary_potential.BoundaryPotential`) removed.
+- `tests/test_desc_grid.py` now checks `desc_grid.flux_grid` and `evaluate_on_flux_grid` (full-torus tiling, Cartesian rotation) with DESC's own J as the current: equal to DESC's J on precise_QA and W7-X (error 0, tolerance 1e-12). `desc_grid.py` docstring and README updated.
+
 ## 2026-10-19: Repository cleanup: scripts, tests and figures in subfolders
 - `scripts/`: the drivers stay at the top (`optimize_qa.py`, `optimize_fb.py`); `dshape/` (the axisymmetric tokamak study), `stellarator/` (precise_QA, NCSX, QH, CTH-like), `diagnostics/`, `modal_cyl/` (unchanged). Moved scripts find the repository one level higher; sibling imports from their own folder.
 - Removed the DSHAPE scripts of the Cartesian-box and corrected-B_plasma runs, or superseded: gs_box_convergence, gs_bphi_check, gs_axisym_check, gs_check_norms, gs_force_fit, gs_x0_force, gs_plots, gs_plot_drift, gs_plot_null64, gs_nullspace, gs_plot_J_fit, gs_poincare, gs_edge_J (-> gs_edge_zoom), gs_cyl_convergence (-> gs_ladder), gs_long_run, gs_newton, gs_dense_plot (read gs_long_run's output).
