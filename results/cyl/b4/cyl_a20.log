@@ -1,0 +1,85 @@
+precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5: a = 0.17285 m; BoundaryPotential L, M, N = 48, 48, 35 (90408 free); fit/load 2 s
+[cyl a/20] CylindricalGrid(r [0.6258, 1.3567] n 134, z [-0.4197, 0.4197] n 154, N_phi 495, NFP 2: 10.21M nodes); baseline peak 0.69 GB
+    locate: planes 8/495, 16,897 inside, 17 s
+    locate: planes 16/495, 33,769 inside, 33 s
+    locate: planes 24/495, 50,480 inside, 49 s
+    locate: planes 32/495, 67,012 inside, 65 s
+    locate: planes 40/495, 83,293 inside, 81 s
+    locate: planes 48/495, 99,237 inside, 97 s
+    locate: planes 56/495, 114,805 inside, 113 s
+    locate: planes 64/495, 129,937 inside, 129 s
+    locate: planes 72/495, 144,606 inside, 146 s
+    locate: planes 80/495, 158,830 inside, 162 s
+    locate: planes 88/495, 172,635 inside, 178 s
+    locate: planes 96/495, 186,018 inside, 194 s
+    locate: planes 104/495, 199,046 inside, 210 s
+    locate: planes 112/495, 211,750 inside, 226 s
+    locate: planes 120/495, 224,195 inside, 242 s
+    locate: planes 128/495, 236,411 inside, 258 s
+    locate: planes 136/495, 248,443 inside, 273 s
+    locate: planes 144/495, 260,310 inside, 289 s
+    locate: planes 152/495, 272,054 inside, 307 s
+    locate: planes 160/495, 283,704 inside, 324 s
+    locate: planes 168/495, 295,295 inside, 340 s
+    locate: planes 176/495, 306,835 inside, 358 s
+    locate: planes 184/495, 318,354 inside, 376 s
+    locate: planes 192/495, 329,861 inside, 393 s
+    locate: planes 200/495, 341,361 inside, 409 s
+    locate: planes 208/495, 352,883 inside, 426 s
+    locate: planes 216/495, 364,437 inside, 443 s
+    locate: planes 224/495, 376,024 inside, 460 s
+    locate: planes 232/495, 387,627 inside, 477 s
+    locate: planes 240/495, 399,247 inside, 493 s
+    locate: planes 248/495, 410,873 inside, 510 s
+    locate: planes 256/495, 422,499 inside, 526 s
+    locate: planes 264/495, 434,119 inside, 543 s
+    locate: planes 272/495, 445,722 inside, 559 s
+    locate: planes 280/495, 457,309 inside, 576 s
+    locate: planes 288/495, 468,863 inside, 593 s
+    locate: planes 296/495, 480,385 inside, 609 s
+    locate: planes 304/495, 491,885 inside, 626 s
+    locate: planes 312/495, 503,392 inside, 642 s
+    locate: planes 320/495, 514,911 inside, 659 s
+    locate: planes 328/495, 526,451 inside, 675 s
+    locate: planes 336/495, 538,042 inside, 691 s
+    locate: planes 344/495, 549,692 inside, 708 s
+    locate: planes 352/495, 561,436 inside, 724 s
+    locate: planes 360/495, 573,303 inside, 741 s
+    locate: planes 368/495, 585,335 inside, 757 s
+    locate: planes 376/495, 597,551 inside, 774 s
+    locate: planes 384/495, 609,996 inside, 791 s
+    locate: planes 392/495, 622,700 inside, 807 s
+    locate: planes 400/495, 635,728 inside, 824 s
+    locate: planes 408/495, 649,111 inside, 840 s
+    locate: planes 416/495, 662,916 inside, 857 s
+    locate: planes 424/495, 677,140 inside, 874 s
+    locate: planes 432/495, 691,809 inside, 891 s
+    locate: planes 440/495, 706,941 inside, 909 s
+    locate: planes 448/495, 722,509 inside, 926 s
+    locate: planes 456/495, 738,453 inside, 943 s
+    locate: planes 464/495, 754,734 inside, 960 s
+    locate: planes 472/495, 771,266 inside, 977 s
+    locate: planes 480/495, 787,977 inside, 994 s
+    locate: planes 488/495, 804,849 inside, 1011 s
+    locate: planes 495/495, 819,634 inside, 1026 s
+[cyl a/20] locate: 1026.3 s, peak so far 1.48 GB
+  J series (819,634 points) chunk 20/41: 400,000/819,634 points, 74s elapsed, ETA 78s
+  J series (819,634 points) chunk 40/41: 800,000/819,634 points, 145s elapsed, ETA 4s
+  J series (819,634 points) chunk 41/41: 819,634/819,634 points, 148s elapsed, ETA 0s
+[cyl a/20] J: 148.1 s, peak so far 1.67 GB
+    S_m: 57/576 targets
+    S_m: 114/576 targets
+    S_m: 171/576 targets
+    S_m: 228/576 targets
+    S_m: 285/576 targets
+    S_m: 342/576 targets
+    S_m: 399/576 targets
+    S_m: 456/576 targets
+    S_m: 513/576 targets
+    S_m: 570/576 targets
+  FreeSpaceAnnulus: 496 distinct |m| <= 495, N_b = 576; eig 3.5 s, S 211.3 s (658 MB)
+[cyl a/20] precompute: 214.8 s, peak so far 1.67 GB
+[cyl a/20] solve_first: 1.8 s, peak so far 1.98 GB
+[cyl a/20] solve: 1.5 s, peak so far 1.98 GB
+[cyl a/20] interp: 1.6 s, peak so far 1.98 GB
+cyl_a20: inside 819,634; |m| 496, N_b 576, S 0.66 GB (float32); peak 1.98 GB

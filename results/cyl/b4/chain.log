@@ -1,0 +1,13 @@
+=== box --frac 10 19:06:44
+precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5: a = 0.17285 m; BoundaryPotential L, M, N = 48, 48, 35 (90408 free); fit/load 2 s
+box_a10_float64: box (315, 315, 96) (9.5M), inside 119,678; times kernel 0.9 s, locate+J 175.1 s, solve 0.8 s, interp 8.0 s; peak 3.90 GB (baseline 0.69)
+=== cyl --frac 15 19:09:56
+precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5: a = 0.17285 m; BoundaryPotential L, M, N = 48, 48, 35 (90408 free); fit/load 2 s
+cyl_a15: CylindricalGrid(r [0.6200, 1.3624] n 103, z [-0.4255, 0.4255] n 117, N_phi 373, NFP 2: 4.50M nodes); inside 344,131; |m| 374, N_b 440, S 0.58 GB; times locate 443.4 s, J 73.6 s, precompute 95.0 s, solve_first 0.8 s, solve 0.5 s, interp 0.8 s; peak 3.94 GB (baseline 0.69)
+=== box --frac 15 19:20:17
+precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5: a = 0.17285 m; BoundaryPotential L, M, N = 48, 48, 35 (90408 free); fit/load 2 s
+box_a15_float64: box (480, 480, 140) (32.3M), inside 403,774; times kernel 2.8 s, locate+J 494.1 s, solve 2.0 s, interp 28.4 s; peak 4.65 GB (baseline 0.69)
+=== ref 19:29:13
+precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5: a = 0.17285 m; BoundaryPotential L, M, N = 48, 48, 35 (90408 free); fit/load 2 s
+=== cyl --frac 20 19:39:44
+precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5: a = 0.17285 m; BoundaryPotential L, M, N = 48, 48, 35 (90408 free); fit/load 2 s

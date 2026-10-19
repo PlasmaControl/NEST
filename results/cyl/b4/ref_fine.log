@@ -1,0 +1,12 @@
+=== ref fine 21:36:27
+precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5: a = 0.17285 m; BoundaryPotential L, M, N = 48, 48, 35 (90408 free); fit/load 2 s
+  ref: 25/200 targets, 179 s, peak 2.47 GB
+  ref: 50/200 targets, 359 s, peak 2.53 GB
+  ref: 75/200 targets, 555 s, peak 2.53 GB
+  ref: 100/200 targets, 739 s, peak 2.53 GB
+  ref: 125/200 targets, 923 s, peak 2.53 GB
+  ref: 150/200 targets, 1099 s, peak 2.53 GB
+  ref: 175/200 targets, 1282 s, peak 2.53 GB
+  ref: 200/200 targets, 1466 s, peak 2.53 GB
+continuous Biot-Savart at 200 exterior points, L, M, N = (64, 64, 56) vs (48, 48, 42): max diff 1.1e-03; 1466 s; peak 2.53 GB
+=== done 22:01:02

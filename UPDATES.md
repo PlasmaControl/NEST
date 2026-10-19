@@ -2,6 +2,37 @@
 
 One entry per commit, newest first.
 
+## 2026-10-19: Merge branch `cylindrical-grid` into main
+- The cylindrical-annulus J -> B solver (Chebyshev in r, z, Fourier in phi, James' free-space correction with S_m), its axisymmetric path, GPU S_m setup, mapped nodes and compact J sampling, next to main's free boundary (2026-10-16). Only UPDATES.md conflicted (entries of both sides kept, newest first).
+
+## 2026-10-18: Compact J sampling (branch `cylindrical-grid`)
+- `PointInterpolator(compact=True)`: the 4x4x4 Lagrange stencil formed per chunk from the points' stencil coordinates (25 bytes per point against 1280); values to rounding (<= 7e-16). `Fields(j_compact=...)`, `optimize_qa --j-sampling compact|cached`; default compact on the cylindrical grid, main's box unchanged.
+- GPU (A100, production precise_QA, 5 iterations): no time cost (a/20 22.8 vs 23.0 s/it, a/30 51.1 vs 52.4), peak memory -0.48 GiB at a/20 and -1.63 GiB at a/30 (the cache size); the J -> B model drops 1.26x at a/40. Docs: `docs/cylindrical_grid.md`, "Compact J sampling".
+
+## 2026-10-17: Cylindrical grid: mapped (KTE) nodes supported; not a memory lever (branch `cylindrical-grid`)
+- `annulus_poisson`: radial eigendecompositions in real block form (complex pairs of mapped operators, `_block_eig`), complex z eigenbasis when the mapped z operator has pairs; `CylindricalSolver` divides per pair. Unmapped grids run the previous path (bitwise). Gate A2c (block reconstruction 4.5e-15, Dirichlet vs dense <= 1.5e-13, NumPy and JAX).
+- `tests/cyl_b4.py cyl --alpha`. B4 on the smooth-current precise_QA: at equal h the map halves the nodes but raises the error (a/20 2.25e-4 -> 2.8e-4); at equal accuracy it needs 1.24-1.39x fewer total nodes but 1.2-1.3x more inside nodes (J sampling), converging more slowly. No net memory saving; default stays alpha = 0. Docs: `docs/cylindrical_grid.md`, "Mapped nodes".
+
+## 2026-10-17: Cylindrical grid: axisymmetric path (branch `cylindrical-grid`)
+- `CylindricalGrid.around` uses one plane (N_phi = 1) for N = 0 equilibria (`axisym=False` to override): the solve is two 2-D problems; `optimize_qa --grid cylindrical`, `--check-grid cylindrical`, `--dense` and `--bext desc --fit force` work unchanged. The axisymmetric cylindrical check defaults to 2x finer than the run.
+- Gates D3a–D3e (`tests/test_cylindrical_axisym.py`): N_phi = 1 equals N_phi = 5 to ~1e-14 (B, F, J v, dense G); B order 3.3 in h.
+- Tokamak L24M24, factors (2, 2, 1), 30 dense float64 iterations on the laptop: cylindrical a/80 reaches 3.9e-8 (checked 4.0e-8 on a/160), below DESC's 1.14e-7; at a/20 and on the box a/10 the optimizer fits the grid's B error (checks rise to 2.2e-6 and 9.8e-5). Start residual at equal h 2-3x below the box's; the box a/20 start takes 22 min, the cylindrical a/80 2 min.
+- S_m CPU build: the block budget counts the Lagrange matrices (axisymmetric a/80 196 s -> 16 s on the laptop). Docs: `docs/cylindrical_grid.md`, "Axisymmetric path".
+
+## 2026-10-17: Cylindrical grid: S_m setup on the GPU (branch `cylindrical-grid`)
+- `nest/single_layer_jax.py`: the single-layer matrices S_m built on the device (Miller start sweeps per start-length bucket, one recurrence pass per chunk of targets, Lagrange maps and face products on the device). Used automatically on a GPU with x64 (`NEST_S_BACKEND=auto|jax|numpy`).
+- Against the float64 CPU references for precise_QA a/20–a/60: ≤ 3.9e-14 row-relative. S_m at a/60 (16.3 GB) in 30 s on an A100-80GB (41 s on 40 GB), against 141 s on 32 CPU processes (~10 min on the 8 CPUs of a GPU node).
+- `AnnulusPoisson`: per-mode eigendecompositions on threads (`NEST_EIG_THREADS`; BLAS pinned per worker; bitwise equal), a/60 96 s → 14 s on 8 CPUs; `cond_Vr` computed on demand.
+- CPU build: process pool by default on Linux (`NEST_S_JOBS`); S_m cache key by `single_layer.S_NUMERICS` instead of the source of the building code; `tests/cyl_s_build.py grids --eq/--coils`.
+- The precise_QA references on the Modal Volume were re-keyed to the new scheme. Docs: `docs/cylindrical_grid.md`, "Before a high-resolution run"; `tests/cyl_s_gpu.py`, `scripts/modal_cyl/run_s_gpu.sh`.
+
+## 2026-10-17: Cylindrical-annulus J → B (branch `cylindrical-grid`)
+- New free-space J → B solve on one field period of an annulus: Fourier in φ, Chebyshev in r and z, James' correction per toroidal mode (`nest/cylindrical_bs.py`, `cylindrical_grid.py`, `annulus_freespace.py`, `single_layer.py`, `toroidal_kernel.py`, `annulus_poisson.py`, `chebyshev.py`).
+- `Fields` with a `CylindricalGrid` box, `optimize_qa.py --grid cylindrical`; `DenseFields` works unchanged; main's paths bitwise unchanged (C4).
+- Gates A1–C6 pass (`tests/test_cylindrical_bs.py`, `tests/test_cylindrical_integration.py`).
+- precise_QA, cylindrical path in float64 (the default, `cyl_dtype`; float32 is not accurate at production sizes and stalled the GPU optimizations): at equal h 3.4–4.6× less memory than the float32 VG box for the JᵀW product + J sampling (model), ~0.6× its exterior B error (converging ~O(h²) to 3.3e-5 at a/40), and 1.8× less time per optimizer iteration on an A100 (a/20: 23.6 vs 43.2 s). The box cannot reach a/40 on an 80 GB card; cylindrical float64 is estimated at a/60–65.
+- GPU (Modal A100) results, the float32 correction and open items: `docs/cylindrical_grid.md`; job scripts `scripts/modal_cyl/`.
+
 ## 2026-10-16: NEST with a free boundary: B.n = 0 on a moving boundary, solved with force balance
 - `nest/free_boundary.py`: the boundary's normal displacement xi is a new set of unknowns, x = (u, c_p, xi), extended inside as rho^|m|. J and p are carried with the coordinates.
   - New objectives: `BoundaryNormalField` (B.n/|B| on the boundary), `ToroidalFlux` (Psi held), `StoredEnergy` (int p dV in the moving volume) and `TransportedCurrentError`.

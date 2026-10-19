@@ -70,7 +70,23 @@ class Fields(_Pytree):
         Fixed structure, geometry and I; its u is the start.
     pressure : Pressure
         Fixed basis and edge order; its coefficients are the start.
-    kernel : "hockney" or "truncated"
+    kernel : "hockney", "truncated" or "cylindrical"
+        "cylindrical" (implied when ``force.box`` is a ``CylindricalGrid``): the
+        free-space solve on the annulus of ``cylindrical_bs``, in float64, with J
+        in cylindrical components at the grid's inside nodes and B at the points
+        by ``CylindricalInterpolator``; ``dtype`` sets the precision of J on the grid,
+        the mode solves and the interpolation, as it does for the box.
+    cyl_dtype : float64 (default) or float32
+        Precision of the cylindrical path (J at the nodes, the mode solves, the
+        interpolation), independent of ``dtype``. float32 is NOT accurate at production
+        sizes: its error grows ~n^2 with the Chebyshev order (B rms 3.5e-4 at a/20, from
+        the per-mode Dirichlet solve and from differentiating a float32 A), which broke
+        Gauss-Newton line searches in production (D2, results/cyl/c6/f32_mixed.log).
+    S_dtype : float32 or float64
+        Storage of the cylindrical solver's single-layer matrices.
+    cyl_half : bool
+        With stellarator symmetry and a z-symmetric annulus, interpolate J at half the
+        inside nodes and mirror it to the rest (as the box path does).
     share : Fields, optional
         Another ``Fields`` on the same box (and current): its flux grid, box
         interpolation and kernel are reused; only the collocation side is built.
@@ -83,16 +99,29 @@ class Fields(_Pytree):
         Of J and B on the box and of the non-uniform FFT.
     chunk : int
         Points per chunk of the interpolations.
+    j_compact : bool, optional
+        J sampling (flux grid -> box points) with the stencils formed per chunk from the
+        points' stencil coordinates (25 bytes per point) instead of cached (64 indices,
+        weights and signs, 1280 bytes per point in float64); the same values to rounding.
+        Default: on for the cylindrical path, off for main's box (unchanged).
     """
 
     # arrays passed to the jitted functions as inputs (not compiled in as constants)
     _dynamic = ("J_col", "p_col", "phi", "sw", "B_ext", "J_flux", "to_box", "box_phi", "src",
-                "K_hat", "t", "to_points")
+                "K_hat", "t", "to_points", "solver")
 
     def __init__(self, force, current, pressure, kernel="hockney", flux_grid=None, order=4,
-                 dtype=jnp.float32, chunk=65536, share=None):
+                 dtype=jnp.float32, chunk=65536, share=None, S_dtype=jnp.float32, mode_chunk=16,
+                 cyl_half=True, cyl_dtype=jnp.float64, j_compact=None):
         eq, box = force.inp.eq, force.box
+        from cylindrical_grid import CylindricalGrid
+        self.cyl = isinstance(box, CylindricalGrid)
+        if self.cyl:
+            kernel = "cylindrical"
+        elif kernel == "cylindrical":
+            raise ValueError("kernel 'cylindrical' needs a CylindricalGrid as force.box")
         self.force, self.kernel, self.dtype, self.chunk = force, kernel, dtype, chunk
+        self.cyl_dtype = jnp.dtype(cyl_dtype)
         self.sym = force.sym
         self.cdtype = jnp.complex64 if dtype == jnp.float32 else jnp.complex128
         # transform precision (1e-5 would give ~2e-4 with nufftax's kernel width rule)
@@ -115,8 +144,8 @@ class Fields(_Pytree):
 
         if share is not None:  # the box side of another Fields on the same box
             for k in ("J_flux", "half", "half_rows", "to_box", "box_phi", "src", "shape", "axes",
-                      "K_hat", "_solve"):
-                setattr(self, k, getattr(share, k))
+                      "K_hat", "_solve", "solver", "cyl"):
+                setattr(self, k, getattr(share, k, None))
             self._points(force, box, dtype, chunk)
             return
         # J at the box points: uniform flux grid, cached interpolation
@@ -126,6 +155,39 @@ class Fields(_Pytree):
         self.J_flux = TensorCurrent(current.S, current._RZ, fg)
         self.half = self.half_rows = None
         inside, rtz = np.asarray(box.inside), np.asarray(box.rtz)
+        if self.cyl:  # the annulus: J in cylindrical components at the inside nodes
+            from cylindrical_bs import CylindricalSolver
+            zs = box.z_axis
+            if (cyl_half and self.sym
+                    and abs(zs.a + zs.b) <= 1e-12 * max(abs(zs.a), abs(zs.b))):
+                # stellarator symmetry (r, phi, z) -> (r, -phi, -z): node (k, i, l) ->
+                # ((-k) mod N_phi, i, n_z - l), J -> (-J_r, J_phi, J_z); interpolate on
+                # planes 1..(N_phi - 1) / 2 and the upper half of plane 0 only
+                k, i, l = np.unravel_index(inside, box.shape)
+                nz, N = zs.n, box.N_phi
+                keep = ((k >= 1) & (k <= (N - 1) // 2)) | ((k == 0) & (2 * l >= nz))
+                inside, rtz = inside[keep], rtz[keep]
+                k, i, l = k[keep], i[keep], l[keep]
+                mirror = np.ravel_multi_index(((-k) % N, i, nz - l), box.shape)
+                other = mirror != inside  # the midplane line of plane 0 is its own mirror
+                self.half, self.half_rows = mirror[other], np.flatnonzero(other)
+            # in the precision of the cylindrical solve (``cyl_dtype``)
+            self.to_box = PointInterpolator(fg, rtz, order, chunk=chunk, dtype=cyl_dtype,
+                                            compact=True if j_compact is None else bool(j_compact))
+            self.box_phi = None
+            n, n_h = len(inside), 0 if self.half is None else len(self.half)
+            src = np.full(box.size, n + n_h, np.int32)
+            src[inside] = np.arange(n)
+            if self.half is not None:
+                src[self.half] = n + np.arange(n_h)
+            self.src = jnp.asarray(src)
+            self.shape, self.axes, self.K_hat, self._solve = box.shape, None, None, None
+            self.solver = CylindricalSolver(box.r_axis, box.z_axis, box.NFP, box.N_phi,
+                                            chunk=mode_chunk, S_dtype=np.dtype(S_dtype),
+                                            dtype=cyl_dtype)
+            self._points(force, box, cyl_dtype, chunk)
+            return
+        self.solver = None
         if self.sym and _symmetric_box(box):
             # interpolate at y > 0 (and y = 0, z >= 0) only; the mirror (x, -y, -z)
             # takes (-J_x, J_y, J_z)
@@ -138,7 +200,7 @@ class Fields(_Pytree):
             other = mirror != inside  # points on y = z = 0 are their own mirror
             self.half, self.half_rows = mirror[other], np.flatnonzero(other)
         # in the precision of the box fields (J on the box is stored in it)
-        self.to_box = PointInterpolator(fg, rtz, order, chunk=chunk, dtype=dtype)
+        self.to_box = PointInterpolator(fg, rtz, order, chunk=chunk, dtype=dtype, compact=bool(j_compact))
         self.box_phi = jnp.asarray(rtz[:, 2])
         # J on the box as one gather: each box point takes a row of [J at the
         # interpolated points; their mirrors; 0] (a scatter onto a zero box would
@@ -163,6 +225,13 @@ class Fields(_Pytree):
 
     def _points(self, force, box, dtype, chunk):
         """The collocation points as angles of the box period, and their interpolator."""
+        if self.cyl:
+            from cylindrical_grid import CylindricalInterpolator
+            x = np.asarray(force.x)
+            rpz = np.column_stack([np.hypot(x[:, 0], x[:, 1]), np.asarray(force.phi), x[:, 2]])
+            self.t = None
+            self.to_points = CylindricalInterpolator(box, rpz, dtype=dtype)
+            return
         x0 = np.array([a[0] for a in box.axes])
         L = np.array([len(a) * (a[1] - a[0]) for a in box.axes])
         t = 2 * np.pi * (force.x - x0) / L
@@ -203,6 +272,13 @@ class Fields(_Pytree):
     def J_box(self, u, I=None):
         """J on the box (Cartesian components), shape box.shape + (3,); I = 0 gives
         the part linear in u."""
+        if self.cyl:  # cylindrical components on the annulus grid
+            J_flux = self.J_flux(u, self.I if I is None else I).astype(self.cyl_dtype)
+            J = self.to_box(J_flux, VECTOR_PARITY)
+            if self.half is not None:  # the mirror nodes: (-J_r, J_phi, J_z)
+                J = jnp.concatenate([J, J[self.half_rows] * jnp.asarray([-1.0, 1.0, 1.0], J.dtype)])
+            J = jnp.pad(J, ((0, 1), (0, 0)))  # the zero row
+            return J[self.src].reshape(self.shape + (3,))
         J_flux = self.J_flux(u, self.I if I is None else I).astype(self.dtype)
         J = _cartesian(self.to_box(J_flux, VECTOR_PARITY), self.box_phi.astype(self.dtype))
         if self.half is not None:
@@ -212,6 +288,9 @@ class Fields(_Pytree):
 
     def B_plasma(self, u, I=None):
         """B_plasma at the collocation points, (n, 3); I = 0 gives the part linear in u."""
+        if self.cyl:
+            Bp, Bz = self.solver.field_modes(self.J_box(u, I))
+            return _cartesian(self.to_points(Bp, Bz), self.phi)
         # checkpointed: the reverse pass recomputes the kernel slices of the solve
         # from K_hat (cached) instead of storing them
         solve = jax.checkpoint(lambda J_hat, K_hat: self._solve(J_hat, self.axes, K_hat),

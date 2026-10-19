@@ -114,7 +114,7 @@ class ForceResidual:
         dq = inp.compute(["<|F|>_vol", "<|grad(|B|^2)|/2mu0>_vol"], q)
         self.norm = float(np.ravel(dq["<|grad(|B|^2)|/2mu0>_vol"])[0])
         self.F_desc_vol = float(np.ravel(dq["<|F|>_vol"])[0])  # DESC's own <|F|>
-        self.K_hat = None if box is None else biot_savart_kernel_hat(box.axes)
+        self.K_hat = None if box is None or not hasattr(box, "axes") else biot_savart_kernel_hat(box.axes)
 
     @functools.cached_property
     def B_ext(self):
@@ -126,7 +126,18 @@ class ForceResidual:
         return evaluate_chunked(evaluator, rtz, self.eval_chunk)
 
     def B_plasma(self, current):
-        """B_plasma at the collocation points: J on the box -> FFT -> interpolation."""
+        """B_plasma at the collocation points: J on the box -> FFT -> interpolation
+        (on a ``CylindricalGrid``: the annulus solve and its interpolator)."""
+        if not hasattr(self.box, "axes"):
+            import jax.numpy as jnp
+            from cylindrical_bs import CylindricalSolver
+            from cylindrical_grid import evaluate
+            J = self.box.scatter(self._series(current.point_evaluator(self.inp.eq), self.box.rtz))
+            g = self.box
+            Bp, Bz = CylindricalSolver(g.r_axis, g.z_axis, g.NFP, g.N_phi,
+                                       S_dtype=np.float32).field_modes(jnp.asarray(J))
+            rpz = np.column_stack([np.hypot(self.x[:, 0], self.x[:, 1]), self.phi, self.x[:, 2]])
+            return cylindrical_to_cartesian(evaluate(g, Bp, Bz, rpz), self.phi)
         J_box = cylindrical_to_cartesian(self._series(current.point_evaluator(self.inp.eq),
                                                       self.box.rtz), self.box.phi_inside)
         J_hat = fft_J(self.box.scatter(J_box, np.float32))

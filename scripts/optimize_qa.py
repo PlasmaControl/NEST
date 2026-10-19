@@ -10,7 +10,7 @@ the truncated kernel, the block preconditioner; ``--refine 20`` continues on a
 finer box.
 
 run (GPU): sbatch --qos=gpu-stellar --time=03:00:00 run.sbatch scripts/optimize_qa.py \
-    [--frac 10] [--refine 20] [--kernel hockney|truncated] [--free current|all] \
+    [--frac 10] [--refine 20] [--kernel hockney|truncated] [--grid cartesian|cylindrical] [--free current|all] \
     [--maxiter 100] [--cg 100] [--precond jacobi|block] [--time-limit s] [--start x.npz] \
     [--w-force 1] [--w-B 0] [--w-J 0] [--w-p 0] [--w-W 10] [--w-p2 0] [--w-pos 10] [--factors 3 3 2.5] \
     [--out results/opt]
@@ -58,6 +58,18 @@ jax.config.update("jax_enable_x64", True)
 EQ = os.path.join(ROOT, "desc_input", "precise_QA_free_boundary_smooth_J",
                   "precise_QA_free_boundary_smooth_J_edgeJ_r0.3.h5")
 COILS = os.path.join(ROOT, "desc_input", "precise_QA_free_boundary", "precise_QA_helical_coils.h5")
+
+
+def make_box(inp, frac, grid="cartesian", sym=True, margin=2.0):
+    """The B_plasma grid at h = a / frac: main's periodic Cartesian box, or the
+    cylindrical annulus (``cylindrical_grid``), with the plasma located on it."""
+    if grid == "cylindrical":
+        from cylindrical_grid import CylindricalGrid
+        g = CylindricalGrid.around(inp, inp.a / frac, margin)
+        zs = g.z_axis
+        sym_z = abs(zs.a + zs.b) <= 1e-12 * max(abs(zs.a), abs(zs.b))
+        return g.locate_plasma(inp, verbose=True, sym=sym and sym_z)
+    return CartesianGrid.periodic_box(inp, inp.a / frac, odd=sym).locate_plasma(inp)
 
 
 def check(inp, box, cur, pre, resolution, kernel, xs, n_rho=8):
@@ -143,6 +155,14 @@ def main():
     ap.add_argument("--refine", type=int, nargs="*", default=[],
                     help="continue on finer boxes, h = a / refine (e.g. --refine 20)")
     ap.add_argument("--kernel", default="truncated", choices=["hockney", "truncated"])
+    ap.add_argument("--grid", default="cartesian", choices=["cartesian", "cylindrical"],
+                    help="B_plasma solver: main's periodic box (with --kernel), or the "
+                         "free-space solve on the cylindrical annulus (cylindrical_bs)")
+    ap.add_argument("--margin", type=float, default=2.0,
+                    help="cylindrical grid: walls this many h beyond the plasma's (R, Z) extent")
+    ap.add_argument("--check-grid", default="cartesian", choices=["cartesian", "cylindrical"],
+                    help="grid of the independent check (default the box: independent of "
+                         "--grid cylindrical)")
     ap.add_argument("--free", default="all", choices=["current", "all"],
                     help="all: the current and the pressure (with W and pos held by default)")
     ap.add_argument("--maxiter", type=int, default=100, help="per box")
@@ -162,8 +182,9 @@ def main():
     ap.add_argument("--check", type=float, default=3,
                     help="independent check grid resolution / resolution of F")
     ap.add_argument("--check-frac", type=int, default=None,
-                    help="box of the independent check, h = a / check-frac (default 2 x the last "
-                         "box, at most a/20 unless that is finer)")
+                    help="grid of the independent check, h = a / check-frac (default: 2 x the last "
+                         "frac, at most a/20 unless the last is finer; axisymmetric with "
+                         "--check-grid cylindrical: always 2 x the last)")
     ap.add_argument("--check-kernel", default="truncated", choices=["hockney", "truncated"])
     for k in ("force", "B", "J", "p", "W", "p2", "pos"):
         ap.add_argument(f"--w-{k}", type=float, default=1.0 if k == "force" else None)
@@ -187,6 +208,13 @@ def main():
     ap.add_argument("--dtype", default="float32", choices=["float32", "float64"],
                     help="precision of J and B on the box (and of the dense G): float32 limits "
                          "<|F|> / norm to ~1e-8")
+    ap.add_argument("--cyl-dtype", default="float64", choices=["float32", "float64"],
+                    help="precision of the cylindrical J -> B path (float32 is not accurate at "
+                         "production sizes); --dtype sets main's box")
+    ap.add_argument("--j-sampling", default=None, choices=["compact", "cached"],
+                    help="J at the grid points from the flux grid: stencils formed per chunk "
+                         "(compact, 25 bytes per point) or cached (1280 bytes per point); the same "
+                         "values to rounding. Default: compact on the cylindrical grid, cached on the box")
     ap.add_argument("--dense-batch", type=int, default=8,
                     help="box solves at a time when forming the dense B_plasma (GPU memory)")
     ap.add_argument("--no-check", action="store_true",
@@ -229,9 +257,11 @@ def main():
             x = x.at[cur.n_free :].multiply(a.p_scale / s0)
     hist, m0, m1, xs, u_force = [], None, None, [], None
     for stage, frac in enumerate([a.frac] + list(a.refine)):
-        box = CartesianGrid.periodic_box(inp, inp.a / frac, odd=sym).locate_plasma(inp)
+        box = make_box(inp, frac, a.grid, sym, a.margin)
         fr = ForceResidual(inp, box, resolution=res(a.colloc))
-        fields = Fields(fr, cur, pre, kernel=a.kernel, dtype=getattr(jnp, a.dtype))
+        fields = Fields(fr, cur, pre, kernel=a.kernel, dtype=getattr(jnp, a.dtype),
+                        cyl_dtype=getattr(jnp, a.cyl_dtype),
+                        j_compact=None if a.j_sampling is None else a.j_sampling == "compact")
         if a.dense:  # B_plasma = G u + B_I; checked against the box solve along a random u
             v = jnp.asarray(np.random.default_rng(0).standard_normal(fields.n_u))
             B_box = np.asarray(fields.B_plasma(v))
@@ -271,7 +301,9 @@ def main():
             x = x.at[fix].set(x0[fix])
         print(f"{inp}\n[box {stage + 1}] h = a/{frac} {box.shape}, collocation {fr.tgrid.shape}, "
               f"unknowns {obj.dim_x:,} ({int(free.sum()):,} free), residual {obj.dim_f:,}; "
-              f"objectives {weights}; kernel {a.kernel}; setup {time.time() - t0:.0f} s; "
+              f"objectives {weights}; "
+              f"{'cylindrical annulus ' + repr(box) if a.grid == 'cylindrical' else 'kernel ' + a.kernel}; "
+              f"setup {time.time() - t0:.0f} s; "
               f"{obj.dim_f / int(free.sum()):.1f} residuals per free unknown", flush=True)
         if m0 is None:
             m0 = fr.metrics(np.asarray(fields.compute(x0)["F"]))
@@ -323,11 +355,15 @@ def main():
     out = None
     if not a.no_check:
         last = ([a.frac] + list(a.refine))[-1]
-        cf = a.check_frac or min(2 * last, max(last, 20))  # a/30 is beyond one A100
-        cbox = CartesianGrid.periodic_box(inp, inp.a / cf, odd=sym).locate_plasma(inp)
+        # a/30 is beyond one A100 for the 3-D box; the axisymmetric cylindrical check (one plane)
+        # is cheap at any h, so it is always 2x finer than the last run
+        axi_check = a.check_grid == "cylindrical" and int(inp.eq.N) == 0
+        cf = a.check_frac or (2 * last if axi_check else min(2 * last, max(last, 20)))
+        cbox = make_box(inp, cf, a.check_grid, sym, a.margin)
         out, shape = check(inp, cbox, cur, pre, res(a.check), a.check_kernel,
                            {"start": x0, "end": x})
-        print(f"check: grid {shape}, box h = a/{cf} {cbox.shape}, kernel {a.check_kernel}; "
+        print(f"check: grid {shape}, {a.check_grid} h = a/{cf} {cbox.shape}, "
+              f"{'cylindrical' if a.check_grid == 'cylindrical' else 'kernel ' + a.check_kernel}; "
               f"<|F|> / norm by rho, start -> end:")
         for k in out["start"]["bins"]:
             print(f"   {k:10s} {out['start']['bins'][k]:.2e} -> {out['end']['bins'][k]:.2e}")

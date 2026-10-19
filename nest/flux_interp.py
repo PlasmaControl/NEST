@@ -250,9 +250,13 @@ class PointInterpolator(_Pytree):
     ``__call__``: -1 for V_R of a symmetric vector field, +1 for V_phi, V_Z and
     for scalars such as p)."""
 
-    _dynamic = ("idx", "w", "sign")
+    _dynamic = ("idx", "w", "sign", "s", "sign_pt")
 
-    def __init__(self, grid, rtz, order=4, chunk=65536, dtype=jnp.float64):
+    def __init__(self, grid, rtz, order=4, chunk=65536, dtype=jnp.float64, compact=False):
+        """``compact``: store only the stencil coordinates (s_rho, s_theta, s_zeta) and the
+        point's symmetry sign (25 bytes per point, against 64 indices, weights and signs,
+        1280 bytes in float64) and form the stencil per chunk inside the apply, with the
+        same arithmetic in the same order (bitwise the cached result)."""
         n_r, n_t, n_z = grid.shape
         rtz = np.array(rtz, dtype=float)
         d_r = grid.rho[1] - grid.rho[0]
@@ -268,8 +272,20 @@ class PointInterpolator(_Pytree):
             d_z = (period / 2) / (n_z - 1)
         else:
             d_z = 2 * np.pi / (n_z * grid.NFP)
+        self.sym, self.chunk, self.order, self.grid_shape = grid.sym, chunk, int(order), (n_r, n_t, n_z)
+        s_r = rtz[:, 0] / d_r - 0.5
+        s_t = np.mod(rtz[:, 1], 2 * np.pi) / d_t
+        s_z = (rtz[:, 2] if grid.sym else np.mod(rtz[:, 2], 2 * np.pi / grid.NFP)) / d_z
+        self.compact = bool(compact)
+        if self.compact:  # (attributes of the cached form are None)
+            self.idx = self.w = self.sign = None
+            self.s = jnp.asarray(np.stack([s_r, s_t, s_z], axis=1), jnp.float64)
+            self.sign_pt = jnp.asarray(sign_pt.astype(np.int8))
+            self.dtype = jnp.dtype(dtype)
+            return
+        self.s = self.sign_pt = None
         # rho: s with rho_i = (i + 1/2) d; the top of the stencil stays below n_r
-        ir, wr = _lagrange(rtz[:, 0] / d_r - 0.5, order)
+        ir, wr = _lagrange(s_r, order)
         shift = np.maximum(ir + order - n_r, 0)
         ir -= shift
         if shift.any():  # recompute the weights of the shifted (one-sided) stencils
@@ -279,9 +295,8 @@ class PointInterpolator(_Pytree):
                 for k in range(order):
                     if k != j:
                         wr[:, j] *= x[:, k] / (j - k)
-        it, wt = _lagrange(np.mod(rtz[:, 1], 2 * np.pi) / d_t, order)
-        zeta = rtz[:, 2] if grid.sym else np.mod(rtz[:, 2], 2 * np.pi / grid.NFP)
-        iz, wz = _lagrange(zeta / d_z, order)
+        it, wt = _lagrange(s_t, order)
+        iz, wz = _lagrange(s_z, order)
         R = ir[:, None] + np.arange(order)  # (n, order); < 0: reflected through the axis
         T = it[:, None] + np.arange(order)
         Zi = iz[:, None] + np.arange(order)
@@ -307,8 +322,63 @@ class PointInterpolator(_Pytree):
         self.idx = jnp.asarray(idx.reshape(len(rtz), -1).astype(np.int32))
         self.w = jnp.asarray(w.reshape(len(rtz), -1), dtype)
         self.sign = jnp.asarray((sign * sign_pt[:, None, None, None]).reshape(len(rtz), -1), dtype)
-        self.sym = grid.sym
-        self.chunk = chunk
+
+    def _stencil(self, s, sign_pt):
+        """(idx, w, sign) of a chunk of points from their stencil coordinates: the
+        construction above in JAX, operation for operation."""
+        n_r, n_t, n_z = self.grid_shape
+        o = self.order
+        k = jnp.arange(o)
+
+        def lag(x0, i0):  # weights of nodes i0 .. i0 + o - 1 at x0, as _lagrange's loop
+            x = x0[:, None] - (i0[:, None] + k).astype(x0.dtype)
+            cols = []
+            for j in range(o):
+                wj = jnp.ones_like(x0)
+                for q in range(o):
+                    if q != j:
+                        wj = wj * (x[:, q] / (j - q))
+                cols.append(wj)
+            return jnp.stack(cols, axis=1)
+
+        def start(x0):
+            return jnp.floor(x0).astype(jnp.int32) - (o // 2 - 1)
+
+        ir = start(s[:, 0])
+        ir = ir - jnp.maximum(ir + o - n_r, 0)  # one-sided at the top of rho
+        wr = lag(s[:, 0], ir)
+        it, iz = start(s[:, 1]), start(s[:, 2])
+        wt, wz = lag(s[:, 1], it), lag(s[:, 2], iz)
+        n = s.shape[0]
+        Rb = jnp.broadcast_to((ir[:, None] + k)[:, :, None, None], (n, o, o, o))
+        Tb = jnp.broadcast_to((it[:, None] + k)[:, None, :, None], (n, o, o, o))
+        Zb = jnp.broadcast_to((iz[:, None] + k)[:, None, None, :], (n, o, o, o))
+        sign = jnp.ones((n, o, o, o), self.dtype)
+        if self.sym:
+            top = n_z - 1
+            out = (Zb < 0) | (Zb > top)
+            Zb = jnp.where(Zb < 0, -Zb, jnp.where(Zb > top, 2 * top - Zb, Zb))
+            Tb = jnp.where(out, -Tb, Tb)
+            sign = jnp.where(out, -1.0, 1.0).astype(self.dtype)
+        else:
+            Zb = jnp.mod(Zb, n_z)
+        refl = Rb < 0
+        Rb = jnp.where(refl, -Rb - 1, Rb)
+        Tb = jnp.mod(Tb + jnp.where(refl, n_t // 2, 0), n_t)
+        idx = ((Rb * n_t + Tb) * n_z + Zb).reshape(n, -1)
+        w = (wr[:, :, None, None] * wt[:, None, :, None] * wz[:, None, None, :]).reshape(n, -1)
+        sign = (sign * sign_pt.astype(self.dtype)[:, None, None, None]).reshape(n, -1)
+        return idx, w.astype(self.dtype), sign
+
+    @property
+    def n_points(self):
+        return int((self.s if self.compact else self.idx).shape[0])
+
+    @property
+    def nbytes(self):
+        """Bytes held per the interpolator (the stencil cache, or its compact form)."""
+        return sum(int(a.size * a.dtype.itemsize) for a in (self.idx, self.w, self.sign, self.s, self.sign_pt)
+                   if a is not None)
 
     def __call__(self, field, parity=None):
         """field (n_rho, n_theta, n_zeta, c) on the grid -> (n_points, c) at the points.
@@ -317,6 +387,17 @@ class PointInterpolator(_Pytree):
         with a symmetric grid; default all +1).
         """
         flat = field.reshape(-1, field.shape[-1])
+        if self.compact:
+            use_sign = self.sym and parity is not None and not all(p > 0 for p in parity)
+            par = jnp.asarray(parity if use_sign else [1] * flat.shape[-1], self.dtype)
+
+            def fc(fl, s, sp):
+                i, w, sg = self._stencil(s, sp)
+                if not use_sign:
+                    return jnp.einsum("nk,nkc->nc", w, fl[i])
+                ws = w[:, :, None] * jnp.where(par < 0, sg[:, :, None], 1.0)
+                return jnp.einsum("nkc,nkc->nc", ws, fl[i])
+            return map_chunks(fc, self.s, self.sign_pt, chunk=self.chunk, carry=flat)
         if not self.sym or parity is None or all(p > 0 for p in parity):
             return map_chunks(lambda fl, i, w: jnp.einsum("nk,nkc->nc", w, fl[i]),
                               self.idx, self.w, chunk=self.chunk, carry=flat)

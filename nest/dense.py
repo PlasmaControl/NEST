@@ -48,6 +48,18 @@ def _key(fields, current):
     import magnetic_field
     import objective
     src = "".join(inspect.getsource(m) for m in (objective, magnetic_field))
+    if getattr(fields, "cyl", False):  # the annulus: its axes, planes and the solver's code
+        import annulus_freespace, annulus_poisson, chebyshev, cylindrical_bs, cylindrical_grid
+        import single_layer, toroidal_kernel
+        src += "".join(inspect.getsource(m) for m in (
+            annulus_freespace, annulus_poisson, chebyshev, cylindrical_bs, cylindrical_grid,
+            single_layer, toroidal_kernel))
+        geo = tuple(round(float(v), 9) for v in (box.r_axis.a, box.r_axis.b, box.z_axis.a,
+                                                   box.z_axis.b))
+        parts = (fit_cache._file_hash(f.inp.path), (b.L, b.M, b.N, current.edge_power, b.sym),
+                 f.tgrid.shape, tuple(np.round(np.asarray(f.tgrid.rho), 14)), box.shape, geo,
+                 box.NFP, fields.kernel, str(fields.dtype), hashlib.sha256(src.encode()).hexdigest())
+        return hashlib.sha256(repr(parts).encode()).hexdigest()[:24]
     parts = (fit_cache._file_hash(f.inp.path), (b.L, b.M, b.N, current.edge_power, b.sym),
              f.tgrid.shape, tuple(np.round(np.asarray(f.tgrid.rho), 14)), box.shape,
              # rounded: the spacing a / frac comes from DESC's a, which differs in the last
@@ -120,7 +132,7 @@ class DenseFields(Fields):
             how = f"{n_u - start} box solves"
         obj.G, obj.B_I = jnp.asarray(G), jnp.asarray(B_I)
         # the box side is no longer used
-        for k in ("J_flux", "to_box", "src", "K_hat", "to_points", "box_phi"):
+        for k in ("J_flux", "to_box", "src", "K_hat", "to_points", "box_phi", "solver"):
             object.__setattr__(obj, k, None)
         if verbose:
             print(f"  dense B_plasma: G {G.shape[1]:,} x {n_u} ({G.nbytes / 1e9:.2f} GB, "
