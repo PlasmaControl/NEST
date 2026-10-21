@@ -2,6 +2,9 @@
 
 One entry per commit, newest first.
 
+## 2026-10-21: DSHAPE islands: the force-only runs' states, sections and logs from Stellar
+- `results/isl/<name>_eps<eps>.npz/.json` and `<name>_sections.npz` of `a120n1`, `a120n2` (eps 0-1000 A), `a120w2`, `a120w4`; the scans' logs of Stellar (`results/isl/logs/stellar/`, XLA warnings removed). The base `results/gs/hN_a120D_iter.{json,npz}` is now Stellar's original (the copy of the previous commit was regenerated on Stellar AI).
+
 ## 2026-10-21: DSHAPE islands: kappa = 1e8 and the force-along-B weight; converged states for the runs
 - `--par w` (`isl_scan.py`, `HarmonicModel(par=...)`): the force component along B (B.grad p) weighted w times against the rest of F, no transport term. At 300 A from the unperturbed base (J on n = 0, roughness 1e-1 / 1e-3 / 1e-5): w = 1e2 gives net b_21 of 0.16-0.3% of vacuum (width 0.003) whatever the roughness; w = 1e4 gives 1e-5 of vacuum, B.grad p/(|B||grad p|) 5e-9 and no island (its force error stalls at 5e-5 in 250 steps). The reversed sign of b_21 of the earlier runs goes away as the enforcement grows. So B.grad p = 0 with a smooth current selects the nested (ideal, shielded) state; an island needs a reconnection branch (finite kappa_perp, a start with an island).
 - kappa 1e8 (w_T 1e-4), N = 1, from the kappa 1e6 states: leftover b_21 2.7-3.2% of vacuum (4.5e-6, 1.6e-5, 5.3e-5), widths none / 0.0097 / 0.023, p spread at fixed s 0.21-0.26 of the drop of p0 (1.0 at kappa 1e6), B.grad p median 1e-6 to 6e-6.
