@@ -219,7 +219,7 @@ class HarmonicModel:
 
     def __init__(self, inp, cur, pre, fr, frac, margin=2.0, pert=None, weights=None,
                  chunk=2, batch_u=(4, 2), verbose=True, only=None, j_target=None, j_nodes="direct",
-                 j_mode="full", transport=None, rough=None):
+                 j_mode="full", transport=None, rough=None, par=None):
         t0 = time.time()
         self.inp, self.cur, self.pre, self.fr = inp, cur, pre, fr
         self.frac, self.margin, self.chunk, self.verbose = frac, margin, int(chunk), verbose
@@ -235,6 +235,9 @@ class HarmonicModel:
         # div(kappa_par grad_par p + grad_perp p) = S on the pressure basis, S from the eps = 0 state
         self.transport = None if transport is None else dict({"kappa": 1e4, "w": 1.0}, **transport)
         self._kappa = 1.0 if self.transport is None else float(self.transport["kappa"])
+        # weight of the force component along B (= B . grad p, the equation that makes the surfaces):
+        # rows swF (F + (par - 1) b b.F), b = B/|B| of the iterate (its derivative is of the order of F)
+        self._par = 1.0 if par is None else float(par)
         # smoothness of the n >= 1 current: rows w (l / L)^q |J_k| / rms J_DESC u_k (no location)
         self.rough = None if rough is None else dict({"w": 1e-3, "q": 2}, **rough)
         self._j_target = None if j_target is None else np.asarray(j_target, dtype=float)
@@ -606,28 +609,38 @@ class HarmonicModel:
         return jnp.stack([a[..., 1] * b[..., 2] - a[..., 2] * b[..., 1], a[..., 2] * b[..., 0] - a[..., 0] * b[..., 2],
                           a[..., 0] * b[..., 1] - a[..., 1] * b[..., 0]], -1)
 
+    def _wF(self, const, B, X):
+        """swF P X for force-like X (leading axes before B's allowed): P = I + (par - 1) b b^T."""
+        pad = (None,) * (X.ndim - B.ndim)
+        if self._par != 1.0:
+            Bn = jnp.linalg.norm(B, axis=-1, keepdims=True)
+            b = jax.lax.stop_gradient(B / jnp.where(Bn > 0, Bn, 1.0))[pad]
+            X = X + (self._par - 1.0) * b * jnp.sum(b * X, -1, keepdims=True)
+        return const["swF"][..., None][pad] * X
+
     def _residual(self, J, B, p, gp, J0, const):
         """The local rows (force, J, p<0) of a chunk and its share of <p>."""
         F = self._cross(J, B) - gp
-        rF = const["swF"][..., None] * F
+        rF0 = const["swF"][..., None] * F
+        rF = self._wF(const, B, F)
         rJ = const["swJ"][..., None] * (J0 - const["JD"])
         rP = const["swP"] * jnp.minimum(p, 0.0)
         Wp = jnp.sum(const["sw3"] ** 2 * p)
-        return rF, rJ, rP, Wp
+        return rF, rJ, rP, Wp, rF0
 
     def _rows(self, tables, z, const, eps):
         """The exact Jacobian rows of a chunk, A (n, rows), its residual r (rows), its share of
         <p> and of the gradient of <p>."""
         cols = self._synth(tables)
         J, B, p, gp, J0 = self._fields(cols, z, const, eps)
-        rF, rJ, rP, Wp = self._residual(J, B, p, gp, J0, const)
+        rF, rJ, rP, Wp, rF0 = self._residual(J, B, p, gp, J0, const)
         act = (p < 0).astype(p.dtype)
         rows_F, rows_J, rows_P, gW = [], [], [], []
         for (kind, n, P, a, b), V in zip(self._blocks_static, cols):
             if kind == "u":
                 dJ, dB = jnp.moveaxis(V[..., :3, :], -1, 0), jnp.moveaxis(V[..., 3:, :], -1, 0)  # (k, c, t, z, 3)
                 dF = self._cross(dJ, B[None]) + self._cross(J[None], dB)
-                rows_F.append(const["swF"][None, ..., None] * dF)
+                rows_F.append(self._wF(const, B, dF))
                 if self.j_full:
                     rows_J.append(const["swJ"][None, ..., None] * dJ)
                 else:
@@ -637,7 +650,7 @@ class HarmonicModel:
                 gW.append(jnp.zeros(b - a))
             else:
                 dp, dgp = jnp.moveaxis(V[..., 0, :], -1, 0), jnp.moveaxis(V[..., 1:, :], -1, 0)
-                rows_F.append(-const["swF"][None, ..., None] * dgp)
+                rows_F.append(-self._wF(const, B, dgp))
                 rows_J.append(jnp.zeros((b - a,) + rJ.shape))
                 rows_P.append(const["swP"][None] * act[None] * dp)
                 gW.append(jnp.sum(const["sw3"][None] ** 2 * dp, axis=(1, 2, 3)))
@@ -672,7 +685,7 @@ class HarmonicModel:
                     dJ0 = dJ0 + v[:, :, 0, :3]
             else:
                 dp, dgp = dp + v[..., 0], dgp + v[..., 1:]
-        qF = const["swF"][..., None] * (self._cross(dJ, B) + self._cross(J, dB) - dgp)
+        qF = self._wF(const, B, self._cross(dJ, B) + self._cross(J, dB) - dgp)
         qJ = const["swJ"][..., None] * (dJ if self.j_full else dJ0) * jnp.ones_like(J0)
         qP = const["swP"] * act * dp
         return jnp.concatenate([qF.ravel(), qJ.ravel(), qP.ravel()]), jnp.sum(const["sw3"] ** 2 * dp)
@@ -692,7 +705,7 @@ class HarmonicModel:
     def _r_chunk(self, tables, z, const, eps):
         cols = self._synth(tables)
         J, B, p, gp, J0 = self._fields(cols, z, const, eps)
-        rF, rJ, rP, Wp = self._residual(J, B, p, gp, J0, const)
+        rF, rJ, rP, Wp, rF0 = self._residual(J, B, p, gp, J0, const)
         return jnp.concatenate([rF.ravel(), rJ.ravel(), rP.ravel()]), Wp
 
     @functools.partial(jax.jit, static_argnums=(0,))
@@ -702,15 +715,15 @@ class HarmonicModel:
 
         def one(d):
             J, B, p, gp, J0 = self._fields(cols, z + d, const, eps)
-            rF, rJ, rP, Wp = self._residual(J, B, p, gp, J0, const)
-            Fa = jnp.sum(const["sw3"] * jnp.linalg.norm(rF, axis=-1))
+            rF, rJ, rP, Wp, rF0 = self._residual(J, B, p, gp, J0, const)
+            Fa = jnp.sum(const["sw3"] * jnp.linalg.norm(rF0, axis=-1))
             return jnp.sum(rF**2) + jnp.sum(rJ**2) + jnp.sum(rP**2), Wp, Fa
 
         return jax.lax.map(one, D.T)
 
     def _AT(self, cols, J, B, qF, qJ, qP, act, const):
         """A^T q of a chunk for row values q (force qF (c,t,z,3), J qJ (c,t,3), p<0 qP (c,t,z))."""
-        wF = const["swF"][..., None] * qF
+        wF = self._wF(const, B, qF)
         BxW, WxJ = self._cross(B, wF), self._cross(wF, J)
         wJ = const["swJ"][..., None] * qJ
         wP = const["swP"] * act * qP
@@ -732,13 +745,13 @@ class HarmonicModel:
         """A^T r, |r|^2 of the local rows, the share of <p> and of <|F|>, and of the gradient of <p>."""
         cols = self._synth(tables)
         J, B, p, gp, J0 = self._fields(cols, z, const, eps)
-        rF, rJ, rP, Wp = self._residual(J, B, p, gp, J0, const)
+        rF, rJ, rP, Wp, rF0 = self._residual(J, B, p, gp, J0, const)
         act = (p < 0).astype(p.dtype)
         g = self._AT(cols, J, B, rF, rJ, rP, act, const)  # rows are already weighted
         gW = jnp.concatenate([jnp.sum(const["sw3"] ** 2 * V[..., 0, :].transpose(3, 0, 1, 2), axis=(1, 2, 3))
                               if kind == "p" else jnp.zeros(b - a)
                               for (kind, n, P, a, b), V in zip(self._blocks_static, cols)])
-        Fa = jnp.sum(const["sw3"] * jnp.linalg.norm(rF, axis=-1))
+        Fa = jnp.sum(const["sw3"] * jnp.linalg.norm(rF0, axis=-1))
         return g, jnp.sum(rF**2) + jnp.sum(rJ**2) + jnp.sum(rP**2), Wp, Fa, gW
 
     @functools.partial(jax.jit, static_argnums=(0,))
@@ -756,7 +769,7 @@ class HarmonicModel:
                     dJ0 = dJ0 + v[:, :, 0, :3]
             else:
                 dp, dgp = dp + v[..., 0], dgp + v[..., 1:]
-        qF = const["swF"][..., None] * (self._cross(dJ, B) + self._cross(J, dB) - dgp)
+        qF = self._wF(const, B, self._cross(dJ, B) + self._cross(J, dB) - dgp)
         qJ = const["swJ"][..., None] * (dJ if self.j_full else dJ0)
         qP = const["swP"] * act * dp
         return self._AT(cols, J, B, qF, qJ, qP, act, const), jnp.sum(const["sw3"] ** 2 * dp)
@@ -879,9 +892,9 @@ class HarmonicModel:
     def _eval_chunk(self, tables, z, const, eps):
         cols = self._synth(tables)
         J, B, p, gp, J0 = self._fields(cols, z, const, eps)
-        rF, rJ, rP, Wp = self._residual(J, B, p, gp, J0, const)
+        rF, rJ, rP, Wp, rF0 = self._residual(J, B, p, gp, J0, const)
         # <|F|>/norm: sum sqrt(dV/V)^2 |F| / norm = sum sw3 |rF|
-        Fa = jnp.sum(const["sw3"] * jnp.linalg.norm(rF, axis=-1))
+        Fa = jnp.sum(const["sw3"] * jnp.linalg.norm(rF0, axis=-1))
         return jnp.sum(rF**2) + jnp.sum(rJ**2) + jnp.sum(rP**2), Wp, Fa
 
     def fields(self, x, eps):

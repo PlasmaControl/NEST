@@ -90,6 +90,8 @@ def model_kwargs(a, run, cur, fr):
     kw = {"weights": weights, "j_nodes": run.get("j_nodes") or "flux", "j_mode": getattr(a, "j_mode", "full")}
     if getattr(a, "transport", None):
         kw["transport"] = {"kappa": a.transport, "w": a.w_T}
+    if getattr(a, "par", None):
+        kw["par"] = a.par
     if getattr(a, "rough", None):
         kw["rough"] = {"w": a.rough, "q": a.rough_q}
     if a.base and run.get("j_target") == "start":
@@ -184,6 +186,8 @@ def main():
     ap.add_argument("--rough", type=float, default=None,
                     help="weight of the n >= 1 current smoothness rows, (l / L)^q per coefficient")
     ap.add_argument("--rough-q", type=float, default=2.0)
+    ap.add_argument("--par", type=float, default=None,
+                    help="weight of the force component along B (B . grad p = 0) against the rest of F")
     ap.add_argument("--name", default="isl")
     a = ap.parse_args()
     t0 = time.time()
