@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-21: DSHAPE with the 2/1 helical perturbation: amplitude scan, islands and pressure
+- `scripts/dshape/isl_scan.py` (exact LM for Phi = eps sin(2 theta + zeta), eps 0-1000 A, N = 1 and 2, from the axisymmetric a/120 state; `nest/harmonic_dense.py`, `nest/perturbation.py`), `isl_islands.py` (resonant b^rho_mn, Poincare sections, island widths, NEST against the vacuum superposition), `isl_pmap.py`, `isl_pzoom.py`, `isl_vacuum.py`, `isl_response.py`, `isl_diag.py`; `run_sai.sbatch` for Stellar AI (B200, CUDA 13 env).
+- Location-free formulation (`--j-mode n0 --transport kappa --w-T --rough`): J penalty on n = 0 only, pressure transport along the computed field, smoothness on the n >= 1 current. Widths (a) at 100/300/1000 A: vacuum 0.036/0.061/0.116; kappa 1e6, N = 1: 0.009/0.019/0.048; N = 2: 0.009/0.019/0.040. Net b_21 is 8-17% of vacuum at kappa 1e6 with the sign reversed (overshielding), and w follows Landreman's w = 4 sqrt(b/(m iota')) to ~10%.
+- The pressure does not flatten at the island at any kappa or N tried (spread at fixed s as in the unperturbed profile, B.grad p in the island 3-4x outside); kappa 1e8 runs were still going at the time of this commit.
+- Figures in `figures/dshape/islands/`; results of the runs: `results/isl/<name>.json` (scan summary) and `<name>_islands.json` (the larger npz of states and sections are not tracked).
+
 ## 2026-10-19: Remove the legacy step-2 driver and CurrentFZ
 - `nest/run_step2.py` (the first J-on-the-box driver, unused) and `nest/current_fz.py` (the first Fourier-Zernike J, replaced by `boundary_potential.BoundaryPotential`) removed.
 - `tests/test_desc_grid.py` now checks `desc_grid.flux_grid` and `evaluate_on_flux_grid` (full-torus tiling, Cartesian rotation) with DESC's own J as the current: equal to DESC's J on precise_QA and W7-X (error 0, tolerance 1e-12). `desc_grid.py` docstring and README updated.

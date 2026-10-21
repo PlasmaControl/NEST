@@ -7,11 +7,12 @@ Fixed-boundary MHD solver with non-nested flux surfaces, starting from a DESC fr
 - `nest/`: the library (current potential, pressure, force residual, objectives, solvers; B_plasma on the Cartesian box, on the cylindrical annulus, and the exact axisymmetric field).
 - `scripts/optimize_qa.py`, `scripts/optimize_fb.py`: the drivers (fixed and free boundary).
   - `scripts/dshape/`: the axisymmetric DSHAPE tokamak: exact LM (`gs_dense_solve.py`), independent check (`gs_check_end.py`), resolution ladders (`gs_ladder.py`), B_plasma floor diagnostics (`gs_cyl_floor*.py`, `gs_cyl_ladder.py`), comparison with DESC (`gs_vs_desc.py`, `gs_cyl_poincare.py`, `gs_edge_zoom*.py`), Hessian (`gs_hessian.py`), solver comparison (`gs_solver_compare.py`).
+  - `scripts/dshape/isl_*.py`: DSHAPE with the 2/1 helical perturbation (`nest/harmonic_dense.py`, `nest/perturbation.py`): amplitude scan (`isl_scan.py`), resonant fields, Poincare sections and island widths (`isl_islands.py`), pressure maps and zoom (`isl_pmap.py`, `isl_pzoom.py`), vacuum and response diagnostics (`isl_vacuum.py`, `isl_response.py`, `isl_diag.py`); Stellar AI job script `run_sai.sbatch`.
   - `scripts/stellarator/`: precise_QA, NCSX, QH, CTH-like: islands, validation and Poincare plots, free-boundary comparison, residual decomposition.
   - `scripts/diagnostics/`: memory/time audit, conditioning and preconditioners, test timing.
   - `scripts/modal_cyl/`: cylindrical-grid job scripts.
 - `tests/`: unit tests (`test_*.py`, run by `scripts/diagnostics/time_tests.py`); `tests/checks/`: accuracy and convergence studies (cylindrical grid, exact field, B_plasma floor).
-- `figures/`: `dshape/`, `precise_QA/`, `ncsx/`, `qh/`, `cth/`.
+- `figures/`: `dshape/` (and `dshape/islands/` for the perturbed runs), `precise_QA/`, `ncsx/`, `qh/`, `cth/`.
 - `desc_input/`: DESC equilibria and coils; `docs/`: cylindrical-grid notes; `results/`: run outputs (not tracked, except a few cylindrical-grid benchmarks).
 - `run.sbatch`, `run_cpu.sbatch`, `run_della.sbatch`: job scripts (`sbatch run.sbatch scripts/<path>.py ...`).
 

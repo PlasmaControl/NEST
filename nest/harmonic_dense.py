@@ -1,0 +1,1234 @@
+"""Exact dense Levenberg-Marquardt for a 3-D NEST state on an axisymmetric equilibrium,
+from 2-D tables of the toroidal harmonics.
+
+The flux coordinates and metric of the equilibrium are axisymmetric (zeta = phi), so
+every linear map of the model keeps the toroidal harmonic of a coefficient: a basis
+function of toroidal mode n (cos or sin type) gives, in cylindrical components,
+
+    V(rho, theta, zeta) = V^c(rho, theta) cos(n zeta) + V^s(rho, theta) sin(n zeta)
+
+for V = J (u -> J), B_plasma (u -> annulus solve -> points), p and grad p (c_p ->).
+V^c = V(zeta = 0) and V^s = V(zeta = pi / 2n) are tabulated once per column on the
+(rho, theta) nodes of the collocation grid; the fields at any zeta and the exact
+Jacobian of the residual on the 3-D collocation grid then follow by synthesis, with no
+further box solve. B_plasma columns of harmonic n come from the annulus solve on
+N_phi = 2n + 1 planes (exact mode by mode for that harmonic, ``CylindricalGrid.around``).
+
+Stellarator symmetry halves the tables: every column is symmetric, so with theta_j =
+2 pi j / n_theta (n_theta odd) the values at theta_(n_theta - j) are those at theta_j
+times a sign per component and per cos/sin plane (``_PARITY``): only j <= n_theta // 2
+is stored.
+
+The objective (``HarmonicModel``), with F = J x B - grad p, B = B_coils + eps B_pert +
+B_plasma, all in cylindrical components:
+  force   sqrt(dV/V) F / norm at every collocation point (3 per point);
+  J       w_J sqrt(dV_2D/V) (<J>_zeta - J_DESC) / rms J_DESC for rho < rho_max: the
+          toroidal average only (the n = 0 harmonic), so the axisymmetric problem keeps
+          the regularization of the 2-D runs and the 3-D response is not pulled to 0;
+  W       w_W (<p>_vol - W_t) / W_t (W_t: the pressure fit's, as in the 2-D runs);
+  p<0     w_pos sqrt(dV/V) min(p, 0) / rms p_DESC.
+For an axisymmetric x it equals the 2-D runs' objective exactly.
+
+Each LM iteration streams the tables through the device in chunks of radii: the rows
+of the exact Jacobian [A | r] of a chunk are formed there and accumulated into the Gram
+matrix H = A^T A and g = A^T r (float64). The step for a damping mu is the Cholesky
+solve of (D H D + mu I) y = -D g, d = D y (D: Jacobi scaling, diag(D H D) = 1), for
+mu over decades; every trial step is then evaluated exactly (the fields are affine in
+x, so all trials take one more pass) and the best kept.
+"""
+
+import functools
+import hashlib
+import inspect
+import os
+import sys
+import time
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+import fit_cache
+from flux_interp import TensorCurrent, TensorGeometry, TensorGrid, TensorPressure
+from separable import Separable
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# theta -> -theta (with zeta -> -zeta) of a symmetric column: the sign of the cos part per
+# component; the sin part has the opposite sign. J, B: (-, +, +); p: +; grad p: (+, -, -)
+_PARITY = {"u": np.array([-1.0, 1.0, 1.0, -1.0, 1.0, 1.0]),  # J (3), B_plasma (3)
+           "p": np.array([1.0, 1.0, -1.0, -1.0])}             # p, grad p (3)
+
+
+def harmonics(cur, pre):
+    """|n| of every unknown x = (u, c_p): u = (chi, a, b), c_p (in modes' order)."""
+    S = cur.S
+    nu = np.concatenate([np.abs(S.chi_modes[:, 1]), np.abs(cur.basis.modes[:, 2]),
+                         np.abs(cur.basis.modes[:, 2])])
+    return nu.astype(int), np.abs(pre.basis.modes[:, 2]).astype(int)
+
+
+def embed(x2, cur2, pre2, cur3, pre3):
+    """The coefficients x2 of a run with smaller bases (e.g. N = 0 or 1) in the larger ones (the
+    modes it lacks set to 0), matched mode by mode."""
+    S2, S3 = cur2.S, cur3.S
+    out = np.zeros(cur3.n_free + pre3.basis.num_modes)
+    x2 = np.asarray(x2)
+    chi3 = {tuple(m): i for i, m in enumerate(S3.chi_modes)}
+    ab3 = {tuple(m): i for i, m in enumerate(cur3.basis.modes)}
+    p3 = {tuple(m): i for i, m in enumerate(pre3.basis.modes)}
+    for i, m in enumerate(S2.chi_modes):
+        out[chi3[tuple(m)]] = x2[i]
+    for i, m in enumerate(cur2.basis.modes):
+        out[S3.n_chi + ab3[tuple(m)]] = x2[S2.n_chi + i]
+        out[S3.n_chi + S3.K + ab3[tuple(m)]] = x2[S2.n_chi + S2.K + i]
+    for i, m in enumerate(pre2.basis.modes):
+        out[cur3.n_free + p3[tuple(m)]] = x2[cur2.n_free + i]
+    return out
+
+
+def to_cyl(V, phi):
+    """Cartesian (..., 3) -> (R, phi, Z) components at angles phi (broadcast)."""
+    c, s = np.cos(phi), np.sin(phi)
+    return np.stack([V[..., 0] * c + V[..., 1] * s, -V[..., 0] * s + V[..., 1] * c, V[..., 2]], -1)
+
+
+def _src_hash(*mods):
+    return hashlib.sha256("".join(inspect.getsource(m) for m in mods).encode()).hexdigest()[:16]
+
+
+def _cache_dir():
+    return os.environ.get("NEST_CACHE", os.path.join(ROOT, ".cache"))
+
+
+def _cached_points(name, key_parts, fn):
+    """fn() stored as .cache/<name>_<hash>.npy."""
+    where = _cache_dir()
+    h = hashlib.sha256(repr(key_parts).encode()).hexdigest()[:24]
+    path = os.path.join(where, f"{name}_{h}.npy")
+    if os.path.exists(path):
+        return np.load(path)
+    v = np.asarray(fn())
+    os.makedirs(where, exist_ok=True)
+    tmp = path + f".{os.getpid()}.tmp.npy"
+    np.save(tmp, v)
+    os.replace(tmp, path)
+    return v
+
+
+class _PlanePoints:
+    """The annulus' modal field (``CylindricalSolver.field_modes``, a batch of columns) at
+    fixed (R, Z) points on a few planes phi_p: exact Fourier synthesis in phi, then the
+    barycentric Chebyshev interpolation in (R, Z) as dense matrix products with the rows
+    I_r (points x n_r) and I_z (points x n_z) formed once (``CylindricalInterpolator``
+    forms them again for every call and every column). Same values."""
+
+    def __init__(self, box, R, Z, planes, chunk=4096):
+        from cylindrical_grid import _bary_rows
+        N, NFP = box.N_phi, box.NFP
+        npts = len(R)
+        self.npts, self.chunk = npts, chunk
+        pad = -npts % chunk
+        R = np.concatenate([R, np.full(pad, R[-1])])
+        Z = np.concatenate([Z, np.full(pad, Z[-1])])
+        ra, za = box.r_axis, box.z_axis
+        Ir = _bary_rows(jnp.asarray(ra.to_y(R)), jnp.asarray(ra.y), jnp.asarray(ra.w_bary))
+        Iz = _bary_rows(jnp.asarray(za.to_y(Z)), jnp.asarray(za.y), jnp.asarray(za.w_bary))
+        nc = len(R) // chunk
+        self.Ir, self.Iz = Ir.reshape(nc, chunk, -1), Iz.reshape(nc, chunk, -1)
+        jp = np.fft.fftfreq(N, 1.0 / N)
+        jz = np.arange(N // 2 + 1)
+        wz = np.where(jz == 0, 1.0, 2.0)
+        self.Ep = jnp.asarray(np.exp(1j * np.outer(planes, jp * NFP)) / N)
+        self.Ez = jnp.asarray(wz * np.exp(1j * np.outer(planes, jz * NFP)) / N)
+
+    def __call__(self, Bp, Bz):
+        """(k, P, points, 3) cylindrical components from slabs Bp (k, N, n_r, n_z), Bz (k, N//2+1, ...)."""
+        return _plane_points(self.Ir, self.Iz, self.Ep, self.Ez, Bp, Bz)[:, :, : self.npts]
+
+
+@jax.jit
+def _plane_points(Ir, Iz, Ep, Ez, Bp, Bz):
+    Pc = jnp.einsum("pj,kjab->kpab", Ep, Bp)
+    Pz = jnp.real(jnp.einsum("pj,kjab->kpab", Ez, Bz))
+
+    def one(args):
+        ir, iz = args  # (chunk, n_r), (chunk, n_z)
+        cr = jnp.einsum("kpib,ib->kpi", jnp.einsum("ia,kpab->kpib", ir, Pc.real), iz)
+        ci = jnp.einsum("kpib,ib->kpi", jnp.einsum("ia,kpab->kpib", ir, Pc.imag), iz)
+        cz = jnp.einsum("kpib,ib->kpi", jnp.einsum("ia,kpab->kpib", ir, Pz), iz)
+        return jnp.stack([cr, ci, cz], -1)
+
+    out = jax.lax.map(one, (Ir, Iz))  # (n_chunks, k, P, chunk, 3)
+    return jnp.moveaxis(out, 0, 2).reshape(out.shape[1], out.shape[2], -1, 3)
+
+
+@jax.jit
+def _qr_r(M):
+    return jnp.linalg.qr(M, mode="r")
+
+
+@jax.jit
+def _damped_qr(RD, c, sm):
+    """y minimizing |R D y + c|^2 + mu |y|^2 by the QR of [R D, c; sqrt(mu) I, 0], and the factor."""
+    n = RD.shape[0]
+    M = jnp.concatenate([jnp.concatenate([RD, c[:, None]], 1),
+                         jnp.concatenate([sm * jnp.eye(n, dtype=RD.dtype), jnp.zeros((n, 1), RD.dtype)], 1)], 0)
+    Rt = jnp.linalg.qr(M, mode="r")
+    y = -jax.scipy.linalg.solve_triangular(Rt[:n, :n], Rt[:n, n], lower=False)
+    return y, Rt[:n, :n]
+
+
+@functools.partial(jax.jit, donate_argnums=(0,))
+def _add_outer(H, a):
+    return H + a[:, None] * a[None, :]
+
+
+@functools.partial(jax.jit, donate_argnums=(0,))
+def _scale(H, d):
+    return d[:, None] * H * d[None, :]
+
+
+def _device_bytes():
+    try:
+        return float(jax.devices()[0].memory_stats()["bytes_limit"])
+    except Exception:  # noqa: BLE001
+        return 40e9
+
+
+@jax.jit
+def _damped_step(Hs, mu, gs):
+    """y = -(Hs + mu I)^-1 gs by Cholesky, and whether it is finite."""
+    i = jnp.arange(Hs.shape[0])
+    L = jnp.linalg.cholesky(Hs.at[i, i].add(mu))
+    y = jax.scipy.linalg.cho_solve((L, True), -gs)
+    return y, jnp.all(jnp.isfinite(y))
+
+
+class HarmonicModel:
+    """Tables, constants and the dense LM (module docstring).
+
+    Parameters
+    ----------
+    inp : DESCInput (axisymmetric equilibrium, with its coils)
+    cur, pre : BoundaryPotential, Pressure with N >= 1 (3-D bases)
+    fr : ForceResidual of the 3-D collocation grid (box None)
+    frac, margin : the annulus spacing h = a / frac and its margin
+    pert : callable, Cartesian points -> B_pert per unit eps (Cartesian), or None
+    weights : dict with "J", "J_rho", "W", "pos"
+    """
+
+    def __init__(self, inp, cur, pre, fr, frac, margin=2.0, pert=None, weights=None,
+                 chunk=2, batch_u=(4, 2), verbose=True, only=None, j_target=None, j_nodes="direct",
+                 j_mode="full", transport=None, rough=None):
+        t0 = time.time()
+        self.inp, self.cur, self.pre, self.fr = inp, cur, pre, fr
+        self.frac, self.margin, self.chunk, self.verbose = frac, margin, int(chunk), verbose
+        w = dict({"J": 1e-3, "J_rho": 0.9, "W": 10.0, "pos": 10.0}, **(weights or {}))
+        self.weights = w
+        # the J term: None -> its toroidal average against J_DESC (rho < J_rho); an array (n_rho,
+        # n_theta, 3) of cylindrical J (axisymmetric, e.g. J of the start) -> the full J against it
+        # at every collocation point (the 2-D runs' CurrentError with j_target "start")
+        self.j_nodes = j_nodes
+        # j_mode "n0": the J term on the toroidal average only, against j_target (or J_DESC)
+        self.j_full = j_target is not None and j_mode == "full"
+        # pressure transport (location-free flattening in islands): weak form of
+        # div(kappa_par grad_par p + grad_perp p) = S on the pressure basis, S from the eps = 0 state
+        self.transport = None if transport is None else dict({"kappa": 1e4, "w": 1.0}, **transport)
+        self._kappa = 1.0 if self.transport is None else float(self.transport["kappa"])
+        # smoothness of the n >= 1 current: rows w (l / L)^q |J_k| / rms J_DESC u_k (no location)
+        self.rough = None if rough is None else dict({"w": 1e-3, "q": 2}, **rough)
+        self._j_target = None if j_target is None else np.asarray(j_target, dtype=float)
+        eq = inp.eq
+        assert int(eq.N) == 0, "the equilibrium must be axisymmetric"
+        self.NFP = int(eq.NFP)
+        g = fr.tgrid
+        self.rho, self.theta, self.zeta = np.asarray(g.rho), np.asarray(g.theta), np.asarray(g.zeta)
+        n_r, n_t, n_z = len(self.rho), len(self.theta), len(self.zeta)
+        assert n_t % 2 == 1 and fr.sym, "needs stellarator symmetry and an odd theta grid"
+        self.n_th = n_t // 2 + 1  # stored theta: j = 0 .. n_t // 2
+        # the full theta from the stored half: source index and mirror flag
+        j = np.arange(n_t)
+        self.src = np.where(j < self.n_th, j, n_t - j)
+        self.mirror = (j >= self.n_th).astype(float)
+        self.n_u, self.n_p = cur.n_free, pre.basis.num_modes
+        self.n = self.n_u + self.n_p
+        nu, npp = harmonics(cur, pre)
+        self.N = int(max(nu.max(), npp.max()))
+        # blocks (kind, n, global indices); the internal order z = x[perm] puts them in a row
+        self.blocks = []
+        for kind, nh, off in (("u", nu, 0), ("p", npp, self.n_u)):
+            for n in range(self.N + 1):
+                idx = off + np.flatnonzero(nh == n)
+                if len(idx):
+                    self.blocks.append({"kind": kind, "n": n, "idx": idx})
+        self.perm = np.concatenate([b["idx"] for b in self.blocks])
+        self.iperm = np.argsort(self.perm)
+        o = 0
+        for b in self.blocks:
+            b["sl"] = slice(o, o + len(b["idx"]))
+            b["P"] = 1 if b["n"] == 0 else 2
+            b["planes"] = np.array([0.0]) if b["n"] == 0 else np.array([0.0, np.pi / (2 * b["n"] * self.NFP)])
+            # synthesis weights at the collocation zetas: (n_z, P)
+            b["Wz"] = (np.ones((n_z, 1)) if b["n"] == 0 else
+                       np.stack([np.cos(b["n"] * self.NFP * self.zeta), np.sin(b["n"] * self.NFP * self.zeta)], 1))
+            o += len(b["idx"])
+        self._log(f"harmonic model: N = {self.N}, collocation {g.shape}, {self.n:,} unknowns in blocks "
+                  + ", ".join(f"{b['kind']}{b['n']} {len(b['idx'])}" for b in self.blocks))
+        if only:  # build (and cache) these tables only, e.g. in separate jobs
+            for b in self.blocks:
+                if f"{b['kind']}{b['n']}" in only:
+                    self._table(b, batch_u)
+            self.tables = None
+            return
+        self._constants(pert)
+        self._log(f"  constants: {time.time() - t0:.0f} s")
+        self.tables = [self._table(b, batch_u) for b in self.blocks]
+        self._log(f"  tables: {sum(t.nbytes for t in self.tables) / 1e9:.1f} GB on the host; "
+                  f"model ready, {time.time() - t0:.0f} s")
+        self._compile()
+
+    # ------------------------------------------------------------------ setup
+    def _log(self, s):
+        if self.verbose:
+            print(s, flush=True)
+
+    def _key(self, *extra):
+        eq, b, pb = self.inp.eq, self.cur.basis, self.pre.basis
+        return (fit_cache._file_hash(self.inp.path), (b.L, b.M, b.N, self.cur.edge_power, str(b.sym)),
+                (pb.L, pb.M, pb.N, self.pre.edge_order), tuple(np.round(self.rho, 14)), len(self.theta),
+                float(self.cur.I)) + extra
+
+    def _constants(self, pert):
+        fr = self.fr
+        shape3 = fr.tgrid.shape
+        phi = np.asarray(fr.phi)
+        dV = np.asarray(fr.dV).reshape(shape3)
+        w3 = dV / dV.sum()
+        self.sw3 = np.sqrt(w3)
+        self.sw2 = np.sqrt(w3.sum(2))
+        self.norm = float(fr.norm)
+        d = fr.desc_fields()
+        w = w3.ravel()
+        self.rms = {k: float(np.sqrt(np.sum(w * np.sum(np.reshape(d[k], (len(w), -1)) ** 2, 1))))
+                    for k in ("J", "B", "p")}
+        # DESC's J (axisymmetric: any zeta) and B, cylindrical
+        self.JD = to_cyl(np.asarray(d["J"]), phi).reshape(shape3 + (3,))[:, :, 0]
+        self.BD = to_cyl(np.asarray(d["B"]), phi).reshape(shape3 + (3,))
+        key = self._key(tuple(np.round(self.zeta, 14)))
+        fld = self.inp.field
+        fkey = hashlib.sha256(repr((type(fld).__name__, float(getattr(fld, "G", 0.0)), float(getattr(fld, "I", 0.0)),
+                                    np.round(np.asarray(getattr(fld, "Phi_mn", [])), 12).tolist(),
+                                    np.round(np.asarray(getattr(fld, "R_lmn", [])), 12).tolist(),
+                                    np.round(np.asarray(getattr(fld, "Z_lmn", [])), 12).tolist())).encode()).hexdigest()
+        key = key + (fkey,)
+        Bc = _cached_points("HarmBcoil", key, lambda: fr.B_ext)
+        self.B_coil = to_cyl(Bc, phi).reshape(shape3 + (3,))
+        self.B_pert = np.zeros_like(self.B_coil)
+        if pert is not None:
+            Bp = _cached_points("HarmBpert", key + (repr(pert),), lambda: pert(fr.x))
+            self.B_pert = to_cyl(Bp, phi).reshape(shape3 + (3,))
+        # the net-current parts (axisymmetric): J_I on the grid, B_I from the n = 0 annulus
+        g2 = TensorGrid(self.rho, self.theta, np.array([0.0]), self.NFP)
+        tc = TensorCurrent(self.cur.S, self.cur._RZ, g2, factored=True)
+        self.J_I = np.asarray(tc(jnp.zeros(self.n_u), self.cur.I))[:, :, 0]
+        import annulus_freespace, cylindrical_bs, cylindrical_grid, objective
+        def B_I():
+            fields0, pts0 = self._annulus(0, full_theta=True)
+            Bp, Bz = fields0.solver.field_modes(fields0.J_box(jnp.zeros(self.n_u), self.cur.I))
+            return np.asarray(_PlanePoints(pts0.box, pts0.R, pts0.Z, np.array([0.0]))(Bp[None], Bz[None]))[0, 0]
+        import node_current
+        self.B_I = _cached_points("HarmBI", self._key(self.frac, self.margin, self.j_nodes, "S64", _src_hash(
+            annulus_freespace, cylindrical_bs, cylindrical_grid, objective, node_current)), B_I).reshape(
+            len(self.rho), len(self.theta), 3)
+        # W's target: <p> of the pressure fit (as the 2-D runs' PressureEnergy)
+        tp = TensorPressure(Separable([self.pre.basis], [self.pre.c], self.NFP), self.pre.edge_order,
+                            self.cur._RZ, fr.tgrid, fr.geo, factored=True)
+        p_fit = np.asarray(tp(jnp.asarray(self.pre.c))[0])
+        self.W_t = float(np.sum(w3 * p_fit))
+        wJ = self.weights["J"]
+        mask = (self.rho < self.weights["J_rho"]) if self.weights["J_rho"] is not None else np.ones(len(self.rho), bool)
+        if self.j_full:
+            self.swJ = wJ * self.sw3 * mask[:, None, None] / self.rms["J"]
+            self.JD = self._j_target[:, :, None, :]
+        else:
+            self.swJ = wJ * self.sw2 * mask[:, None] / self.rms["J"]
+            if self._j_target is not None:  # the toroidal average against the target (e.g. J of the start)
+                self.JD = self._j_target
+        self.swF = self.sw3 / self.norm
+        self.swP = self.weights["pos"] * self.sw3 / self.rms["p"]
+        self.wW = self.weights["W"] / self.W_t
+        jax.clear_caches()
+
+    def _annulus(self, n, full_theta=False):
+        """Fields on the annulus of N_phi = 2n + 1 planes (only its box side is used) and
+        the interpolator to the table points (rho, theta stored or all, plane zetas)."""
+        from boxes import make_box
+        from cylindrical_grid import CylindricalInterpolator
+        from force import ForceResidual
+        from objective import Fields
+        b = self.cur.basis
+        N_phi = 2 * n + 1
+        box = make_box(self.inp, self.frac, "cylindrical", True, self.margin, verbose=self.verbose, N_phi=N_phi)
+        res = (2 * b.L, 2 * b.M, 2 * max(b.N, 1))
+        frs = ForceResidual(self.inp, box, resolution=res, rho_slice=slice(0, 1))
+        fg = TensorGrid.uniform(4 * b.L, 2 * (3 * b.M), 4 * N_phi, self.NFP, sym=True)  # zeta hits the planes
+        fields = Fields(frs, self.cur, self.pre, kernel="cylindrical", dtype=jnp.float64, flux_grid=fg,
+                        S_dtype=jnp.float64,
+                        factored=True)
+        if self.j_nodes == "direct":  # J at the annulus nodes from the basis (node_current), as the 2-D runs
+            from node_current import NodeFields
+            fields = NodeFields.from_fields(fields, self.cur, box)
+        theta = self.theta if full_theta else self.theta[: self.n_th]
+        g = TensorGrid(self.rho, theta, np.array([0.0]), self.NFP)  # R, Z: the same on every plane
+        geo = TensorGeometry(self.cur._RZ, g)
+
+        class Points:
+            pass
+        pts = Points()
+        pts.box, pts.R, pts.Z = box, np.asarray(geo.R).ravel(), np.asarray(geo.Z).ravel()
+        return fields, pts
+
+    def _table(self, blk, batch_u):
+        """(n_r, n_th, comps, P, cols) of a block: u: J (3) and B_plasma (3); p: p and grad p."""
+        n, kind = blk["n"], blk["kind"]
+        cols = blk["idx"] - (0 if kind == "u" else self.n_u)
+        P, n_r, n_th = blk["P"], len(self.rho), self.n_th
+        import annulus_freespace, cylindrical_bs, cylindrical_grid, objective, boundary_potential, pressure
+        import node_current
+        # keyed by the block's own functions (its modes in column order), not the whole basis: a
+        # run with larger N reuses the tables of the harmonics it shares with a smaller one
+        if kind == "u":
+            S, md = self.cur.S, self.cur.basis.modes
+            allm = np.concatenate([np.column_stack([np.zeros(S.n_chi), S.chi_modes]), md, md])
+            tag = np.concatenate([np.repeat([0, 1, 2], [S.n_chi, S.K, S.K])[:, None], allm], 1)[cols]
+            fn = (self.cur.basis.L, self.cur.basis.M, self.cur.edge_power, str(self.cur.basis.sym))
+        else:
+            tag = self.pre.basis.modes[cols]
+            fn = (self.pre.basis.L, self.pre.basis.M, self.pre.edge_order)
+        key = (fit_cache._file_hash(self.inp.path), fn, hashlib.sha256(np.ascontiguousarray(tag, float).tobytes()).hexdigest(),
+               tuple(np.round(self.rho, 14)), len(self.theta), kind, n, self.frac, self.margin,
+               _src_hash(annulus_freespace, cylindrical_bs, cylindrical_grid, objective,
+                         boundary_potential, pressure, node_current), self.j_nodes, "S64")
+        h = hashlib.sha256(repr(key).encode()).hexdigest()[:24]
+        path = os.path.join(_cache_dir(), f"HarmTab_{kind}{n}_{h}.npy")
+        if os.path.exists(path):
+            T = np.load(path)
+            self._log(f"  table {kind}{n}: {T.shape} from the cache")
+            return T
+        t0 = time.time()
+        g = TensorGrid(self.rho, self.theta[:n_th], blk["planes"], self.NFP)
+        nc = len(cols)
+        T = np.empty((n_r, n_th, 6 if kind == "u" else 4, P, nc))
+        if kind == "p":
+            tp = TensorPressure(Separable([self.pre.basis], [self.pre.c], self.NFP), self.pre.edge_order,
+                                self.cur._RZ, g, factored=True)
+            f = jax.jit(jax.vmap(lambda e, t: (lambda pg: jnp.concatenate([pg[0][..., None], pg[1]], -1))(t(e)),
+                                 in_axes=(0, None)))
+            bt = 64
+            for i in range(0, nc, bt):
+                c = cols[i : i + bt]
+                E = np.zeros((bt, self.n_p))
+                E[np.arange(len(c)), c] = 1.0
+                T[..., i : i + len(c)] = np.asarray(f(jnp.asarray(E), tp))[: len(c)].transpose(1, 2, 4, 3, 0)
+            self._log(f"  table p{n}: {T.shape}, {time.time() - t0:.0f} s")
+        else:
+            tc = TensorCurrent(self.cur.S, self.cur._RZ, g, factored=True)
+            fJ = jax.jit(jax.vmap(lambda e, t: t(e, 0.0), in_axes=(0, None)))
+            bt = 64
+            for i in range(0, nc, bt):
+                c = cols[i : i + bt]
+                E = np.zeros((bt, self.n_u))
+                E[np.arange(len(c)), c] = 1.0
+                T[:, :, :3, :, i : i + len(c)] = np.asarray(fJ(jnp.asarray(E), tc))[: len(c)].transpose(1, 2, 4, 3, 0)
+            del tc
+            jax.clear_caches()
+            self._log(f"  table u{n}: J {time.time() - t0:.0f} s; B_plasma on the annulus N_phi = {2 * n + 1}",)
+            fields, interp = self._annulus(n)
+            pp = _PlanePoints(interp.box, interp.R, interp.Z, blk["planes"])
+            modes = jax.jit(jax.vmap(lambda e, fl: fl.solver.field_modes(fl.J_box(e, 0.0)), in_axes=(0, None)))
+            bt = batch_u[0] if n == 0 else batch_u[1]
+            part = path + ".partial.npz"
+            start, t_save, t1 = 0, time.time(), time.time()
+            if os.path.exists(part):
+                with np.load(part) as d:
+                    start = int(d["done"])
+                    T[:, :, 3:, :, :start] = d["B"]
+                self._log(f"    resuming at column {start} of {nc}")
+            for i in range(start, nc, bt):
+                c = cols[i : i + bt]
+                E = np.zeros((bt, self.n_u))
+                E[np.arange(len(c)), c] = 1.0
+                Bp, Bz = modes(jnp.asarray(E), fields)
+                B = np.asarray(pp(Bp, Bz))[: len(c)]  # (b, P, n_r n_th, 3)
+                T[:, :, 3:, :, i : i + len(c)] = B.reshape(len(c), P, n_r, n_th, 3).transpose(2, 3, 4, 1, 0)
+                done = i + len(c)
+                if i == start + 4 * bt:
+                    self._log(f"    {(time.time() - t1) / (done - start) * (nc - start) / 60:.1f} min estimated "
+                              f"for {nc - start} box solves ({bt} at a time)")
+                if time.time() - t_save > 600 and done < nc:
+                    tmp = part + f".{os.getpid()}.tmp.npz"
+                    np.savez(tmp, B=T[:, :, 3:, :, :done], done=done)
+                    os.replace(tmp, part)
+                    t_save = time.time()
+            solve = modes
+            del fields, interp, solve, pp
+            jax.clear_caches()
+            if os.path.exists(part):
+                os.remove(part)
+            self._log(f"  table u{n}: {T.shape}, {time.time() - t0:.0f} s")
+        self._check_parity(blk, T)
+        os.makedirs(_cache_dir(), exist_ok=True)
+        tmp = path + f".{os.getpid()}.tmp.npy"
+        np.save(tmp, T)
+        os.replace(tmp, path)
+        return T
+
+    def _check_parity(self, blk, T):
+        """The stored half reproduces the other half: J and p (cheap) at the mirrored theta
+        of a few columns, against the parity signs."""
+        kind, n = blk["kind"], blk["n"]
+        cols = (blk["idx"] - (0 if kind == "u" else self.n_u))[:: max(1, len(blk["idx"]) // 6)][:6]
+        n_t = len(self.theta)
+        jm = n_t - np.arange(1, self.n_th)  # mirrors of the stored j >= 1
+        g = TensorGrid(self.rho, self.theta[jm], blk["planes"], self.NFP)
+        if kind == "u":
+            tc = TensorCurrent(self.cur.S, self.cur._RZ, g, factored=True)
+            E = np.zeros((len(cols), self.n_u))
+            E[np.arange(len(cols)), cols] = 1.0
+            V = np.asarray(jax.vmap(lambda e: tc(e, 0.0))(jnp.asarray(E)))  # (c, r, t, P, 3)
+            ref = T[:, 1:, :3][..., [np.searchsorted(blk["idx"], c) for c in cols]]
+            sgn = _PARITY["u"][:3]
+        else:
+            tp = TensorPressure(Separable([self.pre.basis], [self.pre.c], self.NFP), self.pre.edge_order,
+                                self.cur._RZ, g, factored=True)
+            E = np.zeros((len(cols), self.n_p))
+            E[np.arange(len(cols)), cols] = 1.0
+            V = np.asarray(jax.vmap(lambda e: (lambda pg: jnp.concatenate([pg[0][..., None], pg[1]], -1))(
+                tp(jnp.asarray(e))))(jnp.asarray(E)))
+            ref = T[:, 1:][..., [np.searchsorted(blk["idx"] - self.n_u, c) for c in cols]]
+            sgn = _PARITY["p"]
+        V = V.transpose(1, 2, 4, 3, 0)  # (r, t, comp, P, c)
+        ps = np.array([1.0, -1.0])[: blk["P"]]
+        pred = ref * sgn[None, None, :, None, None] * ps[None, None, None, :, None]
+        err = np.abs(V - pred).max() / max(np.abs(V).max(), 1e-300)
+        if err > 1e-10:
+            raise RuntimeError(f"table {kind}{n}: the theta mirror misses by {err:.1e}")
+
+    # ------------------------------------------------------------------ device side
+    def _compile(self):
+        n_r = len(self.rho)
+        c = self.chunk
+        self.n_chunks = -(-n_r // c)
+        pad = self.n_chunks * c - n_r
+        padr = lambda a: np.concatenate([a, np.zeros((pad,) + a.shape[1:])]) if pad else a  # noqa: E731
+        self._const = {k: padr(v) for k, v in (("sw3", self.sw3), ("swF", self.swF), ("swP", self.swP),
+                                                ("swJ", self.swJ), ("JD", self.JD), ("J_I", self.J_I),
+                                                ("B_I", self.B_I), ("B_coil", self.B_coil),
+                                                ("B_pert", self.B_pert))}
+        self._pad = pad
+        self._sgn = {k: np.stack([v, -v], -1) for k, v in _PARITY.items()}  # (comps, P=2)
+        blocks = [(b["kind"], b["n"], b["P"], b["sl"].start, b["sl"].stop) for b in self.blocks]
+        self._blocks_static = tuple(blocks)
+        self._Wz = tuple(jnp.asarray(b["Wz"]) for b in self.blocks)
+        self._src_j = jnp.asarray(self.src)
+        self._mir = jnp.asarray(self.mirror)
+        # tables kept on the device while they fit (beside the Gram matrix, its Cholesky factor
+        # and a chunk's work); the rest streams from the host chunk by chunk
+        self._dev = [None] * len(self.tables)
+        used = self._reload()
+        self._log(f"  tables on the device: {used / 1e9:.1f} GB; streamed per pass: "
+                  f"{sum(T.nbytes for T, d in zip(self.tables, self._dev) if d is None) / 1e9:.1f} GB")
+        # the gradient of <p> (linear in z: a constant row)
+        self._gW = None
+        self.n_pc = sum(b["sl"].stop - b["sl"].start for b in self.blocks if b["kind"] == "p")
+        self.n_uc = self.n - self.n_pc
+        self._dvec = np.zeros(self.n)
+        if self.rough is not None:
+            S, md = self.cur.S, self.cur.basis.modes
+            l_u = np.concatenate([np.abs(S.chi_modes[:, 0]), md[:, 0], md[:, 0]]).astype(float)
+            L = float(self.cur.basis.L)
+            for blk, T in zip(self.blocks, self.tables):
+                if blk["kind"] != "u" or blk["n"] == 0:
+                    continue
+                coln = np.sqrt(np.mean(T[:, :, :3] ** 2, axis=(0, 1, 2, 3)))  # |J| of each column
+                self._dvec[blk["sl"]] = (self.rough["w"] * (l_u[blk["idx"]] / L) ** self.rough["q"] * coln
+                                         / self.rms["J"])
+        self._dvec_j = jnp.asarray(self._dvec)
+        self._rough_idx = np.flatnonzero(self._dvec)
+        self._s, self._snorm = None, 1.0
+
+    def _chunk_tables(self, k):
+        r0, r1 = k * self.chunk, min((k + 1) * self.chunk, len(self.rho))
+        out = []
+        for T, D in zip(self.tables, self._dev):
+            if D is not None:
+                out.append(D[k * self.chunk : (k + 1) * self.chunk])
+                continue
+            t = T[r0:r1]
+            if r1 - r0 < self.chunk:
+                t = np.concatenate([t, np.zeros((self.chunk - (r1 - r0),) + t.shape[1:])])
+            out.append(jnp.asarray(t))
+        return tuple(out)
+
+    def _chunk_const(self, k):
+        r0, r1 = k * self.chunk, (k + 1) * self.chunk
+        return {key: jnp.asarray(v[r0:r1]) for key, v in self._const.items()}
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _synth(self, tables):
+        """Column fields of a chunk at the collocation points, per block: (c, n_t, n_z, comps, cols)."""
+        out = []
+        for (kind, n, P, a, b), T, Wz in zip(self._blocks_static, tables, self._Wz):
+            sgn = jnp.asarray(self._sgn[kind][:, :P])  # (comps, P)
+            full = T[:, self._src_j]  # (c, n_t, comps, P, cols)
+            f = 1.0 + self._mir[None, :, None, None, None] * (sgn[None, None, :, :, None] - 1.0)
+            out.append(jnp.einsum("rtcpk,zp->rtzck", full * f, Wz))
+        return out
+
+    def _fields(self, cols, z, const, eps):
+        """J, B, p, grad p of z (c, n_t, n_z, .) and J0 (the n = 0 J, (c, n_t, 3))."""
+        J = const["J_I"][:, :, None]
+        Bp = const["B_I"][:, :, None]
+        p, gp, J0 = 0.0, 0.0, const["J_I"]
+        for (kind, n, P, a, b), V in zip(self._blocks_static, cols):
+            v = V @ z[a:b]
+            if kind == "u":
+                J, Bp = J + v[..., :3], Bp + v[..., 3:]
+                if n == 0:
+                    J0 = J0 + v[:, :, 0, :3]
+            else:
+                p, gp = p + v[..., 0], gp + v[..., 1:]
+        B = const["B_coil"] + eps * const["B_pert"] + Bp
+        return J, B, p, gp, (J if self.j_full else J0)
+
+    @staticmethod
+    def _cross(a, b):
+        return jnp.stack([a[..., 1] * b[..., 2] - a[..., 2] * b[..., 1], a[..., 2] * b[..., 0] - a[..., 0] * b[..., 2],
+                          a[..., 0] * b[..., 1] - a[..., 1] * b[..., 0]], -1)
+
+    def _residual(self, J, B, p, gp, J0, const):
+        """The local rows (force, J, p<0) of a chunk and its share of <p>."""
+        F = self._cross(J, B) - gp
+        rF = const["swF"][..., None] * F
+        rJ = const["swJ"][..., None] * (J0 - const["JD"])
+        rP = const["swP"] * jnp.minimum(p, 0.0)
+        Wp = jnp.sum(const["sw3"] ** 2 * p)
+        return rF, rJ, rP, Wp
+
+    def _rows(self, tables, z, const, eps):
+        """The exact Jacobian rows of a chunk, A (n, rows), its residual r (rows), its share of
+        <p> and of the gradient of <p>."""
+        cols = self._synth(tables)
+        J, B, p, gp, J0 = self._fields(cols, z, const, eps)
+        rF, rJ, rP, Wp = self._residual(J, B, p, gp, J0, const)
+        act = (p < 0).astype(p.dtype)
+        rows_F, rows_J, rows_P, gW = [], [], [], []
+        for (kind, n, P, a, b), V in zip(self._blocks_static, cols):
+            if kind == "u":
+                dJ, dB = jnp.moveaxis(V[..., :3, :], -1, 0), jnp.moveaxis(V[..., 3:, :], -1, 0)  # (k, c, t, z, 3)
+                dF = self._cross(dJ, B[None]) + self._cross(J[None], dB)
+                rows_F.append(const["swF"][None, ..., None] * dF)
+                if self.j_full:
+                    rows_J.append(const["swJ"][None, ..., None] * dJ)
+                else:
+                    rows_J.append(const["swJ"][None, ..., None] * dJ[:, :, :, 0] if n == 0 else
+                                  jnp.zeros((b - a,) + rJ.shape))
+                rows_P.append(jnp.zeros((b - a,) + rP.shape))
+                gW.append(jnp.zeros(b - a))
+            else:
+                dp, dgp = jnp.moveaxis(V[..., 0, :], -1, 0), jnp.moveaxis(V[..., 1:, :], -1, 0)
+                rows_F.append(-const["swF"][None, ..., None] * dgp)
+                rows_J.append(jnp.zeros((b - a,) + rJ.shape))
+                rows_P.append(const["swP"][None] * act[None] * dp)
+                gW.append(jnp.sum(const["sw3"][None] ** 2 * dp, axis=(1, 2, 3)))
+        A = jnp.concatenate([jnp.concatenate([r.reshape(r.shape[0], -1) for r in rows], 0)
+                             for rows in (rows_F, rows_J, rows_P)], 1)  # (n, rows)
+        r = jnp.concatenate([rF.ravel(), rJ.ravel(), rP.ravel()])
+        return A, r, Wp, jnp.concatenate(gW)
+
+    @functools.partial(jax.jit, static_argnums=(0,), donate_argnums=(1, 2))
+    def _gram_chunk(self, H, g, tables, z, const, eps):
+        A, r, Wp, gW = self._rows(tables, z, const, eps)
+        return H + A @ A.T, g + A @ r, 0.5 * jnp.sum(r**2), Wp, gW
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _rows_chunk(self, tables, z, const, eps):
+        """[A^T | r] of a chunk (rows, n + 1), its share of <p> and of the gradient of <p>."""
+        A, r, Wp, gW = self._rows(tables, z, const, eps)
+        return jnp.concatenate([A.T, r[:, None]], 1), Wp, gW
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _Av_chunk(self, tables, z, d, const, eps):
+        """The rows of A d of a chunk (flat) and its share of <p> along d."""
+        cols = self._synth(tables)
+        J, B, p, gp, J0 = self._fields(cols, z, const, eps)
+        act = (p < 0).astype(p.dtype)
+        dJ, dB, dp, dgp, dJ0 = 0.0, 0.0, 0.0, 0.0, 0.0
+        for (kind, n, P, a, b), V in zip(self._blocks_static, cols):
+            v = V @ d[a:b]
+            if kind == "u":
+                dJ, dB = dJ + v[..., :3], dB + v[..., 3:]
+                if n == 0 and not self.j_full:
+                    dJ0 = dJ0 + v[:, :, 0, :3]
+            else:
+                dp, dgp = dp + v[..., 0], dgp + v[..., 1:]
+        qF = const["swF"][..., None] * (self._cross(dJ, B) + self._cross(J, dB) - dgp)
+        qJ = const["swJ"][..., None] * (dJ if self.j_full else dJ0) * jnp.ones_like(J0)
+        qP = const["swP"] * act * dp
+        return jnp.concatenate([qF.ravel(), qJ.ravel(), qP.ravel()]), jnp.sum(const["sw3"] ** 2 * dp)
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _ATu_chunk(self, tables, z, u, const, eps):
+        """A^T u of the local rows of a chunk (u flat, as ``_Av_chunk`` returns)."""
+        cols = self._synth(tables)
+        J, B, p, gp, J0 = self._fields(cols, z, const, eps)
+        act = (p < 0).astype(p.dtype)
+        sF, sJ = J.shape, J0.shape
+        nF, nJ = int(np.prod(sF)), int(np.prod(sJ))
+        return self._AT(cols, J, B, u[:nF].reshape(sF), u[nF:nF + nJ].reshape(sJ), u[nF + nJ:].reshape(p.shape),
+                        act, const)
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _r_chunk(self, tables, z, const, eps):
+        cols = self._synth(tables)
+        J, B, p, gp, J0 = self._fields(cols, z, const, eps)
+        rF, rJ, rP, Wp = self._residual(J, B, p, gp, J0, const)
+        return jnp.concatenate([rF.ravel(), rJ.ravel(), rP.ravel()]), Wp
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _trial_chunk(self, tables, z, D, const, eps):
+        """Sum of squares of the local rows and the share of <p>, at z + D[:, k] for each k."""
+        cols = self._synth(tables)
+
+        def one(d):
+            J, B, p, gp, J0 = self._fields(cols, z + d, const, eps)
+            rF, rJ, rP, Wp = self._residual(J, B, p, gp, J0, const)
+            Fa = jnp.sum(const["sw3"] * jnp.linalg.norm(rF, axis=-1))
+            return jnp.sum(rF**2) + jnp.sum(rJ**2) + jnp.sum(rP**2), Wp, Fa
+
+        return jax.lax.map(one, D.T)
+
+    def _AT(self, cols, J, B, qF, qJ, qP, act, const):
+        """A^T q of a chunk for row values q (force qF (c,t,z,3), J qJ (c,t,3), p<0 qP (c,t,z))."""
+        wF = const["swF"][..., None] * qF
+        BxW, WxJ = self._cross(B, wF), self._cross(wF, J)
+        wJ = const["swJ"][..., None] * qJ
+        wP = const["swP"] * act * qP
+        out = []
+        for (kind, n, P, a, b), V in zip(self._blocks_static, cols):
+            if kind == "u":
+                o = jnp.einsum("rtzck,rtzc->k", V[..., :3, :], BxW) + jnp.einsum("rtzck,rtzc->k", V[..., 3:, :], WxJ)
+                if self.j_full:
+                    o = o + jnp.einsum("rtzck,rtzc->k", V[..., :3, :], wJ)
+                elif n == 0:
+                    o = o + jnp.einsum("rtck,rtc->k", V[:, :, 0, :3, :], wJ)
+            else:
+                o = -jnp.einsum("rtzck,rtzc->k", V[..., 1:, :], wF) + jnp.einsum("rtzk,rtz->k", V[..., 0, :], wP)
+            out.append(o)
+        return jnp.concatenate(out)
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _grad_chunk(self, tables, z, const, eps):
+        """A^T r, |r|^2 of the local rows, the share of <p> and of <|F|>, and of the gradient of <p>."""
+        cols = self._synth(tables)
+        J, B, p, gp, J0 = self._fields(cols, z, const, eps)
+        rF, rJ, rP, Wp = self._residual(J, B, p, gp, J0, const)
+        act = (p < 0).astype(p.dtype)
+        g = self._AT(cols, J, B, rF, rJ, rP, act, const)  # rows are already weighted
+        gW = jnp.concatenate([jnp.sum(const["sw3"] ** 2 * V[..., 0, :].transpose(3, 0, 1, 2), axis=(1, 2, 3))
+                              if kind == "p" else jnp.zeros(b - a)
+                              for (kind, n, P, a, b), V in zip(self._blocks_static, cols)])
+        Fa = jnp.sum(const["sw3"] * jnp.linalg.norm(rF, axis=-1))
+        return g, jnp.sum(rF**2) + jnp.sum(rJ**2) + jnp.sum(rP**2), Wp, Fa, gW
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _normal_chunk(self, tables, z, d, const, eps):
+        """A^T (A d) of the local rows of a chunk, and its share of <p> along d."""
+        cols = self._synth(tables)
+        J, B, p, gp, J0 = self._fields(cols, z, const, eps)
+        act = (p < 0).astype(p.dtype)
+        dJ, dB, dp, dgp, dJ0 = 0.0, 0.0, 0.0, 0.0, 0.0
+        for (kind, n, P, a, b), V in zip(self._blocks_static, cols):
+            v = V @ d[a:b]
+            if kind == "u":
+                dJ, dB = dJ + v[..., :3], dB + v[..., 3:]
+                if n == 0 and not self.j_full:
+                    dJ0 = dJ0 + v[:, :, 0, :3]
+            else:
+                dp, dgp = dp + v[..., 0], dgp + v[..., 1:]
+        qF = const["swF"][..., None] * (self._cross(dJ, B) + self._cross(J, dB) - dgp)
+        qJ = const["swJ"][..., None] * (dJ if self.j_full else dJ0)
+        qP = const["swP"] * act * dp
+        return self._AT(cols, J, B, qF, qJ, qP, act, const), jnp.sum(const["sw3"] ** 2 * dp)
+
+    # ------------------------------------------------------------------ global rows
+    def _p_grads(self, cols):
+        """grad of every pressure column at the chunk's points: (c, t, z, 3, n_pc), and p of them."""
+        G = [V[..., 1:, :] for (kind, *_), V in zip(self._blocks_static, cols) if kind == "p"]
+        P = [V[..., 0, :] for (kind, *_), V in zip(self._blocks_static, cols) if kind == "p"]
+        return jnp.concatenate(G, -1), jnp.concatenate(P, -1)
+
+    def _transport_R(self, cols, B, gp, w):
+        """sum_points w grad(phi_k) . M grad p, M = I + (kappa - 1) b b."""
+        Gp, _ = self._p_grads(cols)
+        Bn = jnp.linalg.norm(B, axis=-1, keepdims=True)
+        b = B / jnp.where(Bn > 0, Bn, 1.0)  # (padded radii: B = 0, weight 0)
+        Mgp = gp + (self._kappa - 1.0) * b * jnp.sum(b * gp, -1, keepdims=True)
+        return jnp.einsum("rtzck,rtzc->k", Gp, w[..., None] * Mgp)
+
+    @functools.partial(jax.jit, static_argnums=(0, 5))
+    def _global_chunk(self, tables, z, const, eps, jac):
+        """A chunk's share of <p> and its gradient row, and (with transport) of R and its Jacobian."""
+        cols = self._synth(tables)
+        J, B, p, gp, J0 = self._fields(cols, z, const, eps)
+        w = const["sw3"] ** 2
+        Gp, Pp = self._p_grads(cols)
+        Wp, gWp = jnp.sum(w * p), jnp.einsum("rtzk,rtz->k", Pp, w)
+        if self.transport is None:
+            return Wp, gWp, None, None
+        Bn = jnp.linalg.norm(B, axis=-1, keepdims=True)
+        Bn = jnp.where(Bn > 0, Bn, 1.0)  # (padded radii: B = 0, weight 0)
+        b = B / Bn
+        k1 = self._kappa - 1.0
+        bp = jnp.sum(b * gp, -1, keepdims=True)
+        wG = w[..., None, None] * Gp
+        R = jnp.einsum("rtzck,rtzc->k", wG, gp + k1 * b * bp)
+        if not jac:
+            return Wp, gWp, R, None
+        MGp = Gp + k1 * b[..., None] * jnp.sum(b[..., None] * Gp, -2, keepdims=True)
+        JRp = jnp.einsum("rtzck,rtzcj->kj", wG, MGp)
+        dB = jnp.concatenate([V[..., 3:, :] for (kind, *_), V in zip(self._blocks_static, cols) if kind == "u"], -1)
+        db = (dB - b[..., None] * jnp.sum(b[..., None] * dB, -2, keepdims=True)) / Bn[..., None]
+        dMgp = k1 * (db * bp[..., None] + b[..., None] * jnp.sum(db * gp[..., None], -2, keepdims=True))
+        JRu = jnp.einsum("rtzck,rtzcj->kj", wG, dMgp)
+        return Wp, gWp, R, jnp.concatenate([JRu, JRp], 1)
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _trial_R_chunk(self, tables, z, D, const, eps):
+        cols = self._synth(tables)
+        w = const["sw3"] ** 2
+
+        def one(d):
+            J, B, p, gp, J0 = self._fields(cols, z + d, const, eps)
+            return self._transport_R(cols, B, gp, w)
+
+        return jax.lax.map(one, D.T)
+
+    def _global(self, z, eps, jac=True):
+        """The global residuals g (the <p> row, the transport rows, the roughness rows) and, with
+        ``jac``, their Jacobian G (n_g, n)."""
+        Wp, gWp, R, JR = 0.0, jnp.zeros(self.n_pc), None, None
+        for k in range(self.n_chunks):
+            w_, gw, r_, jr = self._global_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps, jac)
+            Wp, gWp = Wp + float(w_), gWp + gw
+            if r_ is not None:
+                R = r_ if R is None else R + r_
+                if jr is not None:
+                    JR = jr if JR is None else JR + jr
+        self._gW = jnp.concatenate([jnp.zeros(self.n_uc), gWp])
+        gv = [jnp.asarray([self.weights["W"] * (Wp - self.W_t) / self.W_t])]
+        rows = [self.wW * self._gW[None]] if jac else []
+        if self.transport is not None:
+            if self._s is None:
+                raise RuntimeError("transport: set_source(x) first (the eps = 0 state)")
+            sc = self.transport["w"] / self._snorm
+            gv.append(sc * (R - self._s))
+            if jac:
+                rows.append(sc * JR)
+        if self.rough is not None:
+            ri = self._rough_idx
+            gv.append(self._dvec_j[ri] * z[ri])
+            if jac:
+                rows.append(jnp.zeros((len(ri), self.n)).at[jnp.arange(len(ri)), ri].set(self._dvec_j[ri]))
+        return jnp.concatenate(gv), (jnp.concatenate(rows) if jac else None)
+
+    def set_source(self, x):
+        """The transport source: the weak residual of the eps = 0 state x (so that it satisfies the
+        transport equation exactly)."""
+        if self.transport is None:
+            return
+        z = self.to_z(x)
+        R = None
+        for k in range(self.n_chunks):
+            _, _, r_, _ = self._global_chunk(self._chunk_tables(k), z, self._chunk_const(k), 0.0, False)
+            R = r_ if R is None else R + r_
+        self._s = R
+        self._snorm = float(jnp.linalg.norm(R))
+        self._log(f"  transport: kappa_par / kappa_perp {self._kappa:g}, weight {self.transport['w']:g}; "
+                  f"source |s| {self._snorm:.3e}")
+
+    # ------------------------------------------------------------------ public
+    def to_z(self, x):
+        return jnp.asarray(np.asarray(x)[self.perm])
+
+    def to_x(self, z):
+        return np.asarray(z)[self.iperm]
+
+    def evaluate(self, x, eps):
+        """f = |r|^2 / 2 and <|F|>/norm at x (one pass, no Gram)."""
+        z = self.to_z(x)
+        f, Wp, Fsum = 0.0, 0.0, 0.0
+        for k in range(self.n_chunks):
+            const = self._chunk_const(k)
+            s, w_, Fa = self._eval_chunk(self._chunk_tables(k), z, const, eps)
+            f, Wp, Fsum = f + float(s), Wp + float(w_), Fsum + float(Fa)
+        gv, _ = self._global(z, eps, jac=False)
+        return 0.5 * (f + float(gv @ gv)), Fsum
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _eval_chunk(self, tables, z, const, eps):
+        cols = self._synth(tables)
+        J, B, p, gp, J0 = self._fields(cols, z, const, eps)
+        rF, rJ, rP, Wp = self._residual(J, B, p, gp, J0, const)
+        # <|F|>/norm: sum sqrt(dV/V)^2 |F| / norm = sum sw3 |rF|
+        Fa = jnp.sum(const["sw3"] * jnp.linalg.norm(rF, axis=-1))
+        return jnp.sum(rF**2) + jnp.sum(rJ**2) + jnp.sum(rP**2), Wp, Fa
+
+    def fields(self, x, eps):
+        """J, B, p, grad p (cylindrical) and F at all collocation points, numpy, (n_r, n_t, n_z, .)."""
+        z = self.to_z(x)
+        out = {k: [] for k in ("J", "B", "p", "grad_p", "F")}
+        for k in range(self.n_chunks):
+            const = self._chunk_const(k)
+            J, B, p, gp, _ = self._fields(self._synth(self._chunk_tables(k)), z, const, eps)
+            for key, v in zip(("J", "B", "p", "grad_p", "F"), (J, B, p, gp, self._cross(J, B) - gp)):
+                out[key].append(np.asarray(v))
+        n_r = len(self.rho)
+        return {k: np.concatenate(v)[:n_r] for k, v in out.items()}
+
+    # ------------------------------------------------------------------ the solver
+    def _gram(self, z, eps):
+        """Full pass: H = A^T A (with the <p> row), g = A^T r, f."""
+        n = self.n
+        H, g = jnp.zeros((n, n)), jnp.zeros(n)
+        fl, Wp, gW = 0.0, 0.0, jnp.zeros(n)
+        for k in range(self.n_chunks):
+            H, g, s, w_, gw = self._gram_chunk(H, g, self._chunk_tables(k), z, self._chunk_const(k), eps)
+            fl, Wp, gW = fl + float(s), Wp + float(w_), gW + gw
+        self._gW = gW
+        rW = self.weights["W"] * (Wp - self.W_t) / self.W_t
+        aW = self.wW * gW
+        return _add_outer(H, aW), g + aW * rW, 0.5 * (fl + rW**2)
+
+    def _grad(self, z, eps):
+        """Pass: g = A^T r and f (exact, matrix-free)."""
+        g, fl, Wp, Fs = jnp.zeros(self.n), 0.0, 0.0, 0.0
+        gW = jnp.zeros(self.n)
+        for k in range(self.n_chunks):
+            gk, s, w_, Fa, gw = self._grad_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps)
+            g, fl, Wp, Fs, gW = g + gk, fl + float(s), Wp + float(w_), Fs + float(Fa), gW + gw
+        gv, G = self._global(z, eps)
+        return g + G.T @ gv, 0.5 * (fl + float(gv @ gv)), Fs
+
+    def _normal(self, z, d, eps):
+        """Pass: A^T A d (exact, matrix-free, with the <p> row)."""
+        out, Sd = jnp.zeros(self.n), 0.0
+        for k in range(self.n_chunks):
+            o, sd = self._normal_chunk(self._chunk_tables(k), z, d, self._chunk_const(k), eps)
+            out, Sd = out + o, Sd + sd
+        return out + self.wW**2 * self._gW * Sd
+
+    def _trials(self, z, D, eps):
+        K = D.shape[1]
+        fs, Ws, Fs = (np.zeros(K) for _ in range(3))
+        R = 0.0
+        for k in range(self.n_chunks):
+            tab, con = self._chunk_tables(k), self._chunk_const(k)
+            s, w_, Fa = self._trial_chunk(tab, z, D, con, eps)
+            fs, Ws, Fs = fs + np.asarray(s), Ws + np.asarray(w_), Fs + np.asarray(Fa)
+            if self.transport is not None:
+                R = R + self._trial_R_chunk(tab, z, D, con, eps)  # (K, n_pc)
+        g2 = (self.weights["W"] * (Ws - self.W_t) / self.W_t) ** 2
+        if self.transport is not None:
+            sc = self.transport["w"] / self._snorm
+            g2 = g2 + np.asarray(jnp.sum((sc * (R - self._s[None])) ** 2, 1))
+        if self.rough is not None:
+            ri = self._rough_idx
+            g2 = g2 + np.asarray(jnp.sum((self._dvec_j[ri, None] * (z[ri, None] + D[ri])) ** 2, 0))
+        return 0.5 * (fs + g2), Fs
+
+    def _scaling(self, diag, floor=1e-8):
+        """Column scaling D = 1 / sqrt(max(H_ii, floor x median of its kind)): Jacobi, except that a
+        column that barely moves the residual is not given a huge scale (with the response driven,
+        its gradient is no longer 0, and a damped step would throw it far out)."""
+        dg = np.asarray(diag)
+        out = np.zeros_like(dg)
+        for kind in ("u", "p"):
+            idx = np.concatenate([np.arange(b["sl"].start, b["sl"].stop) for b in self.blocks if b["kind"] == kind])
+            pos = dg[idx][dg[idx] > 0]
+            fl = floor * (np.median(pos) if len(pos) else 1.0)
+            out[idx] = 1.0 / np.sqrt(np.maximum(dg[idx], fl))
+        return jnp.asarray(out)
+
+    def _evict(self):
+        """Free the resident tables (the Gram step needs the room); ``_reload`` puts them back."""
+        self._dev = [None] * len(self._dev)
+
+    def _reload(self):
+        n_r = len(self.rho)
+        pad = self.n_chunks * self.chunk - n_r
+        budget = 0.9 * _device_bytes() - self.n**2 * 8 - 6e9  # beside the kept Cholesky factor
+        used, dev = 0.0, []
+        for T in self.tables:
+            if used + T.nbytes <= budget:
+                dev.append(jnp.asarray(np.concatenate([T, np.zeros((pad,) + T.shape[1:])]) if pad else T))
+                used += T.nbytes
+            else:
+                dev.append(None)
+        self._dev = dev
+        return used
+
+    def _gram_step(self, z, eps, decades):
+        """The exact Gram matrix at z, steps for mu over decades by Cholesky, each evaluated
+        exactly; keeps the Cholesky factor of the best as the PCG preconditioner."""
+        n = self.n
+        self._prec = None
+        self._evict()
+        H, g, f_here = self._gram(z, eps)
+        Dsc = self._scaling(jnp.diag(H))
+        Hs = _scale(H, Dsc)  # in place (H donated)
+        del H
+        gs = Dsc * g
+        v = jnp.ones(n) / np.sqrt(n)
+        for _ in range(30):  # lambda_max of Hs: the damping scale
+            v = Hs @ v
+            lam = float(jnp.linalg.norm(v))
+            v = v / lam
+        host = 3 * n * n * 8 > 0.6 * _device_bytes()  # large n: Hs waits on the host
+        if host:
+            Hs = np.asarray(Hs)
+        steps, mus = [], []
+        for kd in np.arange(decades[0] - 3, decades[1] + 0.5, 1.0):
+            mu = lam * 10.0 ** (-kd)
+            y, ok = _damped_step(jnp.asarray(Hs) if host else Hs, mu, gs)
+            if bool(ok):
+                steps.append(Dsc * y)
+                mus.append(mu)
+        D = jnp.stack(steps, 1)
+        fs, Fs = self._trials(z, D, eps)
+        j = int(np.argmin(fs))
+        dz = D[:, j]
+        i = jnp.arange(n)
+        self._prec = {"L": jnp.linalg.cholesky((jnp.asarray(Hs) if host else Hs).at[i, i].add(mus[j])),
+                      "Dsc": Dsc, "mu": mus[j], "lam": lam}
+        del Hs, D
+        self._reload()
+        return dz, f_here, fs[j], Fs[j], {"mu/lambda_max": mus[j] / lam, "|g|": float(jnp.linalg.norm(gs))}
+
+    def _pcg_step(self, z, eps, maxit=30, tol=1e-6):
+        """The LM step at z for the kept damping, by PCG on (D A^T A D + mu I) y = -D g with
+        exact matrix-free products and the kept Cholesky factor as preconditioner; then the
+        step and its halvings evaluated exactly."""
+        P = self._prec
+        Dsc, mu, L = P["Dsc"], P["mu"], P["L"]
+        g, f_here, _ = self._grad(z, eps)
+        b = -Dsc * g
+        M = lambda r: jax.scipy.linalg.cho_solve((L, True), r)  # noqa: E731
+        Op = lambda y: Dsc * self._normal(z, Dsc * y, eps) + mu * y  # noqa: E731
+        y = M(b)
+        r = b - Op(y)
+        zr = M(r)
+        pdir = zr
+        rz = float(r @ zr)
+        bn = float(jnp.linalg.norm(b))
+        k, res = 0, float(jnp.linalg.norm(r)) / bn
+        while res > tol and k < maxit:
+            Ap = Op(pdir)
+            alpha = rz / float(pdir @ Ap)
+            y, r = y + alpha * pdir, r - alpha * Ap
+            zr = M(r)
+            rz_new = float(r @ zr)
+            pdir = zr + (rz_new / rz) * pdir
+            rz = rz_new
+            k += 1
+            res = float(jnp.linalg.norm(r)) / bn
+        d = Dsc * y
+        D = jnp.stack([d, 0.5 * d, 0.25 * d, 0.125 * d], 1)
+        fs, Fs = self._trials(z, D, eps)
+        j = int(np.argmin(fs))
+        return D[:, j], f_here, fs[j], Fs[j], {"pcg": k + 1, "pcg res": res, "scale": 0.5**j,
+                                                 "mu/lambda_max": mu / P["lam"], "|g|": float(jnp.linalg.norm(b))}
+
+    # --- QR (no normal equations: sigma_min / sigma_max ~ 1e-13 here, squared it is lost)
+    def _tsqr(self, z, eps, merge_rows=22000):
+        """R of [A | r] (n + 1, n + 1) by a streamed QR of the row blocks (with the <p> row), and f."""
+        self._evict()
+        gv, G = self._global(z, eps)  # the global rows (<p>, transport, roughness), appended last
+        R, buf, nb = None, [], 0
+        for k in range(self.n_chunks):
+            blk, _, _ = self._rows_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps)
+            buf.append(blk)
+            nb += blk.shape[0]
+            if nb >= merge_rows or k == self.n_chunks - 1:
+                if k == self.n_chunks - 1:
+                    buf.append(jnp.concatenate([G, gv[:, None]], 1))
+                R = _qr_r(jnp.concatenate(([R] if R is not None else []) + buf))
+                buf, nb = [], 0
+        del G
+        return R
+
+    def _qr_step(self, z, eps, decades):
+        """Exact LM steps from the QR of [A | r]: for each mu, the QR of [R D, c; sqrt(mu) I, 0];
+        each step evaluated exactly, the best kept (with its factor, the LSQR preconditioner)."""
+        n = self.n
+        self._prec = None
+        Ra = self._tsqr(z, eps)
+        R, c = Ra[:n, :n], Ra[:n, n]
+        f_here = 0.5 * float(c @ c + Ra[n, n] ** 2)
+        # what a full Gauss-Newton step could still remove: f - |r_perp|^2 / 2, r_perp the part of r
+        # outside the range of A (the exact linear model's minimum)
+        gn_share = float(c @ c) / float(c @ c + Ra[n, n] ** 2)
+        Dsc = self._scaling(jnp.sum(R**2, axis=0))
+        RD = R * Dsc[None, :]
+        del Ra, R
+        v = jnp.ones(n) / np.sqrt(n)
+        for _ in range(30):  # lambda_max of (R D)^T (R D)
+            v = RD.T @ (RD @ v)
+            lam = float(jnp.linalg.norm(v))
+            v = v / lam
+        steps, mus = [], []
+        for kd in np.arange(decades[0] - 3, decades[1] + 0.5, 2.0):
+            mu = lam * 10.0 ** (-kd)
+            y, Rt = _damped_qr(RD, c, np.sqrt(mu))
+            del Rt
+            if bool(jnp.all(jnp.isfinite(y))):
+                steps.append(Dsc * y)
+                mus.append(mu)
+        D = jnp.stack(steps, 1)
+        fs, Fs = self._trials(z, D, eps)
+        j = int(np.argmin(fs))
+        fbest, Fbest, d, mu = fs[j], Fs[j], D[:, j], mus[j]
+        del D
+        _, Rt = _damped_qr(RD, c, np.sqrt(mu))  # the factor of the best: the LSQR preconditioner
+        del RD
+        self._prec = {"Rt": Rt, "Dsc": Dsc, "mu": mu, "lam": lam}
+        self._reload()
+        return d, f_here, fbest, Fbest, {"mu/lambda_max": mu / lam, "GN share": gn_share}
+
+    def _rvec(self, z, eps):
+        """The local residuals (per chunk) and the global ones; keeps the global Jacobian at z."""
+        rs = []
+        for k in range(self.n_chunks):
+            r, _ = self._r_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps)
+            rs.append(r)
+        gv, self._Gz = self._global(z, eps)
+        return rs, gv
+
+    def _Av(self, z, d, eps):
+        out = []
+        for k in range(self.n_chunks):
+            q, _ = self._Av_chunk(self._chunk_tables(k), z, d, self._chunk_const(k), eps)
+            out.append(q)
+        return out, self._Gz @ d
+
+    def _ATu(self, z, u, ug, eps):
+        out = jnp.zeros(self.n)
+        for k in range(self.n_chunks):
+            out = out + self._ATu_chunk(self._chunk_tables(k), z, u[k], self._chunk_const(k), eps)
+        return out + self._Gz.T @ ug
+
+    def _lsqr_step(self, z, eps, maxit=20, tol=1e-6):
+        """The LM step for the kept damping by LSQR on [A D; sqrt(mu) I] Rt^-1 w = [-r; 0] (right
+        preconditioned with the kept QR factor: exact products, no normal equations)."""
+        from jax.scipy.linalg import solve_triangular
+        P = self._prec
+        Dsc, mu, Rt = P["Dsc"], P["mu"], P["Rt"]
+        sm = np.sqrt(mu)
+        Ri = lambda w: solve_triangular(Rt, w, lower=False)  # noqa: E731
+        RiT = lambda w: solve_triangular(Rt, w, lower=False, trans="T")  # noqa: E731
+
+        def op(w):
+            y = Ri(w)
+            a, aW = self._Av(z, Dsc * y, eps)
+            return (a, aW, sm * y)
+
+        def opT(u):
+            a, aW, v = u
+            return RiT(Dsc * self._ATu(z, a, aW, eps) + sm * v)
+
+        dot = lambda u, v: sum(float(x @ y) for x, y in zip(u[0], v[0])) + float(u[1] @ v[1]) + float(u[2] @ v[2])  # noqa: E731
+        scal = lambda s_, u: ([s_ * x for x in u[0]], s_ * u[1], s_ * u[2])  # noqa: E731
+        add = lambda u, v: ([x + y for x, y in zip(u[0], v[0])], u[1] + v[1], u[2] + v[2])  # noqa: E731
+        rs, rW = self._rvec(z, eps)
+        f_here = 0.5 * (sum(float(x @ x) for x in rs) + float(rW @ rW))
+        b = ([-x for x in rs], -rW, jnp.zeros(self.n))
+        beta = np.sqrt(dot(b, b))
+        u = scal(1 / beta, b)
+        v = opT(u)
+        alpha = float(jnp.linalg.norm(v))
+        v = v / alpha
+        w = v
+        x = jnp.zeros(self.n)
+        phibar, rhobar = beta, alpha
+        k, res = 0, 1.0
+        anorm = alpha
+        while k < maxit:
+            u = add(op(v), scal(-alpha, u))
+            beta = np.sqrt(dot(u, u))
+            u = scal(1 / beta, u)
+            v = opT(u) - beta * v
+            alpha = float(jnp.linalg.norm(v))
+            v = v / alpha
+            anorm = max(anorm, np.hypot(alpha, beta))
+            rho = np.hypot(rhobar, beta)
+            cs, sn = rhobar / rho, beta / rho
+            theta = sn * alpha
+            rhobar = -cs * alpha
+            phi = cs * phibar
+            phibar = sn * phibar
+            x = x + (phi / rho) * w
+            w = v - (theta / rho) * w
+            k += 1
+            res = abs(phibar * alpha * cs) / (anorm * max(phibar, 1e-300))  # |A^T r| / (|A| |r|)
+            if res < tol:
+                break
+        d = Dsc * Ri(x)
+        D = jnp.stack([d, 0.5 * d, 0.25 * d, 0.125 * d], 1)
+        fs, Fs = self._trials(z, D, eps)
+        j = int(np.argmin(fs))
+        return D[:, j], f_here, fs[j], Fs[j], {"lsqr": k, "lsqr res": float(res), "scale": 0.5**j,
+                                                 "mu/lambda_max": mu / P["lam"]}
+
+    def lm(self, x, eps, iters=20, rtol=1e-7, decades=(1, 17), callback=None, steps="qr", gn_tol=1e-6):
+        """Levenberg-Marquardt from x at amplitude eps.
+
+        ``steps="qr"``: an exact QR step every iteration, and a stop once that step's exact linear
+        model says a full Gauss-Newton step could remove less than ``gn_tol`` of f (or f drops by
+        less than ``rtol``). ``"lsqr"``: QR steps only to refresh the preconditioner of LSQR steps
+        (for problems too large to factor every iteration)."""
+        z = self.to_z(x)
+        hist = []
+        f0, F0 = self.evaluate(self.to_x(z), eps)
+        hist.append({"it": 0, "f": f0, "<|F|>/norm": F0, "time": 0.0})
+        self._log(f"  eps {eps:g}: start f {f0:.6e}, <|F|>/norm {F0:.4e}")
+        if not hasattr(self, "_prec"):
+            self._prec = None
+        for it in range(1, iters + 1):
+            t0 = time.time()
+            kind = "QR" if steps == "qr" or self._prec is None or "Rt" not in self._prec else "LSQR"
+            if kind == "LSQR":
+                last = hist[-1].get("rel decrease", 1.0) if len(hist) > 1 else 1.0
+                dz, f_here, f_new, F, info = self._lsqr_step(z, eps, tol=float(np.clip(last, 1e-8, 1e-3)))
+                if not f_new < f_here:  # a stale preconditioner: refactor now
+                    kind = "QR"
+                elif info["lsqr"] >= 15:  # still a decrease, but refactor next time
+                    self._prec = None
+            if kind == "QR":
+                dz, f_here, f_new, F, info = self._qr_step(z, eps, decades)
+            if not f_new < f_here:
+                self._log(f"  it {it}: no decrease ({kind}); stopping")
+                break
+            rel = (f_here - f_new) / f_here
+            z = z + dz
+            h = {"it": it, "f": float(f_new), "<|F|>/norm": float(F), "|d|/|x|": float(jnp.linalg.norm(dz) / jnp.linalg.norm(z)),
+                 "rel decrease": float(rel), "step": kind, "time": time.time() - t0, **info}
+            hist.append(h)
+            self._log(f"  it {it:2d} {kind:4s} f {f_new:.6e}  <|F|>/norm {F:.4e}  |dx|/|x| {h['|d|/|x|']:.2e}  "
+                      f"rel {rel:.1e}  " + (f"lsqr {info['lsqr']} res {info['lsqr res']:.0e}  " if kind == "LSQR" else
+                                            f"mu/lam {info['mu/lambda_max']:.0e}  GN share {info['GN share']:.1e}  ")
+                      + f"{h['time']:.0f} s")
+            if callback is not None:
+                callback(self.to_x(z), hist)
+            if rel < rtol or info.get("GN share", 1.0) < gn_tol:
+                break
+        return self.to_x(z), hist

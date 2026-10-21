@@ -1,0 +1,157 @@
+{
+ "args": {
+  "base": "results/gs/hN_a120D",
+  "eq": "/scratch/gpfs/lk1158/NEST_isl2/desc_input/tokamak_free_boundary/tokamak_L32M32_fb.h5",
+  "coils": "/scratch/gpfs/lk1158/NEST_isl2/desc_input/tokamak_free_boundary/tokamak_L32M32_field.h5",
+  "factors": [
+   3,
+   3,
+   1
+  ],
+  "edge_power": 3,
+  "frac": 320,
+  "N": 1,
+  "m": 2,
+  "n": -1,
+  "eps": [
+   0.0,
+   10.0,
+   30.0,
+   100.0,
+   300.0,
+   1000.0
+  ],
+  "iters": 25,
+  "rtol": 1e-07,
+  "gn_tol": 0.0,
+  "steps": "lsqr",
+  "predict": null,
+  "chunk": 2,
+  "batch": [
+   4,
+   2
+  ],
+  "j_n0": true,
+  "verify": null,
+  "only": null,
+  "again": false,
+  "resume": true,
+  "start_from": "a120n1",
+  "w_J": 0.01,
+  "name": "a120w2"
+ },
+ "base_args": {
+  "eq": "desc_input/tokamak_free_boundary/tokamak_L32M32_fb.h5",
+  "coils": "desc_input/tokamak_free_boundary/tokamak_L32M32_field.h5",
+  "frac": 120,
+  "refine": [],
+  "kernel": "truncated",
+  "grid": "cylindrical",
+  "margin": 2.0,
+  "check_grid": "cartesian",
+  "free": "all",
+  "maxiter": 1,
+  "cg": 100,
+  "cg_tol": 0.01,
+  "start": null,
+  "ftol": 0.0002,
+  "precond": "block",
+  "time_limit": null,
+  "factors": [
+   2.0,
+   2.0,
+   1.0
+  ],
+  "colloc": 2.0,
+  "check": 3,
+  "check_frac": null,
+  "check_kernel": "truncated",
+  "w_force": 1.0,
+  "w_B": 0.0,
+  "w_J": 0.001,
+  "w_p": 0.0,
+  "w_W": 10.0,
+  "w_p2": 0.0,
+  "w_pos": 10.0,
+  "w_M": 0.0,
+  "moments": [
+   "I",
+   "R",
+   "Z",
+   "V"
+  ],
+  "fix_I": false,
+  "p_scale": 1.0,
+  "bext": "field",
+  "bplasma": "box",
+  "correct_passes": 0,
+  "j_target_from": null,
+  "j_target": "start",
+  "fit": "J",
+  "edge_power": 3,
+  "w_J_rho": null,
+  "fit_eps": 0.001,
+  "dense": true,
+  "dtype": "float64",
+  "cyl_dtype": "float64",
+  "j_sampling": null,
+  "S_dtype": "float64",
+  "j_nodes": "direct",
+  "dense_g": "box",
+  "dense_batch": 8,
+  "no_check": true,
+  "track": true,
+  "keep_iterates": true,
+  "out": "results/gs/hN_a120D",
+  "solver": "dense LM (gs_dense_solve.py)",
+  "start_from": "results/gs/hN_a120P"
+ },
+ "start": {
+  "f": 9.508884735079925e-16,
+  "<|F|>/norm": 1.5062925036798006e-09
+ },
+ "runs": [
+  {
+   "eps": 0.0,
+   "f": 3.206653508107627e-16,
+   "<|F|>/norm": 1.9306698400450825e-08,
+   "iters": 7,
+   "time": 91.05156970024109
+  },
+  {
+   "eps": 10.0,
+   "f": 6.78705553026328e-13,
+   "<|F|>/norm": 5.739897150634664e-07,
+   "iters": 4,
+   "time": 46.76102304458618
+  },
+  {
+   "eps": 30.0,
+   "f": 6.107017742491358e-12,
+   "<|F|>/norm": 1.7205281301838852e-06,
+   "iters": 6,
+   "time": 172.91143608093262
+  },
+  {
+   "eps": 100.0,
+   "f": 6.78782795391097e-11,
+   "<|F|>/norm": 5.735279718811285e-06,
+   "iters": 11,
+   "time": 529.1645834445953
+  },
+  {
+   "eps": 300.0,
+   "f": 6.113347341358027e-10,
+   "<|F|>/norm": 1.7212103746254128e-05,
+   "iters": 16,
+   "time": 833.1322336196899
+  },
+  {
+   "eps": 1000.0,
+   "f": 6.8063461099708675e-09,
+   "<|F|>/norm": 5.7474176258812144e-05,
+   "iters": 12,
+   "time": 491.7244710922241
+  }
+ ]
+}
