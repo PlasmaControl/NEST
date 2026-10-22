@@ -2,6 +2,11 @@
 
 One entry per commit, newest first.
 
+## 2026-10-22: DSHAPE perturbed, w_J = 1e-7: solver speed options (branch dshape-perturbed-wJ1e-7)
+- Objective of these runs: force balance + w_J (J - J_fit) on the full J at every collocation point, nothing else (`--j-mode full --w-W 0 --w-pos 0`, no transport, roughness or force-along-B weight); direct starts at w_J = 1e-7 against a continuation in w_J.
+- `HarmonicModel(speed=...)`, `isl_scan.py --speed a,b,k=v`: `resident` (tables stay on the device: step 18 s -> 13 s at N = 1), `chol` + `narrow` (Cholesky damping scan around the last best mu instead of ~10 dense QRs; the final damped QR only for LSQR), `merge=M` (rows per QR block: the QR runs at ~24 TFLOP/s whatever the block), `gpus=G` (one Python thread per device: the cuSOLVER calls block the host thread; N = 1 step 18 s -> 4 s on 4 B200, N = 2 57 s -> 13 s; trajectories identical to the unchanged solver), `fp32`, `profile`. Tested ideas: `reuse=k` (Cholesky factor of a QR step kept for k - 1 steps with the exact gradient: 1 s against 12 s per step at N = 2, ~2.5x the progress per second at 300 A), `soc`, `accel=m`, `pproj`, `newton` (residual-curvature term: no effect at N = 1). All off by default.
+- `isl_scan.py`: with `gpus=` in the arguments `desc.set_device` no longer hides all but one GPU (it sets CUDA_VISIBLE_DEVICES to one); prints `<|B.grad p|/|B|>/norm` per amplitude.
+
 ## 2026-10-21: DSHAPE islands: the force-only runs' states, sections and logs from Stellar
 - `results/isl/<name>_eps<eps>.npz/.json` and `<name>_sections.npz` of `a120n1`, `a120n2` (eps 0-1000 A), `a120w2`, `a120w4`; the scans' logs of Stellar (`results/isl/logs/stellar/`, XLA warnings removed). The base `results/gs/hN_a120D_iter.{json,npz}` is now Stellar's original (the copy of the previous commit was regenerated on Stellar AI).
 
