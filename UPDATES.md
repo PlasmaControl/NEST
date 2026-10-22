@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-22: DSHAPE perturbed, w_J = 1e-7: results so far (runs in progress)
+- N = 1, 3000 A, w_J 1e-7 direct (`a120Cd3000k7`, cancelled at iteration 237): <|F|>/norm 4.01e-5, <|B.grad p|/|B|>/norm 1.80e-5, GN share 0.51. N = 2 from that state (`a120Cd3000w2`): 4.75e-5 -> 1.3e-5 in 30 steps, ~1.0e-5 after 250 (GN share 0.74). N = 3 warm (`a120Cd3000w3`, cancelled at iteration ~12): 1.29e-5 at iteration 10 against N = 2's 1.41e-5, 2x the cost per step.
+- N = 2 direct from the unperturbed base at w_J 1e-7 (`a120Cn2d300`, `a120Cn2d1000`, `a120Cd3000w2`), states at iterations 200-250 of 400 when copied: <|F|>/norm 2.4e-7 (300 A), 2.2e-6 (1000 A), 9.9e-6 (3000 A), GN share 0.74-0.92: still creeping, not converged. At N = 2 and 300 A <|B.grad p|/|B|>/norm is 75% of <|F|>/norm.
+- w_J continuation at N = 1 (`a120Ce<eps>s<k>`, w_J = 1e-k; stages 3 and 4 only, cancelled): leftover resonant field |b_21(NEST)|/|b_21(vac)| at w_J 1e-3 -> 1e-4: 0.204 -> 0.056 (300 A), 0.212 -> 0.136 (1000 A), 0.251 -> 0.451 (3000 A, not converged).
+- Copied: states `results/isl/<name>_eps<eps>.npz/.json`, island summaries `<name>_islands.json`, filtered Slurm logs `results/isl/logs/wJ1e-7/`, figures `figures/dshape/islands/isl_a120Ce*`. Not copied (on Stellar AI `/scratch/gpfs/EKOLEMEN/lk1158/NEST_isl`): Poincare sections and pressure maps (`*_sections.npz`, `*_pmap.npz`), and the final states of the N = 2 runs and the benchmark jobs.
+
 ## 2026-10-22: DSHAPE perturbed, w_J = 1e-7: run and benchmark scripts
 - `isl_stage.sbatch` (N = 1) and `isl_stage2.sbatch` (N = 2, 4 GPUs, fast solver): one job per w_J stage of the continuation, scan + island and pressure diagnostics, then the next stage submits itself (one queued job per chain: the queue has a per-user submit limit). `isl_variants.sbatch`: solver variants from one snapshot state. `bench_qr.py`, `bench_qr2.py`: QR rate against block size and one thread per device (23-25 TFLOP/s for 32k-256k rows, 4 blocks on 4 devices 0.28 s with 4 threads against 1.09 s from one). `isl_par_summary.py`, `isl_poincare_cmp.py`: the 300 A summary of the force-along-B runs and the side-by-side Poincare sections (figures `isl_par_*.png`).
 
