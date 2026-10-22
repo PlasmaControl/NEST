@@ -2,6 +2,9 @@
 
 One entry per commit, newest first.
 
+## 2026-10-22: DSHAPE perturbed, w_J = 1e-7: run and benchmark scripts
+- `isl_stage.sbatch` (N = 1) and `isl_stage2.sbatch` (N = 2, 4 GPUs, fast solver): one job per w_J stage of the continuation, scan + island and pressure diagnostics, then the next stage submits itself (one queued job per chain: the queue has a per-user submit limit). `isl_variants.sbatch`: solver variants from one snapshot state. `bench_qr.py`, `bench_qr2.py`: QR rate against block size and one thread per device (23-25 TFLOP/s for 32k-256k rows, 4 blocks on 4 devices 0.28 s with 4 threads against 1.09 s from one). `isl_par_summary.py`, `isl_poincare_cmp.py`: the 300 A summary of the force-along-B runs and the side-by-side Poincare sections (figures `isl_par_*.png`).
+
 ## 2026-10-22: DSHAPE perturbed, w_J = 1e-7: solver speed options (branch dshape-perturbed-wJ1e-7)
 - Objective of these runs: force balance + w_J (J - J_fit) on the full J at every collocation point, nothing else (`--j-mode full --w-W 0 --w-pos 0`, no transport, roughness or force-along-B weight); direct starts at w_J = 1e-7 against a continuation in w_J.
 - `HarmonicModel(speed=...)`, `isl_scan.py --speed a,b,k=v`: `resident` (tables stay on the device: step 18 s -> 13 s at N = 1), `chol` + `narrow` (Cholesky damping scan around the last best mu instead of ~10 dense QRs; the final damped QR only for LSQR), `merge=M` (rows per QR block: the QR runs at ~24 TFLOP/s whatever the block), `gpus=G` (one Python thread per device: the cuSOLVER calls block the host thread; N = 1 step 18 s -> 4 s on 4 B200, N = 2 57 s -> 13 s; trajectories identical to the unchanged solver), `fp32`, `profile`. Tested ideas: `reuse=k` (Cholesky factor of a QR step kept for k - 1 steps with the exact gradient: 1 s against 12 s per step at N = 2, ~2.5x the progress per second at 300 A), `soc`, `accel=m`, `pproj`, `newton` (residual-curvature term: no effect at N = 1). All off by default.
