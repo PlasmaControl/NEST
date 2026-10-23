@@ -1369,7 +1369,8 @@ class HarmonicModel:
         """Trust-region step (speed tr): y(mu) = -(Hs + mu I)^-1 gs with |y(mu)| = Delta in the scaled
         variables of Sc (the physical rms change of J and p with speed phys), mu by safeguarded Newton on
         the secular equation (one Cholesky per mu); the step evaluated exactly; DESC's radius rule (x2 above
-        ratio 0.75 on the boundary, 0.25 |y| below 0.25); a rejected step shrinks Delta and is retried."""
+        ratio 0.75 on the boundary, 0.25 |y| below 0.25); a rejected step shrinks Delta and is retried.
+        As DESC: the undamped Gauss-Newton step when it fits in the radius (mu = 0), no floor on mu."""
         n = self.n
         Delta = self._Delta
         mu = self._mu_tr if self._mu_tr else 1e-8 * lam
@@ -1380,40 +1381,60 @@ class HarmonicModel:
             L = jnp.linalg.cholesky(Hs.at[ii, ii].add(m))
             return L, -jax.scipy.linalg.cho_solve((L, True), gs)
 
-        mu_min = 1e-13 * lam
+        # DESC's exact-QR rule (desc.optimize.tr_subproblems.trust_region_step_exact_qr): the undamped
+        # Gauss-Newton step y_N = -(R D)^-1 c (one triangular solve; R D is upper triangular for both
+        # scalings) is taken whenever |y_N| <= Delta; otherwise mu on the boundary |y(mu)| = Delta. There is
+        # no floor on mu: the former floor 1e-13 lambda_max held every step of the production closure runs
+        # (2026-10-23) there and damped exactly the soft directions that carry K.
+        dr = jnp.diag(RD)
+        dri = jnp.where(dr == 0, 0.0, 1.0 / jnp.where(dr == 0, 1.0, dr))  # as solve_triangular_regularized
+        yN = -dri * jax.scipy.linalg.solve_triangular(RD * dri[:, None], c, lower=False, unit_diagonal=True)
+        nN = float(jnp.linalg.norm(yN))
+        mu_chol = 1e-10 * lam  # below this the Cholesky of Hs + mu I is not trusted (Hs squares kappa)
         tries = 0
         for _ in range(max_tries):
             tries += 1
-            L, y = solve(mu_min)
-            ny = float(jnp.linalg.norm(y))
-            hit = not (np.isfinite(ny) and ny <= Delta)
-            if hit:
-                mu, lo, hi = max(mu, mu_min), 0.0, np.inf
-                for _ in range(25):
-                    L, y = solve(mu)
-                    ny = float(jnp.linalg.norm(y))
-                    if not np.isfinite(ny):
-                        lo = mu
-                        mu = np.sqrt(mu * hi) if np.isfinite(hi) else 10.0 * mu
-                        continue
-                    phi = ny - Delta
-                    if abs(phi) <= 0.05 * Delta:
-                        break
-                    if phi > 0:
-                        lo = mu
-                    else:
-                        hi = mu
-                    q = jax.scipy.linalg.solve_triangular(L, y, lower=True)
-                    mu_new = mu + (ny / float(jnp.linalg.norm(q))) ** 2 * phi / Delta
-                    if not (np.isfinite(mu_new) and lo < mu_new < hi):
-                        mu_new = np.sqrt(lo * hi) if (np.isfinite(hi) and lo > 0) else (10 * mu if phi > 0 else 0.1 * mu)
-                    mu = mu_new
+            if np.isfinite(nN) and nN <= Delta:
+                y, ny, mu, hit = yN, nN, 0.0, False
             else:
-                mu = mu_min
-            if mu < 1e-10 * lam:  # Hs squares the conditioning: the step itself by QR at this mu
-                y, Rt = _damped_qr(RD, c, np.sqrt(mu))
-                del Rt
+                hit = True
+                L, y = solve(mu_chol)
                 ny = float(jnp.linalg.norm(y))
+                if np.isfinite(ny) and ny <= Delta:  # the root lies in (0, mu_chol): log bisection by QR
+                    lo, hi, yh, nh = 1e-12 * mu_chol, mu_chol, y, ny
+                    for _ in range(10):
+                        mid = np.sqrt(lo * hi)
+                        ym, _Rt = _damped_qr(RD, c, np.sqrt(mid))
+                        del _Rt
+                        nm = float(jnp.linalg.norm(ym))
+                        if np.isfinite(nm) and nm <= Delta:
+                            hi, yh, nh = mid, ym, nm
+                        else:
+                            lo = mid
+                        if nh >= 0.95 * Delta:
+                            break
+                    y, ny, mu = yh, nh, hi
+                else:  # the root lies above mu_chol: safeguarded Newton on the secular equation
+                    mu, lo, hi = max(mu, mu_chol), mu_chol, np.inf
+                    for _ in range(25):
+                        L, y = solve(mu)
+                        ny = float(jnp.linalg.norm(y))
+                        if not np.isfinite(ny):
+                            lo = mu
+                            mu = np.sqrt(mu * hi) if np.isfinite(hi) else 10.0 * mu
+                            continue
+                        phi = ny - Delta
+                        if abs(phi) <= 0.05 * Delta:
+                            break
+                        if phi > 0:
+                            lo = mu
+                        else:
+                            hi = mu
+                        q = jax.scipy.linalg.solve_triangular(L, y, lower=True)
+                        mu_new = mu + (ny / float(jnp.linalg.norm(q))) ** 2 * phi / Delta
+                        if not (np.isfinite(mu_new) and lo < mu_new < hi):
+                            mu_new = np.sqrt(lo * hi) if np.isfinite(hi) else 10 * mu
+                        mu = mu_new
             d = Sc.back(y)
             fs, Fs = self._trials(z, d[:, None], eps)
             f_new, F_new = float(fs[0]), float(Fs[0])
