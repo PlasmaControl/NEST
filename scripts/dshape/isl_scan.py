@@ -204,7 +204,8 @@ def main():
     ap.add_argument("--par", type=float, default=None,
                     help="weight of the force component along B (B . grad p = 0) against the rest of F")
     ap.add_argument("--speed", default=None,
-                    help="solver speed options, comma separated: chol, narrow, newton, gpus=G, reuse=k, fp32, profile")
+                    help="solver speed options, comma separated: chol, narrow, newton, gpus=G, reuse=k, fp32, profile, "
+                         "phys (damping in the physical J, p metric instead of Jacobi; QR steps)")
     ap.add_argument("--name", default="isl")
     a = ap.parse_args()
     t0 = time.time()

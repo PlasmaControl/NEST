@@ -204,6 +204,37 @@ def _damped_step(Hs, mu, gs):
     return y, jnp.all(jnp.isfinite(y))
 
 
+class _Scale:
+    """The variables of the damped step: z-step d = S y, damping mu |y|^2.
+    Jacobi (default): S = diag(D). Physical metric (speed phys): S = L^-T with L L^T = M, the Gram
+    matrix of the columns' (J / rms J, p / rms p) at the collocation points, so that |y| is the
+    volume-weighted rms change of J and p. M is fixed by the tables (no field solves); it removes the
+    radial collinearity of the basis that a diagonal scaling cannot (2026-10-23, lm-trust)."""
+
+    def __init__(self, D=None, L=None):
+        self.D, self.L = D, L
+
+    def cols(self, R):  # R S
+        if self.L is None:
+            return R * self.D[None, :]
+        return jax.scipy.linalg.solve_triangular(self.L, R.T, lower=True).T
+
+    def back(self, y):  # S y
+        if self.L is None:
+            return self.D * y
+        return jax.scipy.linalg.solve_triangular(self.L, y, lower=True, trans="T")
+
+    def grad(self, g):  # S^T g
+        if self.L is None:
+            return self.D * g
+        return jax.scipy.linalg.solve_triangular(self.L, g, lower=True)
+
+    def inv(self, d):  # S^-1 d
+        if self.L is None:
+            return d / self.D
+        return self.L.T @ d
+
+
 class HarmonicModel:
     """Tables, constants and the dense LM (module docstring).
 
@@ -241,6 +272,7 @@ class HarmonicModel:
         # solver speed options (each independent): chol, narrow, newton, gpus=G, reuse=k, fp32, profile
         self.speed = dict(speed or {})
         self._kd_last, self._chord, self._steps, self._gn_last = None, None, "qr", float("nan")
+        self._Delta, self._mu_tr = None, None
         self._tcache, self._loaded = {}, False  # speed resident: the tables stay on the device(s)
         # global moments of J_phi (objective.CurrentMoments: I_p, R_geo, Z_geo, V_eff / V) held at their
         # targets (the start's): 4 rows w (m - target) / scale, weighted sums over all collocation points
@@ -1299,6 +1331,104 @@ class HarmonicModel:
             M = M + self._hess2_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps)
         return M + M.T
 
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _metric_chunk(self, tables, const):
+        """A chunk's share of M = sum_points w (J_i . J_j / rms_J^2 + p_i p_j / rms_p^2), (n, n)."""
+        cols = self._synth(tables)
+        X = []
+        for (kind, n, P, a, b), V in zip(self._blocks_static, cols):
+            if kind == "u":  # (c, t, z, 3, k) -> J / rms J, p part 0
+                X.append(jnp.concatenate([V[..., :3, :] / self.rms["J"], jnp.zeros_like(V[..., :1, :])], -2))
+            else:            # (c, t, z, 4, k): p, grad p -> J part 0, p / rms p
+                X.append(jnp.concatenate([jnp.zeros_like(V[..., 1:, :]), V[..., :1, :] / self.rms["p"]], -2))
+        X = jnp.concatenate(X, -1)
+        w = const["sw3"] ** 2
+        return jnp.einsum("rtzck,rtzcl->kl", X * w[..., None, None], X)
+
+    def _phys_L(self, jit=1e-10):
+        """Cholesky factor of the physical metric (built once: it depends only on the tables)."""
+        if getattr(self, "_Lm", None) is None:
+            t0 = time.time()
+            order = [a for (_, _, _, a, _) in self._blocks_static]
+            assert order == sorted(order) and self._blocks_static[-1][4] == self.n, "blocks not contiguous"
+            M = 0.0
+            for k in range(self.n_chunks):
+                M = M + self._metric_chunk(self._chunk_tables(k), self._chunk_const(k))
+            M = 0.5 * (M + M.T)
+            d = jnp.diag(M)
+            M = M.at[jnp.arange(self.n), jnp.arange(self.n)].add(jit * float(jnp.mean(d)))
+            self._Lm = jnp.linalg.cholesky(M)
+            ok = bool(jnp.all(jnp.isfinite(self._Lm)))
+            self._log(f"    physical metric: built in {time.time() - t0:.1f} s, diag min/max "
+                      f"{float(d.min()):.2e}/{float(d.max()):.2e}, jitter {jit:g} x mean, cholesky ok {ok}")
+            assert ok, "physical metric not positive definite: raise the jitter"
+            del M
+        return self._Lm
+
+    def _tr_step(self, z, eps, RD, c, Hs, gs, Sc, lam, f_here, max_tries=8):
+        """Trust-region step (speed tr): y(mu) = -(Hs + mu I)^-1 gs with |y(mu)| = Delta in the scaled
+        variables of Sc (the physical rms change of J and p with speed phys), mu by safeguarded Newton on
+        the secular equation (one Cholesky per mu); the step evaluated exactly; DESC's radius rule (x2 above
+        ratio 0.75 on the boundary, 0.25 |y| below 0.25); a rejected step shrinks Delta and is retried."""
+        n = self.n
+        Delta = self._Delta
+        mu = self._mu_tr if self._mu_tr else 1e-8 * lam
+        rho2 = max(2.0 * f_here - float(c @ c), 0.0)
+        ii = jnp.arange(n)
+
+        def solve(m):
+            L = jnp.linalg.cholesky(Hs.at[ii, ii].add(m))
+            return L, -jax.scipy.linalg.cho_solve((L, True), gs)
+
+        mu_min = 1e-13 * lam
+        tries = 0
+        for _ in range(max_tries):
+            tries += 1
+            L, y = solve(mu_min)
+            ny = float(jnp.linalg.norm(y))
+            hit = not (np.isfinite(ny) and ny <= Delta)
+            if hit:
+                mu, lo, hi = max(mu, mu_min), 0.0, np.inf
+                for _ in range(25):
+                    L, y = solve(mu)
+                    ny = float(jnp.linalg.norm(y))
+                    if not np.isfinite(ny):
+                        lo = mu
+                        mu = np.sqrt(mu * hi) if np.isfinite(hi) else 10.0 * mu
+                        continue
+                    phi = ny - Delta
+                    if abs(phi) <= 0.05 * Delta:
+                        break
+                    if phi > 0:
+                        lo = mu
+                    else:
+                        hi = mu
+                    q = jax.scipy.linalg.solve_triangular(L, y, lower=True)
+                    mu_new = mu + (ny / float(jnp.linalg.norm(q))) ** 2 * phi / Delta
+                    if not (np.isfinite(mu_new) and lo < mu_new < hi):
+                        mu_new = np.sqrt(lo * hi) if (np.isfinite(hi) and lo > 0) else (10 * mu if phi > 0 else 0.1 * mu)
+                    mu = mu_new
+            else:
+                mu = mu_min
+            if mu < 1e-10 * lam:  # Hs squares the conditioning: the step itself by QR at this mu
+                y, Rt = _damped_qr(RD, c, np.sqrt(mu))
+                del Rt
+                ny = float(jnp.linalg.norm(y))
+            d = Sc.back(y)
+            fs, Fs = self._trials(z, d[:, None], eps)
+            f_new, F_new = float(fs[0]), float(Fs[0])
+            r_lin = RD @ y + c
+            pred = f_here - 0.5 * (float(r_lin @ r_lin) + rho2)
+            ratio = (f_here - f_new) / pred if pred > 0 else 0.0
+            if not np.isfinite(ratio) or ratio < 0.25:
+                Delta = 0.25 * ny
+            elif ratio > 0.75 and hit:
+                Delta = max(2.0 * ny, Delta)
+            if f_new < f_here:
+                break
+        self._Delta, self._mu_tr = Delta, mu
+        return d, f_new, F_new, mu, {"tr ratio": float(ratio), "tr tries": tries, "Delta": float(Delta)}
+
     def _qr_step(self, z, eps, decades):
         """Exact LM steps from the QR of [A | r]: for each mu, the QR of [R D, c; sqrt(mu) I, 0];
         each step evaluated exactly, the best kept (with its factor, the LSQR preconditioner).
@@ -1326,7 +1456,12 @@ class HarmonicModel:
         gn_share = float(c @ c) / float(c @ c + Ra[n, n] ** 2)
         self._gn_last = gn_share
         Dsc = self._scaling(jnp.sum(R**2, axis=0))
-        RD = R * Dsc[None, :]
+        if sp.get("phys"):  # damping in the physical (J, p) metric instead of Jacobi
+            assert self._steps == "qr" and not sp.get("newton"), "phys: QR steps only, without newton"
+            Sc = _Scale(L=self._phys_L())
+        else:
+            Sc = _Scale(D=Dsc)
+        RD = Sc.cols(R)
         del Ra, R
         v = jnp.ones(n) / np.sqrt(n)
         for _ in range(30):  # lambda_max of (R D)^T (R D)
@@ -1346,39 +1481,51 @@ class HarmonicModel:
                 Hs = Hs.at[:K, :K].add(Dsc[:K, None] * H2 * Dsc[None, :K])
                 del H2
             tick("gram", t0, Hs)
-        t0 = time.time()
-        kds = list(np.arange(decades[0] - 3, decades[1] + 0.5, 2.0))
-        if sp.get("narrow") and self._kd_last is not None:
-            kds = [k for k in kds if abs(k - self._kd_last) <= 4.0]
-        steps, mus, kdl = [], [], []
-        for kd in kds:
-            mu = lam * 10.0 ** (-kd)
-            if chol and (kd <= 10 or sp.get("newton")):
-                if sp.get("newton") and kd > 12:
-                    continue
-                y, ok = _damped_step(Hs, mu, gs)
-                ok = bool(ok)
-            else:
-                y, Rt = _damped_qr(RD, c, np.sqrt(mu))
-                del Rt
-                ok = bool(jnp.all(jnp.isfinite(y)))
-            if ok:
-                steps.append(Dsc * y)
-                mus.append(mu)
-                kdl.append(kd)
-        D = jnp.stack(steps, 1)
-        tick("scan", t0, D)
-        t0 = time.time()
-        fs, Fs = self._trials(z, D, eps)
-        tick("trials", t0)
-        j = int(np.argmin(fs))
-        fbest, Fbest, d, mu = fs[j], Fs[j], D[:, j], mus[j]
-        self._kd_last = kdl[j]
-        del D
+        use_tr = bool(sp.get("tr")) and self._Delta is not None
+        if use_tr:  # trust region: mu from |y(mu)| = Delta (the metric of Sc), exact trial, DESC radius rule
+            t0 = time.time()
+            if Hs is None:
+                Hs, gs = RD.T @ RD, RD.T @ c
+            d, fbest, Fbest, mu, trinfo = self._tr_step(z, eps, RD, c, Hs, gs, Sc, lam, f_here)
+            kdl, j = [float("nan")], 0
+            tick("tr", t0)
+        else:
+            t0 = time.time()
+            kds = list(np.arange(decades[0] - 3, decades[1] + 0.5, 2.0))
+            if sp.get("narrow") and self._kd_last is not None:
+                kds = [k for k in kds if abs(k - self._kd_last) <= 4.0]
+            steps, mus, kdl = [], [], []
+            for kd in kds:
+                mu = lam * 10.0 ** (-kd)
+                if chol and (kd <= 10 or sp.get("newton")):
+                    if sp.get("newton") and kd > 12:
+                        continue
+                    y, ok = _damped_step(Hs, mu, gs)
+                    ok = bool(ok)
+                else:
+                    y, Rt = _damped_qr(RD, c, np.sqrt(mu))
+                    del Rt
+                    ok = bool(jnp.all(jnp.isfinite(y)))
+                if ok:
+                    steps.append(Sc.back(y))
+                    mus.append(mu)
+                    kdl.append(kd)
+            D = jnp.stack(steps, 1)
+            tick("scan", t0, D)
+            t0 = time.time()
+            fs, Fs = self._trials(z, D, eps)
+            tick("trials", t0)
+            j = int(np.argmin(fs))
+            fbest, Fbest, d, mu = fs[j], Fs[j], D[:, j], mus[j]
+            self._kd_last = kdl[j]
+            del D
+            if sp.get("tr"):  # first iteration: the scan initializes the trust radius
+                self._Delta, self._mu_tr = float(jnp.linalg.norm(Sc.inv(d))), mu
+            trinfo = {}
         if sp.get("soc"):  # second-order correction with the kept factor (the exact quadratic part q(d, d))
             t0 = time.time()
             L = jnp.linalg.cholesky(Hs.at[jnp.arange(n), jnp.arange(n)].add(mu))
-            y0, dcur = d / Dsc, d
+            y0, dcur = Sc.inv(d), d
             rs0, gv0 = self._rvec(z, eps)
             Gz = self._Gz
             cands = []
@@ -1389,7 +1536,7 @@ class HarmonicModel:
                 q = [r1 - r0 - a_ for r1, r0, a_ in zip(rs1, rs0, aq)]
                 qg = gv1 - gv0 - aW
                 t = self._ATu(z, q, qg, eps)
-                dcur = Dsc * (y0 - jax.scipy.linalg.cho_solve((L, True), Dsc * t))
+                dcur = Sc.back(y0 - jax.scipy.linalg.cho_solve((L, True), Sc.grad(t)))
                 cands.append(dcur)
             del L, rs0, rs1, q
             Dc = jnp.stack(cands + [0.5 * cands[-1]], 1)
@@ -1403,7 +1550,7 @@ class HarmonicModel:
             self._prec = {"Rt": Rt, "Dsc": Dsc, "mu": mu, "lam": lam}
         if sp.get("reuse"):
             i = jnp.arange(n)
-            self._chord = {"L": jnp.linalg.cholesky(Hs.at[i, i].add(mu)), "Dsc": Dsc, "mu": mu, "lam": lam,
+            self._chord = {"L": jnp.linalg.cholesky(Hs.at[i, i].add(mu)), "Sc": Sc, "mu": mu, "lam": lam,
                            "gn": gn_share, "age": 0}
         del RD, Hs, gs
         self._reload()
@@ -1412,14 +1559,14 @@ class HarmonicModel:
                                                     for k, v_ in getattr(self, "_tt", {}).items()))
             self._log("    time: " + ", ".join(f"{k} {v_:.1f} s" for k, v_ in tm.items())
                       + f"; kd {kdl[j]:g} of {len(kdl)} scanned")
-        return d, f_here, fbest, Fbest, {"mu/lambda_max": mu / lam, "GN share": gn_share}
+        return d, f_here, fbest, Fbest, {"mu/lambda_max": mu / lam, "GN share": gn_share, **trinfo}
 
     def _chord_step(self, z, eps):
         """A step from the exact gradient at z with the kept Cholesky factor of the last QR step's
         (scaled) Gauss-Newton matrix, evaluated exactly with its halvings."""
         P = self._chord
         g, f_here, _ = self._grad(z, eps)
-        d = P["Dsc"] * (-jax.scipy.linalg.cho_solve((P["L"], True), P["Dsc"] * g))
+        d = P["Sc"].back(-jax.scipy.linalg.cho_solve((P["L"], True), P["Sc"].grad(g)))
         D = jnp.stack([d, 0.5 * d, 0.25 * d, 0.125 * d], 1)
         fs, Fs = self._trials(z, D, eps)
         j = int(np.argmin(fs))
@@ -1544,6 +1691,7 @@ class HarmonicModel:
         z = self.to_z(x)
         hist = []
         self._steps, self._chord, self._kd_last, self._zhist = steps, None, None, []
+        self._Delta, self._mu_tr = None, None  # speed tr: the trust radius (scaled variables), last mu
         f0, F0 = self.evaluate(self.to_x(z), eps)
         hist.append({"it": 0, "f": f0, "<|F|>/norm": F0, "time": 0.0})
         self._log(f"  eps {eps:g}: start f {f0:.6e}, <|F|>/norm {F0:.4e}")
@@ -1593,7 +1741,8 @@ class HarmonicModel:
             hist.append(h)
             self._log(f"  it {it:2d} {kind:4s} f {f_new:.6e}  <|F|>/norm {F:.4e}  |dx|/|x| {h['|d|/|x|']:.2e}  "
                       f"rel {rel:.1e}  " + (f"lsqr {info['lsqr']} res {info['lsqr res']:.0e}  " if kind == "LSQR" else
-                                            f"mu/lam {info['mu/lambda_max']:.0e}  GN share {info['GN share']:.1e}  ")
+                                            f"mu/lam {info['mu/lambda_max']:.0e}  GN share {info['GN share']:.1e}  "
+                                            + (f"ratio {info['tr ratio']:.2f} tries {info['tr tries']}  " if 'tr ratio' in info else ""))
                       + f"{h['time']:.0f} s")
             if callback is not None:
                 callback(self.to_x(z), hist)
