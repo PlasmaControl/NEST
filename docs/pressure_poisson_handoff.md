@@ -55,6 +55,11 @@ sbatch --gres=gpu:nvidia_b200:1 --mem=300G --job-name=cond run_sai.sbatch script
 What to send back: the `it` lines (with `|c_p|/|r|`, `f* chk`, `p min/max`), and the cond json. The decisive
 comparison is abD vs abB at equal iterations (and wall time), abE vs abD for the pressure space.
 
+Checks done locally (2026-10-27): `pressure_elim_conditioning_isl.py` in fresh-start mode on the L16 model reproduces
+the laptop diagnostic exactly (kappa 3.492e5 / 2.708e4 Jacobi, 2.408e5 / 1.415e4 phys); the full test suite passes
+(69 tests; run per file: in one pytest process main's test_magnetic_field[precise_QA] is killed for memory on 8 GB).
+Not checked locally: multi-GPU (`gpus=4`) with elim; the column index is now a numpy array for that reason.
+
 ## 4. Caveats
 
 - Laptop models only so far (up to L32, 2,646 unknowns). At w_J 1e-7 elim's f after 30 its is 1.1-1.6x lower (1.64x
