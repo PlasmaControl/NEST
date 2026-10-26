@@ -140,6 +140,24 @@ class Pressure:
         c[first] -= edge[g[first]]
         return Pressure(self.basis, c, self.eq)
 
+    # the interface of Fields (shared with ``label_pressure.LabelPressure``)
+    @property
+    def n(self):
+        return self.basis.num_modes
+
+    def with_c(self, c, eq=None):
+        return Pressure(self.basis, c, self.eq if eq is None else eq, self.edge_order)
+
+    def labels(self):
+        """(kind, l, m, n) per unknown (``precondition.mode_labels``): kind 1."""
+        p = np.asarray(self.basis.modes, int)
+        return np.column_stack([np.ones(len(p), int), p])
+
+    def tensor(self, grid, geo, RZ, factored=False):
+        from flux_interp import TensorPressure
+        P = Separable([self.basis], [self.c], self.basis.NFP)
+        return TensorPressure(P, self.edge_order, RZ, grid, geo, factored=factored)
+
     def point_evaluator(self, eq=None):
         """Jitted f(rho, theta, zeta) -> (p, grad p in (R, phi, Z) components)."""
         eq = self.eq if eq is None else eq

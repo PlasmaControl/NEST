@@ -67,9 +67,10 @@ from desc.basis import DoubleFourierSeries, fourier
 from desc.grid import Grid
 
 from batching import map_chunks
-from flux_interp import TensorGeometry, TensorGrid, _lagrange, _Pytree, separable_factors
+from flux_interp import (StencilInterpolator, TensorGeometry, TensorGrid, _lagrange, _Pytree,
+                         separable_factors)
 from fourier import fft_J
-from objective import (VECTOR_PARITY, CurrentError, Fields, ObjectiveFunction, _cartesian,
+from objective import (VECTOR_PARITY, CurrentError, CurrentMoments, Fields, ObjectiveFunction, _cartesian,
                        _Objective, _symmetric_box)
 from separable import Separable
 
@@ -312,8 +313,8 @@ class _Rows(_Pytree):
     def __init__(self, interp, n):
         self.interp, self.n = interp, n
 
-    def __call__(self, B_box):
-        return self.interp(B_box)[: self.n]
+    def __call__(self, *B):
+        return self.interp(*B)[: self.n]
 
 
 def _lagrange_weights(x):
@@ -445,6 +446,73 @@ class BoxShift(_Pytree):
                           carry=flat)
 
 
+class StencilShift(_Pytree):
+    """``BoxShift`` for the inside nodes of the cylindrical grid, with the stencils
+    of a ``StencilInterpolator`` (formed at each call): J at the nodes for the
+    displacement D is J(s) + ds . grad_s J(s), ds = -(dX/d(rho, theta))^-1 D, with
+    D itself interpolated from the flux grid (``MovingGeometry.at``) by the same
+    stencils. The cache: the nodes' flux coordinates (in the interpolator) and the
+    inverse Jacobians (n, 2, 2) of the anchor geometry at them.
+
+    Parameters
+    ----------
+    interp : StencilInterpolator
+        The nodes and stencils (``Fields.to_box`` with ``cyl_stencil``).
+    RZ : Separable
+        The anchor geometry.
+    """
+
+    _dynamic = ("interp", "jinv")
+
+    def __init__(self, interp, RZ, chunk=200000):
+        from batching import host_chunks
+        rtz = np.asarray(interp.rtz)
+
+        @jax.jit
+        def jinv(r):
+            a, b, c = r[:, 0], r[:, 1], r[:, 2]
+            Xr, Xt = RZ.evaluate(a, b, c, dr=1), RZ.evaluate(a, b, c, dt=1)
+            jac = jnp.stack([jnp.stack([Xr[:, 0], Xt[:, 0]], -1),
+                             jnp.stack([Xr[:, 1], Xt[:, 1]], -1)], 1)
+            return jnp.linalg.inv(jac)
+
+        self.interp = interp
+        self.jinv = jnp.asarray(host_chunks(jinv, rtz, chunk=chunk))
+
+    def __call__(self, J_flux, D_flux):
+        """J (n, 3) at the nodes (parity of a symmetric vector, cylindrical
+        components), shifted by the displacement D_flux (flux grid, (dR, dZ))."""
+        f = jnp.concatenate([J_flux, D_flux.astype(J_flux.dtype)], axis=-1)
+        v, vr, vt = self.interp(f, tuple(VECTOR_PARITY) + (1, -1), derivs=True)
+        d = -jnp.einsum("nij,nj->ni", self.jinv.astype(v.dtype), v[:, 3:])
+        return v[:, :3] + d[:, :1] * vr[:, :3] + d[:, 1:] * vt[:, :3]
+
+    def tangent(self, J0, D0, dJ, dD):
+        """The derivative of ``__call__`` at (J0, D0) along (dJ, dD), linear in (dJ, dD).
+        Written out (not ``jax.jvp``) so that J0, D0 are constants of the chunked map
+        and only (dJ, dD) its carry: the jvp of the carried map would keep a copy of the
+        flux-grid field per chunk for its transpose."""
+        it = self.interp
+        dt = J0.dtype
+        f0 = jnp.concatenate([J0, D0.astype(dt)], axis=-1).reshape(-1, 5)
+        par = jnp.asarray([p < 0 for p in tuple(VECTOR_PARITY) + (1, -1)])
+
+        def f(ft, rtz, jinv):
+            i, w, s, wr, wt = it.stencil(rtz, True)
+            sg = jnp.where(par[None, None, :], s[:, :, None], 1.0).astype(dt)
+            g0, gt = f0[i] * sg, ft[i] * sg
+            v0, vr0, vt0 = (jnp.einsum("nk,nkc->nc", q.astype(dt), g0) for q in (w, wr, wt))
+            v1, vr1, vt1 = (jnp.einsum("nk,nkc->nc", q.astype(dt), gt) for q in (w, wr, wt))
+            ji = jinv.astype(dt)
+            d0 = -jnp.einsum("nij,nj->ni", ji, v0[:, 3:])
+            d1 = -jnp.einsum("nij,nj->ni", ji, v1[:, 3:])
+            return (v1[:, :3] + d0[:, :1] * vr1[:, :3] + d0[:, 1:] * vt1[:, :3]
+                    + d1[:, :1] * vr0[:, :3] + d1[:, 1:] * vt0[:, :3])
+
+        ft = jnp.concatenate([dJ, dD.astype(dt)], axis=-1).reshape(-1, 5)
+        return map_chunks(f, it.rtz, self.jinv, chunk=it.chunk, carry=ft)
+
+
 class DirectField(_Pytree):
     """B_plasma at points on or outside the plasma by direct Biot-Savart quadrature
     of the volume current,
@@ -557,17 +625,27 @@ class DirectField(_Pytree):
 
 
 # ---------------------------------------------------------------- reference
-def reference(inp, resolution, sym=None):
+def reference(inp, resolution, sym=None, current=None):
     """What stays DESC's across anchors, from the starting equilibrium on the
     collocation grid of ``resolution``: the force normalization and DESC's own
     force error, rms |J|, |B|, p, and DESC's current as sqrt(g) J^i (``N_desc``,
-    carried with the coordinates as the target of ``TransportedCurrentError``)."""
+    carried with the coordinates as the target of ``TransportedCurrentError``).
+
+    ``current``: a ``BoundaryPotential`` on the same equilibrium (the start fit) whose
+    sqrt(g) J^i is the target instead of DESC's. Unlike DESC's (J != 0 on NCSX's LCFS),
+    it is in the basis, so the current term does not pull against force balance."""
     from force import ForceResidual
     fr = ForceResidual(inp, None, resolution=resolution, sym=sym)
     g = fr.tgrid
     d = inp.compute_tensor(["sqrt(g)", "J^rho", "J^theta", "J^zeta", "J", "B", "p"],
                            g.rho, g.theta, g.zeta)
-    N = np.stack([d["sqrt(g)"] * d[k] for k in ("J^rho", "J^theta", "J^zeta")], axis=-1)
+    if current is None:
+        N = np.stack([d["sqrt(g)"] * d[k] for k in ("J^rho", "J^theta", "J^zeta")], axis=-1)
+    else:
+        from flux_interp import TensorCurrent
+        tc = TensorCurrent(current.S, current._RZ, g, fr.geo)
+        N = np.stack([np.asarray(v) for v in tc.contravariant(jnp.asarray(current.u), current.I)],
+                     axis=-1)
     w = fr.dV / fr.dV.sum()
     rms = {k: float(np.sqrt(np.sum(w * np.sum(np.reshape(d[k], (len(w), -1)) ** 2, 1))))
            for k in ("J", "B", "p")}
@@ -633,7 +711,7 @@ class FreeBoundaryFields(Fields):
     def __init__(self, force, current, pressure, disp, ref, boundary=None, section=None,
                  kernel="truncated", flux_grid=None, order=4, dtype=jnp.float32, chunk=65536,
                  gradient_step=1e-5, grad_B_ext=None, direct=None, direct_tangent=False,
-                 verbose=True):
+                 verbose=True, **fields_kw):
         self.disp, self.n_xi, self.ref = disp, disp.n, ref
         self.xi_scale = 1.0  # the unknowns are xi / xi_scale (``scale_xi``)
         b = current.basis
@@ -646,7 +724,7 @@ class FreeBoundaryFields(Fields):
         if "B_ext" not in vars(force):  # the coil field in chunks (one call: ~18 GB for NCSX)
             force.B_ext = _chunked(force.inp.B_ext, force.x)
         super().__init__(force, current, pressure, kernel=kernel, flux_grid=flux_grid,
-                         order=order, dtype=dtype, chunk=chunk)
+                         order=order, dtype=dtype, chunk=chunk, **fields_kw)
         self.x0 = jnp.concatenate([self.x0, jnp.zeros(self.n_xi)])
         if tuple(ref["shape"]) != force.tgrid.shape:
             raise ValueError(f"collocation grid {force.tgrid.shape} differs from the "
@@ -659,8 +737,14 @@ class FreeBoundaryFields(Fields):
         # J on the box: the flux grid on the moving geometry, the box points' moving
         # coordinates
         self.mg_flux = MovingGeometry(self.J_flux.geo, disp, self.J_flux.grid)
-        self.box_shift = BoxShift(self.J_flux.grid, self._box_rtz(force.box), current._RZ, disp,
-                                  order, dtype, chunk)
+        if self.cyl:  # the inside nodes of the cylindrical grid, cylindrical components
+            if not isinstance(self.to_box, StencilInterpolator):
+                self.to_box = StencilInterpolator(self.J_flux.grid, self.rows_rtz, order,
+                                                  chunk=chunk, dtype=self.cyl_dtype)
+            self.box_shift = StencilShift(self.to_box, current._RZ)
+        else:
+            self.box_shift = BoxShift(self.J_flux.grid, self._box_rtz(force.box), current._RZ,
+                                      disp, order, dtype, chunk)
         # B_plasma on the boundary by direct Biot-Savart (the box's is too coarse there)
         self.direct = None if direct is None else DirectField(
             current, disp, self._boundary, direct[0], direct[1], self.sym, dtype=dtype)
@@ -669,6 +753,7 @@ class FreeBoundaryFields(Fields):
             self.direct_d = self.direct if direct_tangent is True else DirectField(
                 current, disp, self._boundary, direct_tangent[0], direct_tangent[1], self.sym,
                 dtype=dtype)
+        self.to_mesh()  # with the annulus solver on several devices (``cyl_mesh``)
 
     # ------------------------------------------------------------ setup
     def _box_rtz(self, box):
@@ -731,6 +816,20 @@ class FreeBoundaryFields(Fields):
             G = np.stack([(bext(x_all + h * np.eye(3)[j]) - B0) / h for j in range(3)], axis=-1)
         self.B_ext_all = jnp.asarray(B0)
         self.grad_B_ext = jnp.asarray(G)  # [n, i, j] = d B_i / d x_j
+        if self.cyl:  # one moving interpolator on the annulus for all points
+            from cylindrical_grid import CylindricalInterpolator
+            rpz = np.column_stack([np.hypot(x_all[:, 0], x_all[:, 1]),
+                                   np.asarray(self.phi_all), x_all[:, 2]])
+            self.move = CylindricalInterpolator(self.cyl_grid, rpz, dtype=dtype,
+                                                order=self.cyl_order)
+            self.t = self.box_scale = None
+            self.to_points = _Rows(self.move, self.n_col)
+            if self._verbose:
+                print(f"  free boundary: {self.n_xi} boundary modes (M, N = {disp.M}, {disp.N}), "
+                      f"boundary grid {bgrid.shape[1:]}, section {sgrid.shape[:2]}, B_ext "
+                      f"gradient at {len(x_all):,} points; cylindrical grid {box.shape}; "
+                      f"{time.time() - t0:.0f} s", flush=True)
+            return
         # the points as angles of the box period, one moving interpolator
         x0 = np.array([a[0] for a in box.axes])
         L = np.array([len(a) * (a[1] - a[0]) for a in box.axes])
@@ -768,7 +867,8 @@ class FreeBoundaryFields(Fields):
         current's, so that the optimizer's damping floor (a fraction of the mean
         of diag(J^T J)) does not swamp the steps of u and c_p."""
         for mg in (self.mg_col, self.mg_bnd, self.mg_sec, self.mg_flux, self.box_shift):
-            mg.A = mg.A * s
+            if hasattr(mg, "A"):  # (StencilShift takes D from mg_flux)
+                mg.A = mg.A * s
         for d in {id(f): f for f in (self.direct, self.direct_d) if f is not None}.values():
             d.mg.A = d.mg.A * s
         self.xi_scale *= s
@@ -791,7 +891,10 @@ class FreeBoundaryFields(Fields):
     def J_half(self, u, xi, I=None):
         """J at the box points it is interpolated at (Cartesian) for the displacement
         xi (``BoxShift``); linear in u for I = 0."""
-        g, _ = self.mg_flux.at(xi)
+        g, D = self.mg_flux.at(xi)
+        if self.cyl:  # cylindrical components on the annulus, in its precision
+            J_flux = _with_geo(self.J_flux, g)(u, self.I if I is None else I)
+            return self.box_shift(J_flux.astype(self.cyl_dtype), D)
         J_flux = _with_geo(self.J_flux, g)(u, self.I if I is None else I).astype(self.dtype)
         J, Jr, Jt = self.box_shift(J_flux, VECTOR_PARITY)
         dr, dt = self.box_shift.shift(xi)
@@ -799,7 +902,10 @@ class FreeBoundaryFields(Fields):
         return _cartesian(J, self.box_phi.astype(self.dtype))
 
     def _assemble(self, V):
-        """A field at the J points onto the box (mirror rows, zero outside)."""
+        """A field at the J points onto the box (mirror rows, zero outside); on the
+        cylindrical grid, the rows of all inside nodes (``Fields._cyl_rows``)."""
+        if self.cyl:
+            return self._cyl_rows(V)
         if self.half is not None:
             V = jnp.concatenate([V, V[self.half_rows] * jnp.asarray([-1.0, 1.0, 1.0], V.dtype)])
         V = jnp.pad(V, ((0, 1), (0, 0)))
@@ -810,8 +916,31 @@ class FreeBoundaryFields(Fields):
                                policy=jax.checkpoint_policies.nothing_saveable)
         return solve(J_hat, self.K_hat)
 
+    def _grid_field(self, J_grid):
+        """B_plasma of J on the grid (``_assemble``): the box field, or on the annulus
+        the FFT-index slabs (B_+, B_z) of ``CylindricalSolver.field_modes_F``."""
+        if self.cyl and self.cyl_fused:  # B on the points' planes
+            return self._cyl_planes(J_grid, self.move.Ep)
+        if self.cyl:
+            return self.solver.field_modes_F(*self._cyl_sources(J_grid))
+        return self._box_solve(fft_J(J_grid))
+
     def _interp(self, B_box, dx):
+        if self.cyl:  # the points move in their planes: (dR, dZ)
+            ph = self.phi_all
+            d = jnp.stack([dx[:, 0] * jnp.cos(ph) + dx[:, 1] * jnp.sin(ph), dx[:, 2]], axis=-1)
+            B = self.move.from_planes(*B_box, d) if self.cyl_fused else self.move(*B_box, d)
+            return _cartesian(B, ph)
         return self.move(B_box, dx * self.box_scale)
+
+    def _interp_d(self, B_box, dx, ddx):
+        """The derivative of ``_interp(B_box, dx)`` in dx along ddx (cylindrical grid):
+        ``CylindricalInterpolator.from_planes_dd``, the field on the planes held."""
+        ph = self.phi_all
+        cyl = lambda v: jnp.stack([v[:, 0] * jnp.cos(ph) + v[:, 1] * jnp.sin(ph), v[:, 2]],  # noqa: E731
+                                  axis=-1)
+        planes = B_box if self.cyl_fused else self.move.planes(*B_box)
+        return _cartesian(self.move.from_planes_dd(*planes, cyl(dx), cyl(ddx)), ph)
 
     def _local(self, x):
         """Everything but B_plasma: J, J_desc, p, grad p at the collocation points, the
@@ -834,7 +963,7 @@ class FreeBoundaryFields(Fields):
         W = jnp.sum(p * jnp.abs(gc.sqrt_g) * self.w_vol)[None]
         return {"J": J, "J_desc": J_desc, "p": p.ravel(), "grad_p": _cartesian(gp.reshape(-1, 3),
                                                                                 self.phi),
-                "dx": dx, "nhat": nhat, "fac": fac, "W": W}
+                "dx": dx, "nhat": nhat, "fac": fac, "W": W, "x_p": c}
 
     def _fields(self, loc, B_all):
         """The fields from the local part and B at all points (bilinear)."""
@@ -843,11 +972,18 @@ class FreeBoundaryFields(Fields):
         return {"J": loc["J"], "J_desc": loc["J_desc"], "B": Bc, "p": loc["p"],
                 "grad_p": loc["grad_p"], "F": jnp.cross(loc["J"], Bc) - loc["grad_p"],
                 "Bn": jnp.sum(Bb * loc["nhat"], axis=1), "B_bnd": Bb,
-                "Psi": jnp.sum(Bs[:, 1] * loc["fac"] * self.w_sec)[None], "W": loc["W"]}
+                "Psi": jnp.sum(Bs[:, 1] * loc["fac"] * self.w_sec)[None], "W": loc["W"],
+                "x_p": loc["x_p"]}
 
     def _J_half_x(self, x):
         u, _, xi = self.split(x)
         return self.J_half(u, xi)
+
+    def _flux_JD(self, x):
+        """J (cylindrical precision) and D on the flux grid at x (cylindrical grid)."""
+        u, _, xi = self.split(x)
+        g, D = self.mg_flux.at(xi)
+        return _with_geo(self.J_flux, g)(u, self.I).astype(self.cyl_dtype), D
 
     def _bnd_direct(self, x, dxb, field=None):
         """B_plasma on the boundary moved by dxb, by ``DirectField``."""
@@ -856,7 +992,7 @@ class FreeBoundaryFields(Fields):
 
     def _state(self, x):
         loc = self._local(x)
-        B_box = self._box_solve(fft_J(self._assemble(self._J_half_x(x))))
+        B_box = self._grid_field(self._assemble(self._J_half_x(x)))
         B_ext = self.B_ext_all + jnp.einsum("nij,nj->ni", self.grad_B_ext, loc["dx"])
         B_all = B_ext + self._interp(B_box, loc["dx"])
         if self.direct is not None:
@@ -874,14 +1010,21 @@ class FreeBoundaryFields(Fields):
         loc, B_box, B_all = self._state(x)
         f = self._fields(loc, B_all)
         return {"x": x, "B_box": B_box, "B_all": B_all, "J": f["J"], "B": f["B"],
-                "p": f["p"]}, f
+                "p": f["p"], "grad_p": f["grad_p"]}, f
 
     def _tangent(self, v, base):
         """The derivative of the fields at base["x"] along v (linear in v)."""
         loc0, dloc = jax.jvp(self._local, (base["x"],), (v,))
-        dJ_half = jax.jvp(self._J_half_x, (base["x"],), (v,))[1]
-        dB_box = self._box_solve(fft_J(self._assemble(dJ_half)))
-        _, dB_pl = jax.jvp(self._interp, (base["B_box"], loc0["dx"]), (dB_box, dloc["dx"]))
+        if self.cyl:  # explicit: the large primal arrays as constants (``StencilShift.tangent``)
+            (J0, D0), (dJ, dD) = jax.jvp(self._flux_JD, (base["x"],), (v,))
+            dJ_half = self.box_shift.tangent(J0, D0, dJ, dD)
+            dB_box = self._grid_field(self._assemble(dJ_half))
+            dB_pl = (self._interp(dB_box, loc0["dx"])
+                     + self._interp_d(base["B_box"], loc0["dx"], dloc["dx"]))
+        else:
+            dJ_half = jax.jvp(self._J_half_x, (base["x"],), (v,))[1]
+            dB_box = self._grid_field(self._assemble(dJ_half))
+            _, dB_pl = jax.jvp(self._interp, (base["B_box"], loc0["dx"]), (dB_box, dloc["dx"]))
         dB_ext = jnp.einsum("nij,nj->ni", self.grad_B_ext, dloc["dx"])
         dB_all = dB_ext + dB_pl
         if self.direct_d is not None:
@@ -903,6 +1046,14 @@ class TransportedCurrentError(CurrentError):
 
     def _default_target(self, fields):
         return 0.0
+
+
+class TransportedCurrentMoments(CurrentMoments):
+    """``CurrentMoments`` of the start fit's own J (not DESC's, which differs where the fit's
+    edge factor forces J -> 0); pass ``target`` to keep it across anchors."""
+
+    def _start_J(self, fields):
+        return fields.compute(fields.x0)["J"]
 
 
 class StoredEnergy(_Objective):
@@ -974,7 +1125,8 @@ class FreeBoundaryObjective(ObjectiveFunction):
         scalar = 0.0
         for o in self.objectives:
             e = float(jnp.linalg.norm(o.compute_scaled_error(f)))
-            out[o.name] = e / o.weight
+            if o.weight:  # a weight-0 term (B.n with --fixed-boundary) is only reported below
+                out[o.name] = e / o.weight
             scalar += 0.5 * e**2
         out["scalar"] = scalar
         Bb = np.asarray(f["B_bnd"])
@@ -1012,7 +1164,7 @@ def release(*objs):
     of their arrays: without this, every anchor leaves its caches on the GPU (about
     4 GB each for NCSX at a/10). Returns the bytes released."""
     mods = ("flux_interp", "objective", "free_boundary", "force", "grid", "precondition",
-            "boundary_potential", "pressure", "separable", "dense")
+            "boundary_potential", "pressure", "separable", "dense", "cylindrical_grid")
     seen, freed = set(), [0]
 
     def visit(o):
@@ -1059,20 +1211,25 @@ class FreeBoundaryPreconditioner:
     NCSX the coupled form converges worse: B is too rough an A_uu for the
     complement."""
 
-    def __init__(self, block, obj, x, floor=1e-10, coupled=False, verbose=True):
+    def __init__(self, block, obj, x, floor=1e-10, coupled=False, verbose=True, G=None):
         import time
         t0 = time.time()
         n, n_xi = obj.dim_x, obj.fields.n_xi
         self.n_up = n - n_xi
-        _, J, JT = obj.linearize(jnp.asarray(x))
         C = np.zeros((n, n_xi), dtype=np.float32 if coupled else np.float64)
-        G = np.zeros((n_xi, n_xi))
-        for k in range(n_xi):
-            e = jnp.zeros(n).at[self.n_up + k].set(1.0)
-            col = np.asarray(JT(J(e)))
-            G[:, k] = col[self.n_up :]
-            if coupled:
-                C[:, k] = col
+        if G is not None:  # given (e.g. formed on a coarser grid: it only preconditions)
+            if coupled or np.shape(G) != (n_xi, n_xi):
+                raise ValueError("G: (n_xi, n_xi), without coupled")
+            G = np.asarray(G, dtype=float)
+        else:
+            _, J, JT = obj.linearize(jnp.asarray(x))
+            G = np.zeros((n_xi, n_xi))
+            for k in range(n_xi):
+                e = jnp.zeros(n).at[self.n_up + k].set(1.0)
+                col = np.asarray(JT(J(e)))
+                G[:, k] = col[self.n_up :]
+                if coupled:
+                    C[:, k] = col
         G = (G + G.T) / 2
         self.G, self.floor, self.coupled = G, floor, coupled
         self.Cu = jnp.asarray(C[: self.n_up]) if coupled else None

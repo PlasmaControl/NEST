@@ -45,8 +45,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from flux_interp import (PointInterpolator, TensorCurrent, TensorGeometry, TensorGrid,
-                         TensorPressure, _Pytree)
+from flux_interp import (PointInterpolator, StencilInterpolator, TensorCurrent, TensorGeometry,
+                         TensorGrid, TensorPressure, _Pytree)
 from fourier import fft_J
 from magnetic_field import b_plasma_free, biot_savart_kernel_hat
 from separable import Separable
@@ -87,6 +87,35 @@ class Fields(_Pytree):
     cyl_half : bool
         With stellarator symmetry and a z-symmetric annulus, interpolate J at half the
         inside nodes and mirror it to the rest (as the box path does).
+    cyl_oversample : int
+        n_os (odd): J is sampled on the grid's N_phi planes, the annulus is solved on
+        N_phi / n_os of them with J's exact low toroidal modes (polyphase FFT,
+        ``_cyl_sources``): the solve's memory of N_phi / n_os planes, the aliasing of
+        J's thin edge layer of N_phi. The grid's N_phi must be n_os times an odd number.
+    cyl_fused : bool
+        B on the points' planes straight from the sources, one chunk of modes at a time
+        (``CylindricalSolver.planes_F``): the same field, without A and B of all modes
+        on the grid (~3x less memory; 1.5x the mode solves).
+    cyl_order : int, optional
+        B to the points by local Lagrange interpolation on the order x order Chebyshev
+        nodes around each point (``CylindricalInterpolator(order=...)``) instead of the
+        global barycentric interpolant (whose cost per plane is points x n_r x n_z).
+    cyl_rblock : int
+        The solver's sources (J's FFT in phi) formed rb rows of r at a time (0: all at
+        once): J on the whole grid is then never held.
+    cyl_solver : CylindricalSolver, optional
+        The annulus solver to use (it depends on the grid's axes only: e.g. shared by
+        the anchors of a free-boundary run on one grid).
+    cyl_mesh : jax.sharding.Mesh, optional
+        Devices for the annulus solve (``CylindricalSolver(mesh=...)``, or that of
+        ``cyl_solver``): the mode pairs and their tables split over them, each device
+        forming the source slabs of its own modes (``_cyl_planes``); every other array of
+        this object is replicated on them (``to_mesh``). Needs ``cyl_fused``.
+    cyl_stencil : bool
+        J at the inside nodes by ``StencilInterpolator`` (the Lagrange stencils formed
+        at each call from the nodes' flux coordinates) instead of the cached
+        ``PointInterpolator``: the same values, 24 bytes per node instead of ~770
+        (for grids of tens of millions of inside nodes).
     share : Fields, optional
         Another ``Fields`` on the same box (and current): its flux grid, box
         interpolation and kernel are reused; only the collocation side is built.
@@ -112,11 +141,13 @@ class Fields(_Pytree):
 
     # arrays passed to the jitted functions as inputs (not compiled in as constants)
     _dynamic = ("J_col", "p_col", "phi", "sw", "B_ext", "J_flux", "to_box", "box_phi", "src",
-                "K_hat", "t", "to_points", "solver")
+                "K_hat", "t", "to_points", "solver", "ph_z", "ph_p")
 
     def __init__(self, force, current, pressure, kernel="hockney", flux_grid=None, order=4,
                  dtype=jnp.float32, chunk=65536, share=None, S_dtype=jnp.float32, mode_chunk=16,
-                 cyl_half=True, cyl_dtype=jnp.float64, j_compact=None, factored=False):
+                 cyl_half=True, cyl_dtype=jnp.float64, j_compact=None, factored=False,
+                 cyl_stencil=False, cyl_solver=None, cyl_oversample=1, cyl_fused=False, cyl_rblock=0,
+                 cyl_order=None, cyl_mesh=None):
         eq, box = force.inp.eq, force.box
         from cylindrical_grid import CylindricalGrid
         self.cyl = isinstance(box, CylindricalGrid)
@@ -131,15 +162,15 @@ class Fields(_Pytree):
         # transform precision (1e-5 would give ~2e-4 with nufftax's kernel width rule)
         self.eps = 1e-6 if dtype == jnp.float32 else 1e-10
         self.I = current.I
-        self.n_u, self.n_p = current.n_free, pressure.basis.num_modes
+        self.n_u, self.n_p = current.n_free, pressure.n
         self.x0 = jnp.asarray(np.concatenate([current.u, pressure.c]))
 
         # collocation points (force.tgrid, C order)
         cgrid = force.tgrid
         geo = force.geo  # the same R, Z series on the same grid
         self.J_col = TensorCurrent(current.S, current._RZ, cgrid, geo, factored=factored)
-        P = Separable([pressure.basis], [pressure.c], pressure.basis.NFP)
-        self.p_col = TensorPressure(P, pressure.edge_order, current._RZ, cgrid, geo, factored=factored)
+        # TensorPressure (Fourier-Zernike) or TensorLabelPressure (p = P(chi), nonlinear)
+        self.p_col = pressure.tensor(cgrid, geo, current._RZ, factored=factored)
         self.phi = jnp.asarray(force.phi)
         self.sw = jnp.asarray(np.sqrt(force.dV / force.dV.sum()))  # sqrt(dV / V)
         self.B_ext = jnp.asarray(force.B_ext)
@@ -148,9 +179,11 @@ class Fields(_Pytree):
 
         if share is not None:  # the box side of another Fields on the same box
             for k in ("J_flux", "half", "half_rows", "to_box", "box_phi", "src", "shape", "axes",
-                      "K_hat", "_solve", "solver", "cyl"):
+                      "K_hat", "_solve", "solver", "cyl", "cyl_grid", "n_os", "ph_z", "ph_p",
+                      "rows_rtz", "cyl_fused", "cyl_rblock", "cyl_order"):
                 setattr(self, k, getattr(share, k, None))
             self._points(force, box, dtype, chunk)
+            self.to_mesh()
             return
         # J at the box points: uniform flux grid, cached interpolation
         b = current.basis
@@ -175,9 +208,14 @@ class Fields(_Pytree):
                 mirror = np.ravel_multi_index(((-k) % N, i, nz - l), box.shape)
                 other = mirror != inside  # the midplane line of plane 0 is its own mirror
                 self.half, self.half_rows = mirror[other], np.flatnonzero(other)
-            # in the precision of the cylindrical solve (``cyl_dtype``)
-            self.to_box = PointInterpolator(fg, rtz, order, chunk=chunk, dtype=cyl_dtype,
-                                            compact=True if j_compact is None else bool(j_compact))
+            # in the precision of the cylindrical solve (``cyl_dtype``); ``cyl_stencil``:
+            # stencils formed at each call (24 bytes per node instead of ~770)
+            self.rows_rtz = rtz
+            if cyl_stencil:
+                self.to_box = StencilInterpolator(fg, rtz, order, chunk=chunk, dtype=cyl_dtype)
+            else:
+                self.to_box = PointInterpolator(fg, rtz, order, chunk=chunk, dtype=cyl_dtype,
+                                                compact=True if j_compact is None else bool(j_compact))
             self.box_phi = None
             n, n_h = len(inside), 0 if self.half is None else len(self.half)
             src = np.full(box.size, n + n_h, np.int32)
@@ -186,10 +224,34 @@ class Fields(_Pytree):
                 src[self.half] = n + np.arange(n_h)
             self.src = jnp.asarray(src)
             self.shape, self.axes, self.K_hat, self._solve = box.shape, None, None, None
-            self.solver = CylindricalSolver(box.r_axis, box.z_axis, box.NFP, box.N_phi,
-                                            chunk=mode_chunk, S_dtype=np.dtype(S_dtype),
-                                            dtype=cyl_dtype)
+            # ``cyl_oversample`` n_os: J sampled on the box's N_phi planes, the solve on
+            # N_phi / n_os of them with J's exact low toroidal modes (``_cyl_sources``)
+            n_os = int(cyl_oversample)
+            N = box.N_phi // n_os
+            if N * n_os != box.N_phi or N % 2 == 0:
+                raise ValueError(f"cyl_oversample {n_os}: the grid's N_phi {box.N_phi} must be "
+                                 "n_os times an odd number")
+            self.n_os, self.cyl_fused, self.cyl_rblock = n_os, bool(cyl_fused), int(cyl_rblock)
+            self.cyl_order = cyl_order
+            self.cyl_grid = box if n_os == 1 else CylindricalGrid(box.r_axis, box.z_axis,
+                                                                  box.NFP, N)
+            self.ph_z = self.ph_p = None
+            if n_os > 1:  # plane k n_os + s is at phi_k + s delta, delta = 2 pi / (NFP N n_os)
+                dlt = 2 * np.pi / (box.NFP * N * n_os)
+                jz, jp = np.arange(N // 2 + 1), np.fft.fftfreq(N, 1.0 / N)
+                cdt = jnp.complex64 if self.cyl_dtype == jnp.float32 else jnp.complex128
+                sv = np.arange(n_os)[:, None]
+                self.ph_z = jnp.asarray(np.exp(-1j * box.NFP * dlt * sv * jz) / n_os, cdt)
+                self.ph_p = jnp.asarray(np.exp(-1j * box.NFP * dlt * sv * jp) / n_os, cdt)
+            self.solver = cyl_solver or CylindricalSolver(
+                box.r_axis, box.z_axis, box.NFP, N, chunk=mode_chunk,
+                S_dtype=np.dtype(S_dtype), dtype=cyl_dtype, mesh=cyl_mesh)
+            if self.solver.N_phi != N:
+                raise ValueError(f"cyl_solver has {self.solver.N_phi} planes, not {N}")
+            if getattr(self.solver, "mesh", None) is not None and not self.cyl_fused:
+                raise ValueError("a solver on several devices needs cyl_fused")
             self._points(force, box, cyl_dtype, chunk)
+            self.to_mesh()
             return
         self.solver = None
         if self.sym and _symmetric_box(box):
@@ -234,7 +296,8 @@ class Fields(_Pytree):
             x = np.asarray(force.x)
             rpz = np.column_stack([np.hypot(x[:, 0], x[:, 1]), np.asarray(force.phi), x[:, 2]])
             self.t = None
-            self.to_points = CylindricalInterpolator(box, rpz, dtype=dtype)
+            self.to_points = CylindricalInterpolator(self.cyl_grid, rpz, dtype=dtype,
+                                                     order=getattr(self, "cyl_order", None))
             return
         x0 = np.array([a[0] for a in box.axes])
         L = np.array([len(a) * (a[1] - a[0]) for a in box.axes])
@@ -245,6 +308,20 @@ class Fields(_Pytree):
     def compute(self, x):
         """The fields at x (jitted, with the caches as inputs)."""
         return _fields_compute(x, self)
+
+    def to_mesh(self):
+        """With the annulus solver on several devices: this object's arrays replicated on
+        them, once (``cylindrical_bs.replicate``; the solver's split tables are kept)."""
+        mesh = getattr(getattr(self, "solver", None), "mesh", None)
+        if mesh is None:
+            return self
+        from cylindrical_bs import replicate
+        seen = {}
+        for k in self._dynamic:
+            v = getattr(self, k, None)
+            if v is not None:
+                setattr(self, k, replicate(v, mesh, seen))
+        return self
 
     @property
     def desc(self):
@@ -290,10 +367,97 @@ class Fields(_Pytree):
         J = jnp.pad(J, ((0, 1), (0, 0)))  # the zero row
         return J[self.src].reshape(self.shape + (3,))
 
+    def _cyl_rows(self, J):
+        """J at the interpolated inside nodes -> at all of them (mirrors), and a zero row."""
+        if self.half is not None:  # the mirror nodes: (-J_r, J_phi, J_z)
+            J = jnp.concatenate([J, J[self.half_rows] * jnp.asarray([-1.0, 1.0, 1.0], J.dtype)])
+        return jnp.pad(J, ((0, 1), (0, 0)))
+
+    def _cyl_sources(self, Jr, sel=None, arrays=None):
+        """The solver's source slabs (``CylindricalSolver.sources``) of the rows Jr
+        (``_cyl_rows``). With ``cyl_oversample`` n_os, the box's planes are n_os
+        interleaved sets of the solver's N planes, offset by s delta: each set's FFT
+        times exp(-i j NFP s delta), averaged over s, is the DFT of all the planes
+        restricted to |j| <= (N - 1) / 2: J's modes with aliasing only from
+        |j| >= N n_os - N / 2. sel = (sel_z, sel_p): only the slabs Fz[sel_z], Fp[sel_p]
+        (a device's modes, ``CylindricalSolver.planes_sharded``), block by block; arrays:
+        (src, ph_z, ph_p) in place of this object's (inside the device body)."""
+        N, n_os = self.solver.N_phi, self.n_os
+        rb = getattr(self, "cyl_rblock", 0)
+        src, ph_z, ph_p = arrays or (self.src, self.ph_z, self.ph_p)
+        if n_os == 1 and not rb and sel is None:
+            return self.solver.sources(Jr[src].reshape(self.shape + (3,)))
+        nr1, nz1 = self.shape[1:]
+        rb = min(rb or nr1, nr1)
+        n_b = -(-nr1 // rb)
+        src = src.reshape((N, n_os, nr1, nz1))
+        cdt = jnp.complex64 if self.cyl_dtype == jnp.float32 else jnp.complex128
+        n_z, n_p = (N // 2 + 1, N) if sel is None else (sel[0].shape[0], sel[1].shape[0])
+        Fz = jnp.zeros((n_z, nr1, nz1), cdt)
+        Fp = jnp.zeros((n_p, nr1, nz1), cdt)
+        ph = (None, None) if n_os == 1 else (ph_z, ph_p)
+        if sel is not None:
+            from cylindrical_bs import _varying
+            ax = self.solver.mesh_axis
+            Fz, Fp = _varying(Fz, ax), _varying(Fp, ax)  # different on each device
+            if n_os > 1:
+                ph = (ph[0][:, sel[0]], ph[1][:, sel[1]])
+
+        # blocks of rb rows in r (the last one overlapping its neighbour), so that J on
+        # the grid is never formed whole: each block's planes gathered from the rows,
+        # its FFT in phi (per plane set s), written into the sources. The rows (linear)
+        # and the sources as the scan's carry (the form JAX transposes); checkpointed
+        @functools.partial(jax.checkpoint, policy=jax.checkpoint_policies.nothing_saveable)
+        def step(carry, b):
+            Jr, Fz, Fp = carry
+            r0 = jnp.minimum(b * rb, nr1 - rb)
+            sb = jax.lax.dynamic_slice_in_dim(src, r0, rb, axis=2)  # (N, n_os, rb, nz1)
+            fz = fp = 0.0
+            for s in range(n_os):
+                z, p = self.solver.sources(Jr[sb[:, s]])
+                if sel is not None:
+                    z, p = z[sel[0]], p[sel[1]]
+                if n_os > 1:
+                    z, p = ph[0][s][:, None, None] * z, ph[1][s][:, None, None] * p
+                fz, fp = fz + z, fp + p
+            Fz = jax.lax.dynamic_update_slice_in_dim(Fz, fz.astype(cdt), r0, axis=1)
+            Fp = jax.lax.dynamic_update_slice_in_dim(Fp, fp.astype(cdt), r0, axis=1)
+            return (Jr, Fz, Fp), None
+
+        (_, Fz, Fp), _ = jax.lax.scan(step, (Jr, Fz, Fp), jnp.arange(n_b))
+        return Fz, Fp
+
+    def cyl_field_modes(self, u, I=None):
+        """The solver's modal slabs (B_+, B_z) of B_plasma (cylindrical grid)."""
+        J_flux = self.J_flux(u, self.I if I is None else I).astype(self.cyl_dtype)
+        Jr = self._cyl_rows(self.to_box(J_flux, VECTOR_PARITY))
+        return self.solver.field_modes_F(*self._cyl_sources(Jr))
+
+    def _cyl_planes(self, Jr, Ep):
+        """B on the planes of Ep from the rows Jr (``CylindricalSolver.planes_F``); with the
+        solver on several devices, each forms only its own modes' source slabs."""
+        if getattr(self.solver, "mesh", None) is not None:  # the arrays passed in
+            return self.solver.planes_sharded(
+                lambda sz, sp, Jr, *a: self._cyl_sources(Jr, (sz, sp), a), Ep, Jr, self.src,
+                self.ph_z, self.ph_p)
+        return self.solver.planes_F(*self._cyl_sources(Jr), Ep)
+
+    def cyl_planes(self, u, I=None, Ep=None):
+        """B_plasma on the (r, z) nodes of the planes of ``Ep`` (default the points'):
+        ``CylindricalSolver.planes_F`` (cylindrical grid)."""
+        J_flux = self.J_flux(u, self.I if I is None else I).astype(self.cyl_dtype)
+        Jr = self._cyl_rows(self.to_box(J_flux, VECTOR_PARITY))
+        itp = getattr(self.to_points, "interp", self.to_points)
+        return self._cyl_planes(Jr, itp.Ep if Ep is None else Ep)
+
     def B_plasma(self, u, I=None):
         """B_plasma at the collocation points, (n, 3); I = 0 gives the part linear in u."""
+        if self.cyl and getattr(self, "cyl_fused", False):
+            itp = getattr(self.to_points, "interp", self.to_points)
+            B = itp.from_planes(*self.cyl_planes(u, I))[: len(self.phi)]
+            return _cartesian(B, self.phi)
         if self.cyl:
-            Bp, Bz = self.solver.field_modes(self.J_box(u, I))
+            Bp, Bz = self.cyl_field_modes(u, I)
             return _cartesian(self.to_points(Bp, Bz), self.phi)
         # checkpointed: the reverse pass recomputes the kernel slices of the solve
         # from K_hat (cached) instead of storing them
@@ -322,6 +486,8 @@ class Fields(_Pytree):
             dF = dJ x B0 + J0 x dB - grad p(v_c)
 
         exactly. Linear in v: J v is one evaluation, J^T w its transpose."""
+        if hasattr(self.p_col, "chi"):
+            raise NotImplementedError("p = P(chi) is not linear in c_p: FreeBoundaryFields only")
         u, c_p = self.split(v)
         dJ = _cartesian(self.J_col(u, 0.0).reshape(-1, 3), self.phi)
         p, gp = self.p_col(c_p)
@@ -611,7 +777,7 @@ class CurrentMoments(_Objective):
         self._sw = fields.sw
         self._V = float(np.asarray(f.dV).sum())
         if self.target is None:
-            self.target = self._moments(jnp.asarray(fields.desc["J"]))
+            self.target = self._moments(self._start_J(fields))
         self.target = jnp.asarray(self.target)
         if self.normalization is None:
             t = np.asarray(self.target)
@@ -621,6 +787,9 @@ class CurrentMoments(_Objective):
             self.normalization = jnp.asarray([scale[k] for k in self.which])
         self.dim_f = len(self.which)
         return self
+
+    def _start_J(self, fields):
+        return jnp.asarray(fields.desc["J"])
 
     def _moments(self, J):
         w = self._sw**2
@@ -638,6 +807,37 @@ class CurrentMoments(_Objective):
 
     def compute_scaled_tangent(self, e):
         return self.weight * e / self.normalization
+
+
+class BGradP(_Objective):
+    """B . grad p / |B| -> 0 at the collocation points (the part of the force error along
+    B: B . grad p = -B . F), normalized by DESC's <|grad |B|^2 / 2 mu0|>_vol like the
+    force, so it is the same units as |F|. Bilinear in (B, grad p): the tangent is the
+    JVP in both."""
+
+    name, quantity = "B.grad p", "B"
+    local_columns = False  # B comes from a global solve (``precondition``)
+
+    def _default_normalization(self, fields):
+        return fields.norm
+
+    def _default_target(self, fields):
+        return 0.0
+
+    def build(self, fields):
+        super().build(fields)
+        self.dim_f = len(fields.force.rtz)
+        return self
+
+    @staticmethod
+    def _bgp(B, gp):
+        return jnp.sum(B * gp, axis=1) / jnp.linalg.norm(B, axis=1)
+
+    def compute(self, f):
+        return self._bgp(f["B"], f["grad_p"])
+
+    def tangent(self, d, base):
+        return jax.jvp(self._bgp, (base["B"], base["grad_p"]), (d["B"], d["grad_p"]))[1]
 
 
 class PressureSquare(PressureEnergy):
@@ -791,7 +991,7 @@ def _scaled(objfun, x, fields):
 def _base(objfun, x, fields):
     f = fields._compute(x)
     r = jnp.concatenate([o.compute_scaled_error(f) for o in objfun.objectives])
-    return r, {"J": f["J"], "B": f["B"], "p": f["p"]}
+    return r, {"J": f["J"], "B": f["B"], "p": f["p"], "grad_p": f["grad_p"]}
 
 
 @functools.partial(jax.jit, static_argnums=0)

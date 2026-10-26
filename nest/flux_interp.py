@@ -231,6 +231,11 @@ class TensorCurrent(_Pytree):
 
     def __call__(self, u, I):
         """J in (R, phi, Z) components, shape grid.shape + (3,); linear in (u, I)."""
+        # unbound: precondition.py calls this on a stand-in (``_View``) with the same fields
+        return self.geo.vector(*TensorCurrent.contravariant(self, u, I))
+
+    def contravariant(self, u, I):
+        """(sqrt(g) J^rho, sqrt(g) J^theta, sqrt(g) J^zeta), each of shape grid.shape."""
         Cchi, Cab = self.S.split(u)
         f, f1, _, g, g1, _ = self.w
         AB, ABr, ABt, ABz = self.ab(Cab), self.ab(Cab, dr=1), self.ab(Cab, dt=1), self.ab(Cab, dz=1)
@@ -239,7 +244,7 @@ class TensorCurrent(_Pytree):
         a = f * (ABt[..., 1] - self.rho2 * ABz[..., 0])
         b = -(chi_rz + f1 * AB[..., 1] + f * ABr[..., 1])
         c = I / (2 * np.pi) * self.h0r + chi_rt + g1 * AB[..., 0] + g * ABr[..., 0]
-        return self.geo.vector(a, b, c)
+        return a, b, c
 
 
 class TensorPressure(_Pytree):
@@ -446,3 +451,142 @@ class PointInterpolator(_Pytree):
             ws = w[:, :, None] * jnp.where(par < 0, s[:, :, None], 1.0)
             return jnp.einsum("nkc,nkc->nc", ws, fl[i])
         return map_chunks(f, self.idx, self.w, self.sign, chunk=self.chunk, carry=flat)
+
+
+def _lagrange_jnp(x, order, deriv=False):
+    """Lagrange weights (n, order) on nodes 0..order-1 from the offsets x[:, k] = s - k
+    (in node spacings), and with ``deriv`` their derivatives in s (JAX)."""
+    w = []
+    for j in range(order):
+        t = jnp.ones_like(x[:, 0])
+        for k in range(order):
+            if k != j:
+                t = t * x[:, k] / (j - k)
+        w.append(t)
+    w = jnp.stack(w, axis=1)
+    if not deriv:
+        return w
+    dw = []
+    for j in range(order):
+        s = jnp.zeros_like(x[:, 0])
+        for l in range(order):
+            if l == j:
+                continue
+            t = jnp.full_like(x[:, 0], 1.0 / (j - l))
+            for k in range(order):
+                if k not in (j, l):
+                    t = t * x[:, k] / (j - k)
+            s = s + t
+        dw.append(s)
+    return w, jnp.stack(dw, axis=1)
+
+
+class StencilInterpolator(_Pytree):
+    """``PointInterpolator`` with the stencils formed on the fly from the points'
+    coordinates: the cache is the points (rho, theta, zeta) in float64, 24 bytes per
+    point against 64 indices, weights and signs (~770 bytes at order 4), at the
+    cost of forming the weights (a few hundred flops per point) at every call. The
+    same nodes and weights as ``PointInterpolator`` (stellarator reflection,
+    reflection through the axis, one-sided stencils at the top in rho).
+
+    ``__call__(field, parity, derivs=True)`` also returns the derivatives of the
+    interpolant in rho and in the points' own theta (as ``free_boundary.BoxShift``).
+    """
+
+    _dynamic = ("rtz",)
+
+    def __init__(self, grid, rtz, order=4, chunk=65536, dtype=jnp.float64):
+        n_r, n_t, n_z = grid.shape
+        rho = np.asarray(grid.rho)
+        self.d_r = float(rho[1] - rho[0])
+        if abs(rho[0] - self.d_r / 2) > 1e-12 * self.d_r:
+            raise ValueError("StencilInterpolator needs rho_i = (i + 1/2) d (TensorGrid.uniform)")
+        self.d_t = 2 * np.pi / n_t
+        self.period = 2 * np.pi / grid.NFP
+        self.d_z = (self.period / 2) / (n_z - 1) if grid.sym else self.period / n_z
+        self.shape, self.sym, self.order = (n_r, n_t, n_z), bool(grid.sym), int(order)
+        self.chunk, self.dtype = int(chunk), jnp.dtype(dtype)
+        self.rtz = jnp.asarray(np.asarray(rtz, dtype=float))
+        self.n = int(self.rtz.shape[0])
+
+    def stencil(self, rtz, derivs=False):
+        """Flat node indices (n, o^3), weights and parity signs (and the rho and theta
+        derivative weights) of the points rtz (n, 3), float64."""
+        n_r, n_t, n_z = self.shape
+        o = self.order
+        r, t, z = rtz[:, 0], rtz[:, 1], rtz[:, 2]
+        sign_pt = jnp.ones_like(r)
+        if self.sym:
+            zm = jnp.mod(z, self.period)
+            other = zm > self.period / 2
+            t = jnp.where(other, -t, t)
+            z = jnp.where(other, self.period - zm, zm)
+            sign_pt = jnp.where(other, -1.0, 1.0)
+        else:
+            z = jnp.mod(z, self.period)
+        k = jnp.arange(o)
+        sr = r / self.d_r - 0.5
+        ir = jnp.floor(sr).astype(jnp.int32) - (o // 2 - 1)
+        ir = ir - jnp.maximum(ir + o - n_r, 0)
+        st = jnp.mod(t, 2 * np.pi) / self.d_t
+        it = jnp.floor(st).astype(jnp.int32) - (o // 2 - 1)
+        sz = z / self.d_z
+        iz = jnp.floor(sz).astype(jnp.int32) - (o // 2 - 1)
+        xr = sr[:, None] - (ir[:, None] + k)
+        xt = st[:, None] - (it[:, None] + k)
+        xz = sz[:, None] - (iz[:, None] + k)
+        if derivs:
+            wr, dwr = _lagrange_jnp(xr, o, True)
+            wt, dwt = _lagrange_jnp(xt, o, True)
+        else:
+            wr, wt = _lagrange_jnp(xr, o), _lagrange_jnp(xt, o)
+        wz = _lagrange_jnp(xz, o)
+        R = (ir[:, None] + k)[:, :, None, None]
+        T = (it[:, None] + k)[:, None, :, None]
+        Z = (iz[:, None] + k)[:, None, None, :]
+        R, T, Z = jnp.broadcast_arrays(R, T, Z)
+        sign = jnp.ones(R.shape, r.dtype)
+        if self.sym:
+            top = n_z - 1
+            out = (Z < 0) | (Z > top)
+            Z = jnp.where(Z < 0, -Z, jnp.where(Z > top, 2 * top - Z, Z))
+            T = jnp.where(out, -T, T)
+            sign = jnp.where(out, -1.0, 1.0)
+        else:
+            Z = jnp.mod(Z, n_z)
+        refl = R < 0
+        R = jnp.where(refl, -R - 1, R)
+        T = jnp.mod(T + jnp.where(refl, n_t // 2, 0), n_t)
+        n = r.shape[0]
+        idx = ((R * n_t + T) * n_z + Z).reshape(n, -1)
+        prod = lambda a, b, c: (a[:, :, None, None] * b[:, None, :, None]  # noqa: E731
+                                * c[:, None, None, :]).reshape(n, -1)
+        sign = (sign * sign_pt[:, None, None, None]).reshape(n, -1)
+        if not derivs:
+            return idx, prod(wr, wt, wz), sign
+        # d / d theta of the points' own theta: minus that of the mapped one
+        return (idx, prod(wr, wt, wz), sign, prod(dwr / self.d_r, wt, wz),
+                prod(wr, dwt / self.d_t, wz) * sign_pt[:, None])
+
+    def __call__(self, field, parity=None, derivs=False):
+        """field (n_rho, n_theta, n_zeta, c) on the grid -> (n_points, c) at the points;
+        with ``derivs``, (value, d/d rho, d/d theta), each (n_points, c)."""
+        c = field.shape[-1]
+        flat = field.reshape(-1, c)
+        if parity is None or not self.sym:
+            parity = (1.0,) * c
+        neg = jnp.asarray([p < 0 for p in parity])
+        dt = self.dtype
+
+        def f(fl, rtz):
+            if derivs:
+                i, w, s, wr, wt = self.stencil(rtz, True)
+            else:
+                i, w, s = self.stencil(rtz)
+            g = fl[i]  # (n, o^3, c)
+            g = g * jnp.where(neg[None, None, :], s[:, :, None], 1.0).astype(g.dtype)
+            if not derivs:
+                return jnp.einsum("nk,nkc->nc", w.astype(dt), g)
+            return tuple(jnp.einsum("nk,nkc->nc", v.astype(dt), g) for v in (w, wr, wt))
+
+        return map_chunks(f, self.rtz, chunk=self.chunk, carry=flat)

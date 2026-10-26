@@ -36,13 +36,12 @@ CDT = jnp.float32
 
 
 def mode_labels(fields, current, pressure):
-    """(kind, l, m, n) of every unknown x = (u, c_p): kind 0 for chi, a, b and 1 for p."""
+    """(kind, l, m, n) of every unknown x = (u, c_p): kind 0 for chi, a, b and >= 1 for p
+    (``pressure.labels``)."""
     S, modes = current.S, np.asarray(current.basis.modes, int)
     chi = np.column_stack([np.abs(S.chi_modes[:, 0]), S.chi_modes])
     u = np.concatenate([chi, modes, modes])
-    p = np.asarray(pressure.basis.modes, int)
-    return np.concatenate([np.column_stack([np.zeros(len(u), int), u]),
-                           np.column_stack([np.ones(len(p), int), p])])
+    return np.concatenate([np.column_stack([np.zeros(len(u), int), u]), pressure.labels()])
 
 
 def mode_groups(labels, free=None):
@@ -383,14 +382,23 @@ class BlockPreconditioner:
         d = np.zeros(n_x + 1)
         # blocks of the pressure: restricted tables (``_p_block_gram``)
         pg = [gi for gi, g in enumerate(groups) if g.min() >= fields.n_u]
-        if pg:
+        if pg and hasattr(fields.p_col, "gram"):  # p = P(chi): columns by jvp at x
+            c = jnp.asarray(x)[fields.n_u : fields.n_u + fields.n_p]
+            wts = [(o.quantity, o.weight / o.normalization) for o in obj.objectives
+                   if o.quantity in ("F", "p") and o.dim_f > 1 and getattr(o, "local_columns", True)]
+            for gi in pg:
+                fast[gi] = (None, np.asarray(groups[gi]) - fields.n_u, "label")
+            label = lambda idx: fields.p_col.gram(c, idx, wts, fields.sw, fields.phi)  # noqa: E731
+        elif pg:
             arrays = _p_block_arrays(fields.p_col.P, [groups[i] for i in pg], fields.n_u)
             pgram = _p_block_gram(obj, max(len(a[2]) for a in arrays))
             for gi, arrs in zip(pg, arrays):
                 fast[gi] = (pgram, arrs, "p")
         for gi, g in enumerate(groups):
             k = len(g)
-            if gi in fast and len(fast[gi]) == 3:
+            if gi in fast and len(fast[gi]) == 3 and fast[gi][2] == "label":
+                G = label(fast[gi][1])
+            elif gi in fast and len(fast[gi]) == 3:
                 gram, arrs, _ = fast[gi]
                 G = np.asarray(gram(*arrs, fields.p_col, fields.sw, fields.phi),
                                dtype=float)[:k, :k]
@@ -431,6 +439,15 @@ class BlockPreconditioner:
         Phi = jnp.concatenate(Phi)
         return np.asarray(jnp.matmul(Phi, Phi.T, precision=jax.lax.Precision.HIGHEST),
                           dtype=float)
+
+    def rescale(self, idx, s):
+        """The unknowns idx (whole blocks) replaced by these / s: their columns s times larger."""
+        idx = np.asarray(idx)
+        I = np.asarray(self.idx)
+        whole = np.isin(I, idx).any(1)
+        self.w = self.w.at[whole].multiply(s**2)
+        self.dbar = self.dbar.at[whole].multiply(s**2)
+        self.diag = self.diag.at[idx].multiply(s**2)
 
     def __call__(self, r, lam=0.0):
         return _apply_blocks(self.idx, self.V, self.w, self.dbar, r, lam)
