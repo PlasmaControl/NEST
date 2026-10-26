@@ -457,6 +457,7 @@ class Solver:
         self.Linv = None
         self.stall_dir, self.run_name = stall_dir, run_name
         self.stalls, self.anchors = [], []
+        self.on_step = None  # callback(hist) after every trust-region step
         self.t_tables = []
 
     def _metric_inv(self):
@@ -541,6 +542,8 @@ class Solver:
                  "galerkin": float((s_new if accepted else s)["galerkin"]),
                  "time": time.time() - t0, **extra}
             hist.append(h)
+            if self.on_step is not None:
+                self.on_step(hist)
             self.log("    it {:3d} f {:.6e} -> {:.6e} ratio {:+.2f} |y| {:.2e} Delta {:.2e} "
                      "|g| {:.1e} GN {:.3f}{} M/eps {:.4f} Bn/beta {:.3f} dPsi {:+.1e} "
                      "|D| {:.2e} {:.1f}s".format(
@@ -580,9 +583,10 @@ class Solver:
         viol_prev = np.inf
         for k in range(max_outer):
             hist = []
-            while True:
-                z, hist, status = self.inner(z, maxiter=maxiter, hist=hist, gtol=gtol)
-                if status != "reanchor":
+            while True:  # one budget of maxiter steps across the re-anchorings
+                z, hist, status = self.inner(z, maxiter=maxiter - len(hist), hist=hist,
+                                             gtol=gtol)
+                if status != "reanchor" or len(hist) >= maxiter:
                     break
                 t0 = time.time()
                 self.A, z = self.reanchor(z, self.A)

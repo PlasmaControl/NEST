@@ -6,6 +6,7 @@
 #SBATCH --partition=gpu
 #SBATCH --qos=gpu-short
 #SBATCH --nodes=1
+#SBATCH --exclude=sai-n01g4
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:nvidia_b200:1
 #SBATCH --cpus-per-task=8

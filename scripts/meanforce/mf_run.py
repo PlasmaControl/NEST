@@ -254,7 +254,14 @@ def main():
         def cb(z, s, outer, entry=entry):
             entry["outer"] = outer
             entry["time"] = time.time() - t1
+            entry.pop("inner (current outer)", None)
             dump()
+
+        def on_step(hist, entry=entry):
+            entry["inner (current outer)"] = hist
+            dump()
+
+        solver.on_step = on_step
 
         z, outer = solver.solve_alpha(z, max_outer=a.max_outer, maxiter=a.maxiter, gtol=a.gtol,
                                       callback=cb)
