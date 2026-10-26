@@ -116,6 +116,9 @@ def main():
         t1 = time.time()
         x, hist = m.lm(xs if a.start == "stage" else xb, a.eps, iters=a.iters, rtol=1e-12, gn_tol=1e-12)
         res["runs"][v] = {"hist": hist, "time": time.time() - t1}
+        np.savez(os.path.join(OUT, f"{a.tag}_{pre}_eps{a.eps:g}_wJ{a.wJ:g}_{v.replace(',', '+')}"
+                              + ("" if a.start == "stage" else "_frombase")
+                              + ("" if a.p_factors is None else "_p" + "-".join(f"{q:g}" for q in a.p_factors)) + ".npz"), x=x)
         print(f"=== {v}: f/f0 {hist[-1]['f'] / hist[0]['f']:.4f} in {len(hist) - 1} its, {time.time() - t1:.0f} s",
               flush=True)
     out = os.path.join(OUT, f"{a.tag}_{pre}_eps{a.eps:g}_wJ{a.wJ:g}" + ("" if a.start == "stage" else "_frombase")

@@ -125,9 +125,31 @@ E1 result (30 its; `results/lm/e1_*.json`):
 ### P2. Pressure space resolution (the "resolved Poisson" p)
 - [x] `--p-factors` decoupled from the current factors (`isl_scan.py`, `lm_ab.py`; p tables only, cached by key).
 - [x] T8 Manufactured q not in V_h (q = (1-rho^2)^3 (1 + 0.2 x cos zeta + 0.2 y sin zeta)/(1.15 - x)): |grad(p* - q)|_w/|grad q|_w = 2.3e-3, 2.4e-4, 2.8e-5, 3.9e-7, 5.6e-9 at L 8, 12, 16, 24, 32 (0.11-0.12 per +4 in L, the pole's rate); kappa(A_p) 1.8e2 -> 4.2e4, full rank at L 32 on 33 radii.
-- [ ] E2 Ladder p factors 1, 1.5, 2, 3 at fixed u basis: attained f*, reduced kappa, time/it; pick the
-  smallest V_h at which f* saturates. Two-pass Schur variant only if the width costs > 1.5x per iteration.
-**STOP S2**.
+- [x] E2 Ladder p factors 1, 1.5, 2, 3 at fixed u basis (factors 1; laptop model; `results/lm/e2_*.json`, `e2p_*`):
+
+| case | p factors (n_p) | variant | its | f end | <\|F\|>/norm | s/it |
+|---|---|---|---|---|---|---|
+| w_J 1e-3 from base, converged | 1 (234) | elim,phys,tr / phys,tr | 11 / 21 | 3.0971e-10 | 1.485e-5 | 4.4 / 3.1 |
+| | 1.5 (494) | elim,phys,tr / phys,tr | 16 / 8 | 2.8957e-10 | 1.386e-5 | 5.8 / 6.4 |
+| | 2 (850) | elim,phys,tr | 10 | 2.8914e-10 | 1.386e-5 | 16.2 |
+| | 3 (1850) | elim,phys,tr | 11 | 2.8821e-10 | 1.383e-5 | 28.8 |
+| w_J 1e-7 from stage, 30 its | 1 | elim,phys,tr / phys,tr | 30 | 6.36e-11 / 7.91e-11 | 9.94e-6 / 1.11e-5 | 3.6 / 3.5 |
+| | 1.5 | elim,phys,tr / phys,tr | 30 | 5.67e-11 / 6.69e-11 | 9.30e-6 | 6.4 / 8.1 |
+| | 2 | elim,phys,tr / phys,tr | 30 | 5.66e-11 / 7.78e-11 | 9.29e-6 / 1.10e-5 | 9.9 / 9.7 |
+| | 3 | elim,phys,tr | 30 | 5.67e-11 | 9.30e-6 | 28.5 |
+
+  Reading: the pressure space saturates at ~1.5x the current factors (the default costs ~7% in f and
+  <|F|>; beyond 1.5 the change is <= 0.5%: the u basis / collocation limits). Reduced kappa saturates
+  (phys 2.8e4, Jacobi 4.7e4 at p 2-3) while the joint phys kappa grows (8.8e5, 1.6e6, 5.0e6 at p 1.5, 2, 3).
+  At w_J 1e-7 elim reaches a lower f in 30 its at every p (gain 1.2-1.4x in f). At w_J 1e-3, p 1.5 the
+  joint phys,tr converged in fewer iterations (8 vs 16): elim is not uniformly faster to the end.
+  p >= 0: the converged states have min p / max p = -1.4e-4 (w_J 1e-3) and -3e-4 (w_J 1e-7), the same in
+  the joint and elim solutions (same minimiser): a property of the solution, not of elim.
+  `|c_p|/|r|` grows with kappa(A_p): <= 1e-10 at p 1-2, 1e-8 at p 3.
+  Two-pass Schur variant: not implemented. Its flop saving over the [p|u|r] TSQR is 2 m n_p^2 of
+  2 m (n_u + n_p)^2, i.e. n_p^2/(n_u + n_p)^2 = 24% at p 1.5 here and ~10% at production (n_p ~5k of
+  16k, estimate), against forming the rows twice.
+**STOP S2**: recommendation `--p-factors` = 1.5 x the current factors with `--speed elim,phys,tr`.
 
 ### P3. Production measurement
 - [ ] Extend `scripts/diagnostics/base_conditioning.py` with the reduced kappa (Jacobi and phys) at the

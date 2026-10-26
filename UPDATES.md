@@ -2,6 +2,11 @@
 
 One entry per commit, newest first.
 
+## 2026-10-26: `--p-factors` (pressure space decoupled from the current basis), T8, the pressure ladder E2 (branch pressure-poisson)
+- `isl_scan.py --p-factors`, `lm_ab.py --p-factors` (states of the default space embedded), `lm_ab.py` saves each variant's final state; `HarmonicModel.p_range` and `p min/max` in the elim log line.
+- T8 (weak Poisson, manufactured q outside every V_h, pole at x = 1.15): error 2.3e-3, 2.4e-4, 2.8e-5, 3.9e-7, 5.6e-9 at L 8, 12, 16, 24, 32 (0.11-0.12 per +4 in L).
+- E2 (laptop, current factors 1): f converged at w_J 1e-3: 3.0971e-10, 2.8957e-10, 2.8914e-10, 2.8821e-10 at p factors 1, 1.5, 2, 3 (<|F|>/norm 1.485e-5 -> 1.386e-5): saturates at ~1.5x. Reduced kappa (phys) saturates at 2.8e4; joint phys kappa 2.4e5 -> 5.0e6. w_J 1e-7, 30 its: elim,phys,tr 5.67e-11 vs phys,tr 6.69e-11 (p 1.5), 5.66e-11 vs 7.78e-11 (p 2). At w_J 1e-3, p 1.5 the joint converged in 8 its vs elim 16. Converged p has min/max -1e-4..-3e-4 in both. Table in docs/pressure_poisson_plan.md.
+
 ## 2026-10-26: `speed elim`: p eliminated by the weak Poisson (least-squares) solve of force balance (branch pressure-poisson)
 - `HarmonicModel(speed={"elim": 1, ...})`, `isl_scan.py --speed elim,phys,tr`: the force rows are affine in p with constant coefficients, so min_p |r(u, p)| is the weak (force-row-weighted) Poisson equation sum w grad(phi_i).grad p = sum w grad(phi_i).(J x B) on the pressure space (p(1) = 0), plus the constant <p> row. The LM / trust-region step is taken on u alone with the exact reduced Jacobian (I - P) A_u = the trailing block of the streamed QR of [A_p | A_u | r] (`_tsqr(cperm=...)`); every trial re-solves p exactly (`_elim_trials`: f* = f(u', p) - |R_pp^-T A_p^T r|^2 / 2 from one pass), so p = p*(u) at every accepted iterate (`|c_p|/|r|` and `f* chk` logged per iteration). Same minimiser as the joint problem; same TSQR cost; the TR subproblem has n_u instead of n_u + n_p unknowns. Requires par = 1, no transport, w_pos = 0 (asserted); default paths unchanged.
 - Gates `tests/test_pressure_elim.py` T1-T7 pass (Schur identity 1.3e-14, c_p <= 7e-12, f* vs direct 1.7e-15, reduced GN = u part of joint GN 2.9e-11, FD 3.2e-10, fixed point of a converged joint state, an added grad q removed to 5e-11).

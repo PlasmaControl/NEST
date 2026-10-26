@@ -1693,6 +1693,19 @@ class HarmonicModel:
                   f"|dp|/|p| {float(jnp.linalg.norm(Dz[self.n_uc:, 0]) / max(float(jnp.linalg.norm(z[self.n_uc:])), 1e-300)):.2e}")
         return z + Dz[:, 0]
 
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _prange_chunk(self, tables, z, const, eps):
+        J, B, p, gp, J0 = self._fields(self._synth(tables), z, const, eps)
+        return jnp.min(p), jnp.max(p)
+
+    def p_range(self, z, eps):
+        """min p and max p over the collocation points (p >= 0 is not enforced with speed elim)."""
+        lo, hi = np.inf, -np.inf
+        for k in range(self.n_chunks):
+            a, b = self._prange_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps)
+            lo, hi = min(lo, float(a)), max(hi, float(b))
+        return lo, hi
+
     def _elim_step(self, z, eps, decades):
         """One LM / trust-region step on u with p eliminated (see above); returns as ``_qr_step``."""
         n, nu, npc = self.n, self.n_uc, self.n_pc
@@ -1751,7 +1764,8 @@ class HarmonicModel:
         del RD, Hs, gs
         self._reload()
         f_chk, F_chk = self.evaluate(self.to_x(z + d), eps)  # the accepted point, p re-solved
-        info = {"mu/lambda_max": mu / lam, "GN share": gn_share, "|c_p|/|r|": cp_rel,
+        p_lo, p_hi = self.p_range(z + d, eps)
+        info = {"mu/lambda_max": mu / lam, "GN share": gn_share, "|c_p|/|r|": cp_rel, "p min/max": p_lo / p_hi,
                 "f* check": abs(f_chk - fbest) / max(abs(fbest), 1e-300), "qr time": t_qr, **trinfo}
         return d, f_here, f_chk, F_chk, info
 
@@ -1943,6 +1957,7 @@ class HarmonicModel:
                                             f"mu/lam {info['mu/lambda_max']:.0e}  GN share {info['GN share']:.1e}  "
                                             + (f"ratio {info['tr ratio']:.2f} tries {info['tr tries']}  " if 'tr ratio' in info else "")
                                             + (f"|c_p|/|r| {info['|c_p|/|r|']:.0e} f* chk {info['f* check']:.0e}  "
+                                               f"p min/max {info['p min/max']:.1e}  "
                                                if '|c_p|/|r|' in info else ""))
                       + f"{h['time']:.0f} s")
             if callback is not None:
