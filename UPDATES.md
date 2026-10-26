@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-10-26: alpha 0.7 re-run after the fixes; the convergence studies submitted (branch closest-poisson)
+- Sweep jobs 6232 (QR), 6233 (GLTR) at a/40: both stop alpha 0.7 on the stationarity test; |J - J_fit|/rms 1.4882e-2 (QR), 1.4868e-2 (GLTR), within 0.1% (0.35% before); M = 0.700 M_DESC, B.n = beta, Psi within 3e-5. GLTR still loses ~3 steps at the start of an outer iteration (B.n at its bound with nu_B = 0: the penalty grows like |step|^4 there, which no quadratic model sees); the trust region recovers.
+- `scripts/meanforce/submit_studies.sh`: study 1 (a/20, a/60, a/80, QR and GLTR) and study 2 (GLTR, L = M 20, 24) submitted as jobs 6276-6283; L = M 28 and 16/16/16 wait for gpu-medium slots (10 submitted jobs per user); probes a/100, a/120 (6285, 6286, gpu-short).
+
 ## 2026-10-26: the step model keeps a bound's penalty curvature near the bound (branch closest-poisson)
 - First sweep (jobs 6203, 6204, cancelled): GLTR's radius collapsed at the start of outer 2, ratios down to -3e5. Stall diagnostic: Jacobian vs differences 4e-8, adjoint 5e-15; d'Hd = 4270 against d'(J^T J)d = 0.38 along the step. The B.n bound sat at c_B = 0 with nu_B = 0, so the model had neither B.n rows nor the penalty's curvature, and the steps pushed B.n above beta. Now the model's penalty-curvature rows use rho within `--band` 0.05 of a bound (`Weights.d2_model`); gradient unchanged. Gate added. Also: zero residual (at J_fit with inactive bounds) ends the inner solve instead of dividing by zero.
 - Resubmitted: gates 6230, retry smoke 6231, sweeps 6232 (QR), 6233 (GLTR).
