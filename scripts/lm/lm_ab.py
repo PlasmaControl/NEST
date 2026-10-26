@@ -44,7 +44,7 @@ TOK = os.path.join(ROOT, "desc_input", "tokamak_free_boundary")
 OUT = os.path.join(ROOT, "results", "lm")
 
 
-def build(wJ, j_mode, setup_cache={}):  # noqa: B006
+def build(wJ, j_mode, setup_cache={}, p_factors=None):  # noqa: B006
     if not setup_cache:
         a = types.SimpleNamespace(base=None, eq=os.path.join(TOK, "tokamak_L16M16_fb.h5"),
                                   coils=os.path.join(TOK, "tokamak_L16M16_field.h5"), factors=(1.0, 1.0, 1.0),
@@ -56,7 +56,13 @@ def build(wJ, j_mode, setup_cache={}):  # noqa: B006
         setup_cache.update(inp=inp, cur=cur, pre=pre, x0=x0, fr=fr, run=run, jt=jt,
                            pert=Perturbation(inp.field, 2, -1))
     c = setup_cache
-    model = HarmonicModel(c["inp"], c["cur"], c["pre"], c["fr"], c["run"]["frac"], 2.0, pert=c["pert"],
+    pre = c["pre"]
+    if p_factors is not None:  # a richer pressure space (states of the default one are embedded: ``embed_p``)
+        import fit_cache
+        from pressure import Pressure
+        pre = fit_cache.fit(Pressure, c["inp"], factors=tuple(p_factors), N=1, edge_order=2)
+    c["pre_model"] = pre
+    model = HarmonicModel(c["inp"], c["cur"], pre, c["fr"], c["run"]["frac"], 2.0, pert=c["pert"],
                           weights={"J": wJ, "J_rho": None, "W": 0.0, "pos": 0.0}, j_nodes="flux",
                           j_mode=j_mode, j_target=c["jt"], verbose=True)
     model.set_source(c["x0"])
@@ -84,6 +90,8 @@ def main():
     ap.add_argument("--variants", nargs="+", default=["base", "phys"],
                     help="comma-separated speed options per variant; 'base' = none")
     ap.add_argument("--tag", default="ab")
+    ap.add_argument("--p-factors", type=float, nargs=3, default=None,
+                    help="pressure basis factors of the A/B model (base and stage use the default 1 1 1)")
     ap.add_argument("--start", default="stage", choices=["stage", "base"],
                     help="A/B start: the eps stage state (default) or the eps = 0 base (solves the stage)")
     a = ap.parse_args()
@@ -94,7 +102,10 @@ def main():
     xb = converge(m0, c["x0"], 0.0, f"{pre}_base_wJ{a.wJ_base:g}")
     xs = converge(m0, xb, a.eps, f"{pre}_stage_eps{a.eps:g}_wJ{a.wJ_base:g}")
     del m0
-    m, _ = build(a.wJ, a.j_mode)
+    m, c = build(a.wJ, a.j_mode, p_factors=a.p_factors)
+    if a.p_factors is not None:
+        from harmonic_dense import embed
+        xb, xs = (embed(x_, c["cur"], c["pre"], c["cur"], c["pre_model"]) for x_ in (xb, xs))
     res = {"args": vars(a), "runs": {}}
     for v in a.variants:
         sp = {} if v == "base" else {k: (int(val) if val.isdigit() else True)
@@ -107,7 +118,8 @@ def main():
         res["runs"][v] = {"hist": hist, "time": time.time() - t1}
         print(f"=== {v}: f/f0 {hist[-1]['f'] / hist[0]['f']:.4f} in {len(hist) - 1} its, {time.time() - t1:.0f} s",
               flush=True)
-    out = os.path.join(OUT, f"{a.tag}_{pre}_eps{a.eps:g}_wJ{a.wJ:g}" + ("" if a.start == "stage" else "_frombase") + ".json")
+    out = os.path.join(OUT, f"{a.tag}_{pre}_eps{a.eps:g}_wJ{a.wJ:g}" + ("" if a.start == "stage" else "_frombase")
+                       + ("" if a.p_factors is None else "_p" + "-".join(f"{v:g}" for v in a.p_factors)) + ".json")
     json.dump(res, open(out, "w"), indent=1, default=float)
     print(f"\nsummary ({time.time() - t0:.0f} s): " + "  ".join(
         f"{v} {r['hist'][-1]['f'] / r['hist'][0]['f']:.4f}" for v, r in res["runs"].items()) + f"\n-> {out}")

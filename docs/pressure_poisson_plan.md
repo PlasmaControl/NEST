@@ -123,8 +123,8 @@ E1 result (30 its; `results/lm/e1_*.json`):
 **STOP S1**: results to the user.
 
 ### P2. Pressure space resolution (the "resolved Poisson" p)
-- [ ] `--p-factors` decoupled from the current factors (p tables only; cached by key).
-- [ ] T8 Manufactured q not in V_h (smooth, vanishing at rho = 1): ||grad(p* - q)|| converges spectrally with p resolution.
+- [x] `--p-factors` decoupled from the current factors (`isl_scan.py`, `lm_ab.py`; p tables only, cached by key).
+- [x] T8 Manufactured q not in V_h (q = (1-rho^2)^3 (1 + 0.2 x cos zeta + 0.2 y sin zeta)/(1.15 - x)): |grad(p* - q)|_w/|grad q|_w = 2.3e-3, 2.4e-4, 2.8e-5, 3.9e-7, 5.6e-9 at L 8, 12, 16, 24, 32 (0.11-0.12 per +4 in L, the pole's rate); kappa(A_p) 1.8e2 -> 4.2e4, full rank at L 32 on 33 radii.
 - [ ] E2 Ladder p factors 1, 1.5, 2, 3 at fixed u basis: attained f*, reduced kappa, time/it; pick the
   smallest V_h at which f* saturates. Two-pass Schur variant only if the width costs > 1.5x per iteration.
 **STOP S2**.

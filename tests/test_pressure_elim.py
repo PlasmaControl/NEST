@@ -170,6 +170,52 @@ def test_T7():
     assert e < 1e-10 and abs(f3 - f1) / f1 < 1e-10
 
 
+def test_T8():
+    """Manufactured Poisson, q outside every V_h: the weighted least-squares (= weak Poisson) error
+    |grad(p* - q)|_w / |grad q|_w falls geometrically with the pressure resolution. q = (1 - rho^2)^3 Q,
+    Q = (1 + 0.2 x cos(NFP zeta) + 0.2 y sin(NFP zeta)) / (1.15 - x), x = rho cos(theta), y = rho sin(theta):
+    stellarator symmetric, analytic in the disk, pole at x = 1.15 (expected rate ~0.58^L). The weights
+    and gradients are those of the force rows and the pressure tables (TensorPressure, fr.geo)."""
+    import fit_cache
+    from flux_interp import TensorPressure
+    from pressure import Pressure
+    from separable import Separable
+    m = _model()
+    c = lm_ab.build.__defaults__[0]  # lm_ab's setup cache
+    fr, cur, inp = c["fr"], c["cur"], c["inp"]
+    NFP = int(inp.eq.NFP)
+    g = fr.tgrid
+    Rg, Tg, Zg = np.meshgrid(*(np.asarray(v) for v in (g.rho, g.theta, g.zeta)), indexing="ij")
+
+    def q(r, t, z):
+        x, y = r * jnp.cos(t), r * jnp.sin(t)
+        return (1 - r**2) ** 3 * (1 + 0.2 * x * jnp.cos(NFP * z) + 0.2 * y * jnp.sin(NFP * z)) / (1.15 - x)
+
+    d = jax.vmap(jax.grad(q, argnums=(0, 1, 2)))(*(jnp.asarray(a.ravel()) for a in (Rg, Tg, Zg)))
+    gq = np.asarray(fr.geo.gradient(*(jnp.asarray(np.asarray(v).reshape(Rg.shape)) for v in d)))
+    sw = np.asarray(m.sw3)
+    b = (sw[..., None] * gq).ravel()
+    errs, Ls = [], []
+    for pf in (0.5, 0.75, 1.0, 1.5, 2.0):
+        pre = fit_cache.fit(Pressure, inp, factors=(pf, pf, 1.0), N=1, edge_order=2)
+        tp = TensorPressure(Separable([pre.basis], [pre.c], NFP), pre.edge_order, cur._RZ, g, fr.geo, factored=True)
+        f = jax.jit(jax.vmap(lambda e: tp(e)[1]))
+        n_p = pre.basis.num_modes
+        A = np.empty((b.size, n_p))
+        for i in range(0, n_p, 64):
+            k = min(64, n_p - i)
+            E = np.zeros((k, n_p))
+            E[np.arange(k), i + np.arange(k)] = 1.0
+            A[:, i:i + k] = (sw[None, ..., None] * np.asarray(f(jnp.asarray(E)))).reshape(k, -1).T
+        cs = np.linalg.lstsq(A, b, rcond=None)[0]
+        errs.append(np.linalg.norm(A @ cs - b) / np.linalg.norm(b))
+        Ls.append(pre.basis.L)
+    rates = [(errs[i + 1] / errs[i]) ** (4.0 / (Ls[i + 1] - Ls[i])) for i in range(len(errs) - 1)]
+    print("T8 " + ", ".join(f"L{L} {e:.2e}" for L, e in zip(Ls, errs)) + "; reduction per +4 in L: "
+          + ", ".join(f"{r:.3f}" for r in rates))
+    assert max(rates) < 0.2 and errs[-1] < 1e-7
+
+
 if __name__ == "__main__":
     jax.config.update("jax_enable_x64", True)
     names = sys.argv[1:] or [k[5:] for k in sorted(globals()) if k.startswith("test_T")]

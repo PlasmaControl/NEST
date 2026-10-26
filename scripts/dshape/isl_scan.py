@@ -69,7 +69,9 @@ def setup(a):
     kw = {"edge_power": ep} if ep != 2 else {}
     fac = tuple(run["factors"])
     cur3 = fit_cache.fit(BoundaryPotential, inp, factors=fac, N=a.N, **kw)
-    pre3 = fit_cache.fit(Pressure, inp, factors=fac, N=a.N, edge_order=2)
+    # the pressure space (speed elim: the space of the weak Poisson solve) may be richer than the current's
+    pfac = tuple(getattr(a, "p_factors", None) or fac)
+    pre3 = fit_cache.fit(Pressure, inp, factors=pfac, N=a.N, edge_order=2)
     if x2 is None:
         x = np.concatenate([cur3.u, pre3.c])
         nu, npp = harmonics(cur3, pre3)
@@ -163,6 +165,8 @@ def main():
     ap.add_argument("--edge-power", type=int, default=3)
     ap.add_argument("--frac", type=int, default=320)
     ap.add_argument("--N", type=int, default=1, help="toroidal modes |n| <= N of J and p")
+    ap.add_argument("--p-factors", type=float, nargs=3, default=None,
+                    help="resolution factors of the pressure basis (default: --factors / the base run's)")
     ap.add_argument("--m", type=int, default=2)
     ap.add_argument("--n", type=int, default=-1, help="Phi = sin(m theta - n zeta): n = -1 resonates on q = 2")
     ap.add_argument("--eps", type=float, nargs="+", default=[0, 30, 100, 300, 1000], help="amplitudes [A]")
