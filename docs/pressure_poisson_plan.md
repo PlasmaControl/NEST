@@ -106,6 +106,20 @@ Gates (tests/test_pressure_elim.py, `PYTHONPATH=nest:$DESC JAX_PLATFORMS=cpu`):
 - [x] T7 (5.2e-11; f 1.1e-2 -> 1.500369e-10 restored) Manufactured Poisson: G = grad q, q in V_h -> p* = q, r* = 0 (1e-12).
 Experiment E1 (A/B, lm_ab harness, 20 its, w_J 1e-7 eps 1000, and w_J 1e-3): variants `tr`, `elim,tr`,
 `phys,tr`, `elim,phys,tr`. Report f/f0, <|F|>/norm, GN share, time per iteration, accepted/rejected tries.
+E1 result (30 its; `results/lm/e1_*.json`):
+
+| case | variant | its | f end | f / f0(joint) end | GN share end | time |
+|---|---|---|---|---|---|---|
+| A w_J 1e-7, from stage | tr | 30 | 1.058e-10 | 0.705 | 0.24 | 97 s |
+| | elim,tr | 30 | 7.338e-11 | 0.489 | 0.056 | 87 s |
+| | phys,tr | 30 | 7.906e-11 | 0.527 | 0.069 | 105 s |
+| | elim,phys,tr | 30 | 6.358e-11 | 0.424 | 0.011 | 107 s |
+| B w_J 1e-3, from base | tr | 30 (not converged) | 3.0970981936e-10 | 3.17e-3 | 2.6e-9 | 200 s |
+| | elim,tr | 20 | 3.0970981870e-10 | 3.17e-3 | 1.0e-12 | 71 s |
+| | phys,tr | 21 | 3.0970981870e-10 | 3.17e-3 | 8.4e-13 | 65 s |
+| | elim,phys,tr | 11 | 3.0970981870e-10 | 3.17e-3 | 1.1e-14 | 48 s |
+
+- [x] E1 done.
 **STOP S1**: results to the user.
 
 ### P2. Pressure space resolution (the "resolved Poisson" p)

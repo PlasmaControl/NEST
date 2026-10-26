@@ -84,6 +84,8 @@ def main():
     ap.add_argument("--variants", nargs="+", default=["base", "phys"],
                     help="comma-separated speed options per variant; 'base' = none")
     ap.add_argument("--tag", default="ab")
+    ap.add_argument("--start", default="stage", choices=["stage", "base"],
+                    help="A/B start: the eps stage state (default) or the eps = 0 base (solves the stage)")
     a = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
     t0 = time.time()
@@ -101,11 +103,11 @@ def main():
         m._Lm = None
         print(f"\n=== variant {v}: speed {sp}", flush=True)
         t1 = time.time()
-        x, hist = m.lm(xs, a.eps, iters=a.iters, rtol=1e-12, gn_tol=1e-12)
+        x, hist = m.lm(xs if a.start == "stage" else xb, a.eps, iters=a.iters, rtol=1e-12, gn_tol=1e-12)
         res["runs"][v] = {"hist": hist, "time": time.time() - t1}
         print(f"=== {v}: f/f0 {hist[-1]['f'] / hist[0]['f']:.4f} in {len(hist) - 1} its, {time.time() - t1:.0f} s",
               flush=True)
-    out = os.path.join(OUT, f"{a.tag}_{pre}_eps{a.eps:g}_wJ{a.wJ:g}.json")
+    out = os.path.join(OUT, f"{a.tag}_{pre}_eps{a.eps:g}_wJ{a.wJ:g}" + ("" if a.start == "stage" else "_frombase") + ".json")
     json.dump(res, open(out, "w"), indent=1, default=float)
     print(f"\nsummary ({time.time() - t0:.0f} s): " + "  ".join(
         f"{v} {r['hist'][-1]['f'] / r['hist'][0]['f']:.4f}" for v, r in res["runs"].items()) + f"\n-> {out}")
