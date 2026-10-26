@@ -32,7 +32,12 @@ f0: the joint start (the w_J 1e-3 stage state); both variants reach the same con
 The reduced kappa at w_J 1e-3 is flat in L (275, 277, 283) while the joint one grows (~L^1.6). At w_J 1e-7 both grow
 (the w_J floor), the reduced one ~50x lower at L32. `results/lm/lad_*`, `lad_cond_*`.
 
-## 3. Production runs (Stellar AI; same flags as `a120Cn2d1000`, rsync the code first)
+## 3. Production runs (Stellar AI; same flags as `a120Cn2d1000`)
+
+Step-by-step operator instructions, scripts and the report: `docs/pressure_poisson_runbook.md`
+(`scripts/lm/elim_preflight.sh`, `elim_submit.sh`, `elim_collect.sh`, `elim_report.py`). The commands below are what
+`elim_submit.sh` submits (after a GPU gate job running `tests/test_pressure_elim.py`, plus a second conditioning job
+with `--p-factors 3 3 1`).
 
 N = 2 at 1000 A has 16,457 unknowns (u 11,078, p 5,379; collocation 97 x 385 x 5). With `--p-factors 3 3 1`
 (1.5x the base's 2 2 1) p grows to ~12.1k (estimate), the TSQR width to ~23.2k: ~2x the time per iteration, R ~4.3 GB.
