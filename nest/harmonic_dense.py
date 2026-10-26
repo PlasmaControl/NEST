@@ -1245,12 +1245,13 @@ class HarmonicModel:
                                                  "mu/lambda_max": mu / P["lam"], "|g|": float(jnp.linalg.norm(b))}
 
     # --- QR (no normal equations: sigma_min / sigma_max ~ 1e-13 here, squared it is lost)
-    def _tsqr(self, z, eps, merge_rows=None):
+    def _tsqr(self, z, eps, merge_rows=None, cperm=None):
         """R of [A | r] (n + 1, n + 1) by a streamed QR of the row blocks (with the <p> row), and f.
         speed merge=M: rows per factorization (the QR runs at ~24 TFLOP/s whatever the block, and each
         merge re-factors the n rows of R); gpus=G: one Python thread per device (the cuSOLVER calls
         block the host thread, so one thread would run them one after the other), chunks round-robin,
-        the R factors merged on the first device; fp32: single precision."""
+        the R factors merged on the first device; fp32: single precision. cperm: a column order of
+        [A | r] for the factorization (speed elim: [p | u | r])."""
         from concurrent.futures import ThreadPoolExecutor
         merge_rows = int(self.speed.get("merge", 22000)) if merge_rows is None else merge_rows
         self._evict()
@@ -1274,6 +1275,8 @@ class HarmonicModel:
             for k in range(g, self.n_chunks, nd):
                 t0 = time.time()
                 blk, _, _ = self._rows_chunk(self._chunk_tables(k, dev), zs[g], self._chunk_const(k, dev), eps)
+                if cperm is not None:
+                    blk = blk[:, cperm]
                 if prof:
                     jax.block_until_ready(blk)
                     t_rows += time.time() - t0
@@ -1305,7 +1308,8 @@ class HarmonicModel:
         if prof:
             self._tt["leaves"] = time.time() - tq
         parts = [jax.device_put(R, devs[0]) if nd > 1 else R for R in Rs if R is not None]
-        parts.append(cast(jnp.concatenate([G, gv[:, None]], 1)))
+        Gr = jnp.concatenate([G, gv[:, None]], 1)
+        parts.append(cast(Gr if cperm is None else Gr[:, cperm]))
         del G
         R = _qr_r(jnp.concatenate(parts))
         return R.astype(jnp.float64) if dt is not None else R
@@ -1365,13 +1369,14 @@ class HarmonicModel:
             del M
         return self._Lm
 
-    def _tr_step(self, z, eps, RD, c, Hs, gs, Sc, lam, f_here, max_tries=8):
+    def _tr_step(self, z, eps, RD, c, Hs, gs, Sc, lam, f_here, max_tries=8, trials=None):
         """Trust-region step (speed tr): y(mu) = -(Hs + mu I)^-1 gs with |y(mu)| = Delta in the scaled
         variables of Sc (the physical rms change of J and p with speed phys), mu by safeguarded Newton on
         the secular equation (one Cholesky per mu); the step evaluated exactly; DESC's radius rule (x2 above
         ratio 0.75 on the boundary, 0.25 |y| below 0.25); a rejected step shrinks Delta and is retried.
-        As DESC: the undamped Gauss-Newton step when it fits in the radius (mu = 0), no floor on mu."""
-        n = self.n
+        As DESC: the undamped Gauss-Newton step when it fits in the radius (mu = 0), no floor on mu.
+        trials (speed elim): z, D (steps of the reduced variables) -> f, F and the full z-steps."""
+        n = Hs.shape[0]
         Delta = self._Delta
         mu = self._mu_tr if self._mu_tr else 1e-8 * lam
         rho2 = max(2.0 * f_here - float(c @ c), 0.0)
@@ -1436,7 +1441,11 @@ class HarmonicModel:
                             mu_new = np.sqrt(lo * hi) if np.isfinite(hi) else 10 * mu
                         mu = mu_new
             d = Sc.back(y)
-            fs, Fs = self._trials(z, d[:, None], eps)
+            if trials is None:
+                fs, Fs = self._trials(z, d[:, None], eps)
+            else:
+                fs, Fs, Dz = trials(z, d[:, None], eps)
+                d = Dz[:, 0]
             f_new, F_new = float(fs[0]), float(Fs[0])
             r_lin = RD @ y + c
             pred = f_here - 0.5 * (float(r_lin @ r_lin) + rho2)
@@ -1455,6 +1464,8 @@ class HarmonicModel:
         each step evaluated exactly, the best kept (with its factor, the LSQR preconditioner).
         Speed options: chol (Cholesky of (RD)^T RD + mu I for kd <= 10 instead of a QR per mu),
         narrow (mu scan only around the last best), newton (+ D H2 D, the residual curvature)."""
+        if self.speed.get("elim"):
+            return self._elim_step(z, eps, decades)
         n = self.n
         sp = self.speed
         prof = bool(sp.get("profile"))
@@ -1581,6 +1592,168 @@ class HarmonicModel:
             self._log("    time: " + ", ".join(f"{k} {v_:.1f} s" for k, v_ in tm.items())
                       + f"; kd {kdl[j]:g} of {len(kdl)} scanned")
         return d, f_here, fbest, Fbest, {"mu/lambda_max": mu / lam, "GN share": gn_share, **trinfo}
+
+    # ------------------------------------------------------------------ speed elim: p eliminated
+    # The force rows are affine in p with constant coefficients (par = 1, w_pos = 0, no transport), so
+    # min_p |r(u, p)| is the weak Poisson equation of force balance with the force rows' weights,
+    #   sum_points w grad(phi_i) . grad p = sum_points w grad(phi_i) . (J x B)   (+ the constant <p> row),
+    # on the pressure space (p(1) = 0). The LM / trust-region step is taken on u alone with the reduced
+    # Jacobian (I - P) A_u (exact: P is constant): the trailing block of the QR of [A_p | A_u | r]. Every
+    # trial re-solves p exactly, so every accepted iterate has p = p*(u) (variable projection).
+    def _elim_check(self, steps="qr"):
+        sp = self.speed
+        bad = [k for k in ("newton", "soc", "reuse", "pproj", "accel") if sp.get(k)]
+        assert not bad, f"speed elim: not with {bad}"
+        assert steps == "qr", "speed elim: QR steps only"
+        assert self._par == 1.0, "speed elim: needs par = 1 (A_p depends on b otherwise)"
+        assert self.transport is None, "speed elim: not with transport (A_p depends on b)"
+        assert float(self.weights["pos"]) == 0.0, "speed elim: needs w_pos = 0 (p<0 rows are not affine in p)"
+        if not hasattr(self, "_elim_cols"):
+            nu, n = self.n_uc, self.n
+            self._elim_cols = jnp.asarray(np.r_[np.arange(nu, n), np.arange(nu), [n]])
+            self._Rpp, self._Gpp0 = None, None
+
+    def _elim_Rpp_build(self, z, eps):
+        """R of the constant A_p (force rows' p columns and the <p> row) by a streamed QR, p columns only."""
+        nu, n = self.n_uc, self.n
+        t0 = time.time()
+        self._global(z, eps, jac=False)  # sets self._gW
+        R, buf, nb = None, [], 0
+        for k in range(self.n_chunks):
+            blk, _, _ = self._rows_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps)
+            buf.append(blk[:, nu:n])
+            nb += blk.shape[0]
+            if nb >= 22000:
+                R, buf, nb = _qr_r(jnp.concatenate(([R] if R is not None else []) + buf)), [], 0
+        buf.append(self.wW * self._gW[None, nu:])
+        R = _qr_r(jnp.concatenate(([R] if R is not None else []) + buf))
+        self._log(f"    elim: R_pp ({self.n_pc}) built in {time.time() - t0:.1f} s, "
+                  f"diag min/max {float(jnp.abs(jnp.diag(R)).min()):.2e}/{float(jnp.abs(jnp.diag(R)).max()):.2e}")
+        return R
+
+    def _elim_set_Rpp(self, Rpp):
+        """Keep R_pp; check that A_p^T A_p is unchanged (it must be constant)."""
+        G = Rpp.T @ Rpp
+        if self._Gpp0 is None:
+            self._Gpp0 = G
+        else:
+            dev = float(jnp.linalg.norm(G - self._Gpp0) / jnp.linalg.norm(self._Gpp0))
+            if dev > 1e-10:
+                self._log(f"    elim WARNING: A_p^T A_p changed by {dev:.1e} (relative); is A_p constant?")
+        self._Rpp = Rpp
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _elim_trial_chunk(self, tables, z, D, const, eps):
+        """Per trial z + D[:, k]: |local rows|^2, the share of <p> and <|F|>, and A_p^T r of the local rows."""
+        cols = self._synth(tables)
+
+        def one(d):
+            J, B, p, gp, J0 = self._fields(cols, z + d, const, eps)
+            rF, rJ, rP, Wp, rF0 = self._residual(J, B, p, gp, J0, const)
+            Fa = jnp.sum(const["sw3"] * jnp.linalg.norm(rF0, axis=-1))
+            wF = self._wF(const, B, rF)
+            g = [-jnp.einsum("rtzck,rtzc->k", V[..., 1:, :], wF)
+                 for (kind, *_), V in zip(self._blocks_static, cols) if kind == "p"]
+            return jnp.sum(rF**2) + jnp.sum(rJ**2) + jnp.sum(rP**2), Wp, Fa, jnp.concatenate(g)
+
+        return jax.lax.map(one, D.T)
+
+    def _elim_trials(self, z, Du, eps):
+        """Trials u + Du[:, k] with p re-solved exactly: f*(u + Du_k), <|F|>/norm before the p update
+        (the accepted step is re-evaluated), and the full z-steps [Du_k; dp_k] (n, K)."""
+        nu = self.n_uc
+        K = Du.shape[1]
+        D = jnp.concatenate([Du, jnp.zeros((self.n_pc, K), Du.dtype)], 0)
+        fs, Ws, Fs, Gp = 0.0, 0.0, 0.0, 0.0
+        for k in range(self.n_chunks):
+            s, w_, Fa, g = self._elim_trial_chunk(self._chunk_tables(k), z, D, self._chunk_const(k), eps)
+            fs, Ws, Fs, Gp = fs + s, Ws + w_, Fs + Fa, Gp + g
+        fs, Ws, Fs = np.asarray(fs), np.asarray(Ws), np.asarray(Fs)
+        rW = self.weights["W"] * (Ws - self.W_t) / self.W_t
+        g2 = rW**2
+        if self.mom is not None:
+            S = 0.0
+            for k in range(self.n_chunks):
+                S = S + self._mom_trial_chunk(self._chunk_tables(k), z, D, self._chunk_const(k), eps)
+            g2 = g2 + np.asarray(jnp.sum(self._mom_resid(S) ** 2, -1))
+        if self.rough is not None:
+            ri = self._rough_idx
+            g2 = g2 + np.asarray(jnp.sum((self._dvec_j[ri, None] * (z[ri, None] + D[ri])) ** 2, 0))
+        gP = Gp + (self.wW * self._gW[nu:])[None, :] * jnp.asarray(rW)[:, None]  # (K, n_pc): A_p^T r
+        y = jax.scipy.linalg.solve_triangular(self._Rpp, gP.T, lower=False, trans="T")  # R_pp^-T A_p^T r
+        dP = -jax.scipy.linalg.solve_triangular(self._Rpp, y, lower=False)
+        f_star = 0.5 * (fs + g2) - 0.5 * np.asarray(jnp.sum(y**2, 0))
+        return f_star, Fs, jnp.concatenate([Du, dP], 0)
+
+    def _elim_project(self, z, eps):
+        """p <- p*(u) (the weak Poisson solve) at the start; returns z."""
+        self._elim_set_Rpp(self._elim_Rpp_build(z, eps))
+        f_star, _, Dz = self._elim_trials(z, jnp.zeros((self.n_uc, 1)), eps)
+        self._log(f"    elim: start projection p -> p*(u), f* {float(f_star[0]):.6e}, "
+                  f"|dp|/|p| {float(jnp.linalg.norm(Dz[self.n_uc:, 0]) / max(float(jnp.linalg.norm(z[self.n_uc:])), 1e-300)):.2e}")
+        return z + Dz[:, 0]
+
+    def _elim_step(self, z, eps, decades):
+        """One LM / trust-region step on u with p eliminated (see above); returns as ``_qr_step``."""
+        n, nu, npc = self.n, self.n_uc, self.n_pc
+        sp = self.speed
+        t0 = time.time()
+        Ra = self._tsqr(z, eps, cperm=self._elim_cols)
+        t_qr = time.time() - t0
+        self._elim_set_Rpp(Ra[:npc, :npc])
+        cp = Ra[:npc, n]
+        T = Ra[npc:, npc:]  # QR of (I - P)[A_u | r]
+        R, c, rho = T[:nu, :nu], T[:nu, nu], float(T[nu, nu])
+        del Ra
+        cc = float(c @ c)
+        f_here = 0.5 * (cc + rho**2)
+        cp_rel = float(jnp.linalg.norm(cp)) / np.sqrt(float(cp @ cp) + cc + rho**2)
+        gn_share = cc / (cc + rho**2)
+        self._gn_last = gn_share
+        Dsc = self._scaling(jnp.concatenate([jnp.sum(R**2, axis=0), jnp.ones(npc)]))[:nu]
+        Sc = _Scale(L=self._phys_L()[:nu, :nu]) if sp.get("phys") else _Scale(D=Dsc)  # metric block diagonal
+        RD = Sc.cols(R)
+        del R
+        v = jnp.ones(nu) / np.sqrt(nu)
+        for _ in range(30):
+            v = RD.T @ (RD @ v)
+            lam = float(jnp.linalg.norm(v))
+            v = v / lam
+        Hs, gs = RD.T @ RD, RD.T @ c
+        trinfo = {}
+        if sp.get("tr") and self._Delta is not None:
+            d, fbest, Fbest, mu, trinfo = self._tr_step(z, eps, RD, c, Hs, gs, Sc, lam, f_here,
+                                                        trials=self._elim_trials)
+        else:
+            kds = list(np.arange(decades[0] - 3, decades[1] + 0.5, 2.0))
+            if sp.get("narrow") and self._kd_last is not None:
+                kds = [k for k in kds if abs(k - self._kd_last) <= 4.0]
+            steps, mus, kdl = [], [], []
+            for kd in kds:
+                mu = lam * 10.0 ** (-kd)
+                if sp.get("chol") and kd <= 10:
+                    y, ok = _damped_step(Hs, mu, gs)
+                    ok = bool(ok)
+                else:
+                    y, _Rt = _damped_qr(RD, c, np.sqrt(mu))
+                    del _Rt
+                    ok = bool(jnp.all(jnp.isfinite(y)))
+                if ok:
+                    steps.append(Sc.back(y))
+                    mus.append(mu)
+                    kdl.append(kd)
+            fs, Fs, Dz = self._elim_trials(z, jnp.stack(steps, 1), eps)
+            j = int(np.argmin(fs))
+            fbest, d, mu = float(fs[j]), Dz[:, j], mus[j]
+            self._kd_last = kdl[j]
+            if sp.get("tr"):
+                self._Delta, self._mu_tr = float(jnp.linalg.norm(Sc.inv(d[:nu]))), mu
+        del RD, Hs, gs
+        self._reload()
+        f_chk, F_chk = self.evaluate(self.to_x(z + d), eps)  # the accepted point, p re-solved
+        info = {"mu/lambda_max": mu / lam, "GN share": gn_share, "|c_p|/|r|": cp_rel,
+                "f* check": abs(f_chk - fbest) / max(abs(fbest), 1e-300), "qr time": t_qr, **trinfo}
+        return d, f_here, f_chk, F_chk, info
 
     def _chord_step(self, z, eps):
         """A step from the exact gradient at z with the kept Cholesky factor of the last QR step's
@@ -1713,6 +1886,11 @@ class HarmonicModel:
         hist = []
         self._steps, self._chord, self._kd_last, self._zhist = steps, None, None, []
         self._Delta, self._mu_tr = None, None  # speed tr: the trust radius (scaled variables), last mu
+        if self.speed.get("elim"):  # p eliminated: start from p = p*(u)
+            self._elim_check(steps)
+            fj, _ = self.evaluate(self.to_x(z), eps)
+            self._log(f"  eps {eps:g}: speed elim, joint f before the start projection {fj:.6e}")
+            z = self._elim_project(z, eps)
         f0, F0 = self.evaluate(self.to_x(z), eps)
         hist.append({"it": 0, "f": f0, "<|F|>/norm": F0, "time": 0.0})
         self._log(f"  eps {eps:g}: start f {f0:.6e}, <|F|>/norm {F0:.4e}")
@@ -1763,7 +1941,9 @@ class HarmonicModel:
             self._log(f"  it {it:2d} {kind:4s} f {f_new:.6e}  <|F|>/norm {F:.4e}  |dx|/|x| {h['|d|/|x|']:.2e}  "
                       f"rel {rel:.1e}  " + (f"lsqr {info['lsqr']} res {info['lsqr res']:.0e}  " if kind == "LSQR" else
                                             f"mu/lam {info['mu/lambda_max']:.0e}  GN share {info['GN share']:.1e}  "
-                                            + (f"ratio {info['tr ratio']:.2f} tries {info['tr tries']}  " if 'tr ratio' in info else ""))
+                                            + (f"ratio {info['tr ratio']:.2f} tries {info['tr tries']}  " if 'tr ratio' in info else "")
+                                            + (f"|c_p|/|r| {info['|c_p|/|r|']:.0e} f* chk {info['f* check']:.0e}  "
+                                               if '|c_p|/|r|' in info else ""))
                       + f"{h['time']:.0f} s")
             if callback is not None:
                 callback(self.to_x(z), hist)

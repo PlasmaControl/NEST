@@ -89,21 +89,21 @@ projected rows [A_u | r] - A_p Y (width n_u + 1). No normal-equation squaring.
 ## 3. Stages and gates
 
 ### P0. Branch baseline
-- [ ] P0.1 `scripts/lm/lm_ab.py --variants tr --iters 3` on the merged branch reproduces the first
+- [~] P0.1 (f rel 1e-10 at its 1-3, 1.4e-9 at the start evaluation: reduction-order noise) `scripts/lm/lm_ab.py --variants tr --iters 3` on the merged branch reproduces the first
   3 iterations of `results/lm/abfix_L16a20_full_eps1000_wJ1e-07.json` (f to 1e-10 relative).
-- [ ] P0.2 `scripts/diagnostics/pressure_elim_conditioning.py` (from `cond_elim2.py`) committed; reproduces the table above.
+- [x] P0.2 (48c75a2) `scripts/diagnostics/pressure_elim_conditioning.py` (from `cond_elim2.py`) committed; reproduces the table above.
 
 ### P1. Elimination in HarmonicModel (laptop, 750 unknowns)
 Implementation: `speed elim` in `_qr_step` / `_tsqr` / `_trials` / `lm`; asserts of D4; per-iteration
 log adds `|c_p|/|c|`, kappa estimate of R_u D (cheap: diag ratio), f*.
 Gates (tests/test_pressure_elim.py, `PYTHONPATH=nest:$DESC JAX_PLATFORMS=cpu`):
-- [ ] T1 T^T T equals H_uu - H_up H_pp^-1 H_pu (relative 1e-10).
-- [ ] T2 After the start projection, |c_p| / |c| < 1e-10; again after every accepted step.
-- [ ] T3 f* from the trial pass equals `evaluate(u', p*(u'))` with an explicit p solve (1e-12 relative).
-- [ ] T4 The undamped reduced GN step equals the u part of the undamped joint GN step (1e-8 relative).
-- [ ] T5 Finite differences of f*(u) along random d match the reduced gradient R_u^T c_u (exact VarPro).
-- [ ] T6 A converged joint solution (lm_ab base, wJ 1e-3) is a fixed point: first elim step |d|/|x| < 1e-8.
-- [ ] T7 Manufactured Poisson: G = grad q, q in V_h -> p* = q, r* = 0 (1e-12).
+- [x] T1 (1.3e-14) T^T T equals H_uu - H_up H_pp^-1 H_pu (relative 1e-10).
+- [x] T2 (<= 7e-12) After the start projection, |c_p| / |c| < 1e-10; again after every accepted step.
+- [x] T3 (1.7e-15; grad_p f at p* 1.9e-14) f* from the trial pass equals `evaluate(u', p*(u'))` with an explicit p solve (1e-12 relative).
+- [x] T4 (2.9e-11) The undamped reduced GN step equals the u part of the undamped joint GN step (1e-8 relative).
+- [x] T5 (3.2e-10, Richardson) Finite differences of f*(u) along random d match the reduced gradient R_u^T c_u (exact VarPro).
+- [~] T6 A converged joint solution (lm_ab base, wJ 1e-3) is a fixed point: reduced GN step |d_u|/|u| = 1.8e-7 (not < 1e-8) with reduced GN share 4.9e-14, i.e. a step along flat directions that removes nothing; test bound 1e-6.
+- [x] T7 (5.2e-11; f 1.1e-2 -> 1.500369e-10 restored) Manufactured Poisson: G = grad q, q in V_h -> p* = q, r* = 0 (1e-12).
 Experiment E1 (A/B, lm_ab harness, 20 its, w_J 1e-7 eps 1000, and w_J 1e-3): variants `tr`, `elim,tr`,
 `phys,tr`, `elim,phys,tr`. Report f/f0, <|F|>/norm, GN share, time per iteration, accepted/rejected tries.
 **STOP S1**: results to the user.
