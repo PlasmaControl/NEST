@@ -204,6 +204,37 @@ def _damped_step(Hs, mu, gs):
     return y, jnp.all(jnp.isfinite(y))
 
 
+class _Scale:
+    """The variables of the damped step: z-step d = S y, damping mu |y|^2.
+    Jacobi (default): S = diag(D). Physical metric (speed phys): S = L^-T with L L^T = M, the Gram
+    matrix of the columns' (J / rms J, p / rms p) at the collocation points, so that |y| is the
+    volume-weighted rms change of J and p. M is fixed by the tables (no field solves); it removes the
+    radial collinearity of the basis that a diagonal scaling cannot (2026-10-23, lm-trust)."""
+
+    def __init__(self, D=None, L=None):
+        self.D, self.L = D, L
+
+    def cols(self, R):  # R S
+        if self.L is None:
+            return R * self.D[None, :]
+        return jax.scipy.linalg.solve_triangular(self.L, R.T, lower=True).T
+
+    def back(self, y):  # S y
+        if self.L is None:
+            return self.D * y
+        return jax.scipy.linalg.solve_triangular(self.L, y, lower=True, trans="T")
+
+    def grad(self, g):  # S^T g
+        if self.L is None:
+            return self.D * g
+        return jax.scipy.linalg.solve_triangular(self.L, g, lower=True)
+
+    def inv(self, d):  # S^-1 d
+        if self.L is None:
+            return d / self.D
+        return self.L.T @ d
+
+
 class HarmonicModel:
     """Tables, constants and the dense LM (module docstring).
 
@@ -219,7 +250,7 @@ class HarmonicModel:
 
     def __init__(self, inp, cur, pre, fr, frac, margin=2.0, pert=None, weights=None,
                  chunk=2, batch_u=(4, 2), verbose=True, only=None, j_target=None, j_nodes="direct",
-                 j_mode="full", transport=None, rough=None, par=None):
+                 j_mode="full", transport=None, rough=None, par=None, moments=None, speed=None):
         t0 = time.time()
         self.inp, self.cur, self.pre, self.fr = inp, cur, pre, fr
         self.frac, self.margin, self.chunk, self.verbose = frac, margin, int(chunk), verbose
@@ -238,6 +269,14 @@ class HarmonicModel:
         # weight of the force component along B (= B . grad p, the equation that makes the surfaces):
         # rows swF (F + (par - 1) b b.F), b = B/|B| of the iterate (its derivative is of the order of F)
         self._par = 1.0 if par is None else float(par)
+        # solver speed options (each independent): chol, narrow, newton, gpus=G, reuse=k, fp32, profile
+        self.speed = dict(speed or {})
+        self._kd_last, self._chord, self._steps, self._gn_last = None, None, "qr", float("nan")
+        self._Delta, self._mu_tr = None, None
+        self._tcache, self._loaded = {}, False  # speed resident: the tables stay on the device(s)
+        # global moments of J_phi (objective.CurrentMoments: I_p, R_geo, Z_geo, V_eff / V) held at their
+        # targets (the start's): 4 rows w (m - target) / scale, weighted sums over all collocation points
+        self.mom = None if moments is None else dict({"w": 1.0, "which": ("I", "R", "Z", "V")}, **moments)
         # smoothness of the n >= 1 current: rows w (l / L)^q |J_k| / rms J_DESC u_k (no location)
         self.rough = None if rough is None else dict({"w": 1e-3, "q": 2}, **rough)
         self._j_target = None if j_target is None else np.asarray(j_target, dtype=float)
@@ -310,6 +349,9 @@ class HarmonicModel:
         self.sw3 = np.sqrt(w3)
         self.sw2 = np.sqrt(w3.sum(2))
         self.norm = float(fr.norm)
+        self._Vtot = float(dV.sum())
+        self._geoR = np.asarray(fr.geo.R).reshape(shape3)
+        self._geoZ = np.asarray(fr.geo.Z).reshape(shape3)
         d = fr.desc_fields()
         w = w3.ravel()
         self.rms = {k: float(np.sqrt(np.sum(w * np.sum(np.reshape(d[k], (len(w), -1)) ** 2, 1))))
@@ -527,7 +569,8 @@ class HarmonicModel:
         self._const = {k: padr(v) for k, v in (("sw3", self.sw3), ("swF", self.swF), ("swP", self.swP),
                                                 ("swJ", self.swJ), ("JD", self.JD), ("J_I", self.J_I),
                                                 ("B_I", self.B_I), ("B_coil", self.B_coil),
-                                                ("B_pert", self.B_pert))}
+                                                ("B_pert", self.B_pert), ("iR", 1.0 / self._geoR),
+                                                ("Zg", self._geoZ))}
         self._pad = pad
         self._sgn = {k: np.stack([v, -v], -1) for k, v in _PARITY.items()}  # (comps, P=2)
         blocks = [(b["kind"], b["n"], b["P"], b["sl"].start, b["sl"].stop) for b in self.blocks]
@@ -560,22 +603,39 @@ class HarmonicModel:
         self._rough_idx = np.flatnonzero(self._dvec)
         self._s, self._snorm = None, 1.0
 
-    def _chunk_tables(self, k):
+    def _devs(self):
+        g = int(self.speed.get("gpus", 1))
+        return jax.devices()[:g]
+
+    def _chunk_tables(self, k, dev=None):
+        if self.speed.get("resident") and dev is None and len(self._devs()) > 1:
+            dev = self._devs()[0]  # passes on the first device (gradient, evaluation): tables cached there
+        if self.speed.get("resident") and dev is not None:
+            key = (k, dev.id)
+            if key not in self._tcache:
+                self._tcache[key] = self._chunk_tables_build(k, dev)
+            return self._tcache[key]
+        return self._chunk_tables_build(k, dev)
+
+    def _chunk_tables_build(self, k, dev=None):
         r0, r1 = k * self.chunk, min((k + 1) * self.chunk, len(self.rho))
         out = []
         for T, D in zip(self.tables, self._dev):
             if D is not None:
-                out.append(D[k * self.chunk : (k + 1) * self.chunk])
+                sl = D[k * self.chunk : (k + 1) * self.chunk]
+                out.append(sl if dev is None else jax.device_put(sl, dev))
                 continue
             t = T[r0:r1]
             if r1 - r0 < self.chunk:
                 t = np.concatenate([t, np.zeros((self.chunk - (r1 - r0),) + t.shape[1:])])
-            out.append(jnp.asarray(t))
+            out.append(jnp.asarray(t) if dev is None else jax.device_put(t, dev))
         return tuple(out)
 
-    def _chunk_const(self, k):
+    def _chunk_const(self, k, dev=None):
         r0, r1 = k * self.chunk, (k + 1) * self.chunk
-        return {key: jnp.asarray(v[r0:r1]) for key, v in self._const.items()}
+        if dev is None:
+            return {key: jnp.asarray(v[r0:r1]) for key, v in self._const.items()}
+        return {key: jax.device_put(v[r0:r1], dev) for key, v in self._const.items()}
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def _synth(self, tables):
@@ -848,6 +908,11 @@ class HarmonicModel:
             gv.append(sc * (R - self._s))
             if jac:
                 rows.append(sc * JR)
+        if self.mom is not None:
+            r_m, G_m = self._mom_rows(z, eps, jac)
+            gv.append(r_m)
+            if jac:
+                rows.append(G_m)
         if self.rough is not None:
             ri = self._rough_idx
             gv.append(self._dvec_j[ri] * z[ri])
@@ -855,9 +920,91 @@ class HarmonicModel:
                 rows.append(jnp.zeros((len(ri), self.n)).at[jnp.arange(len(ri)), ri].set(self._dvec_j[ri]))
         return jnp.concatenate(gv), (jnp.concatenate(rows) if jac else None)
 
+    # --- current moments (a global, nonlinear-in-J row set)
+    _MOM_KEYS = ("I", "R", "Z", "V")
+
+    def _mom_sums(self, J, const):
+        """sum_points (w J_phi / R, w J_phi, w Z J_phi / R, w J_phi^2) of a chunk (..., 4)."""
+        w = const["sw3"] ** 2
+        Jp = J[..., 1]
+        return jnp.stack([jnp.sum(w * Jp * const["iR"]), jnp.sum(w * Jp),
+                          jnp.sum(w * const["Zg"] * Jp * const["iR"]), jnp.sum(w * Jp**2)])
+
+    def _mom_values(self, S):
+        """The moments (I, R, Z, V) from the sums S (..., 4), the selected ones (..., n_which)."""
+        s0, s1, sz, s2 = S[..., 0], S[..., 1], S[..., 2], S[..., 3]
+        m = {"I": self._Vtot / (2 * np.pi) * s0, "R": s1 / s0, "Z": sz / s0, "V": s1**2 / s2}
+        return jnp.stack([m[k] for k in self.mom["which"]], -1)
+
+    def _mom_resid(self, S):
+        return self.mom["w"] * (self._mom_values(S) - self._mom_t) / self._mom_scale
+
+    @functools.partial(jax.jit, static_argnums=(0, 5))
+    def _mom_chunk(self, tables, z, const, eps, jac):
+        cols = self._synth(tables)
+        J, B, p, gp, J0 = self._fields(cols, z, const, eps)
+        S = self._mom_sums(J, const)
+        if not jac:
+            return S, None
+        w = const["sw3"] ** 2
+        Jp = J[..., 1]
+        rows = []
+        for (kind, n, P, a, b), V in zip(self._blocks_static, cols):
+            if kind == "u":
+                dJp = V[..., 1, :]  # (c, t, z, k)
+                rows.append(jnp.stack([jnp.einsum("rtzk,rtz->k", dJp, w * const["iR"]),
+                                       jnp.einsum("rtzk,rtz->k", dJp, w),
+                                       jnp.einsum("rtzk,rtz->k", dJp, w * const["Zg"] * const["iR"]),
+                                       2.0 * jnp.einsum("rtzk,rtz->k", dJp, w * Jp)]))
+            else:
+                rows.append(jnp.zeros((4, b - a)))
+        return S, jnp.concatenate(rows, 1)
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _mom_trial_chunk(self, tables, z, D, const, eps):
+        cols = self._synth(tables)
+
+        def one(d):
+            J, B, p, gp, J0 = self._fields(cols, z + d, const, eps)
+            return self._mom_sums(J, const)
+
+        return jax.lax.map(one, D.T)  # (K, 4)
+
+    def _mom_total(self, z, eps, jac):
+        S, JS = 0.0, None
+        for k in range(self.n_chunks):
+            s_, js = self._mom_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps, jac)
+            S = S + s_
+            if jac:
+                JS = js if JS is None else JS + js
+        return S, JS
+
+    def _mom_rows(self, z, eps, jac):
+        """The moment residuals r (n_which) and, with ``jac``, their Jacobian (n_which, n)."""
+        S, JS = self._mom_total(z, eps, jac)
+        r = self._mom_resid(S)
+        if not jac:
+            return r, None
+        return r, jax.jacfwd(self._mom_resid)(S) @ JS
+
+    def _set_moment_target(self, x):
+        z = self.to_z(x)
+        S, _ = self._mom_total(z, 0.0, False)
+        which = self.mom["which"]
+        t = np.asarray(self._mom_values(S))
+        self._mom_t = jnp.asarray(t)
+        a = float(self.inp.a)
+        sc = {"I": abs(t[which.index("I")]) if "I" in which else 1.0, "R": a, "Z": a,
+              "V": abs(t[which.index("V")]) if "V" in which else 1.0}
+        self._mom_scale = jnp.asarray([sc[k] for k in which])
+        self._log("  moments " + ", ".join(f"{k} {v:.6g}" for k, v in zip(which, t))
+                  + f"; weight {self.mom['w']:g}")
+
     def set_source(self, x):
         """The transport source: the weak residual of the eps = 0 state x (so that it satisfies the
         transport equation exactly)."""
+        if self.mom is not None:
+            self._set_moment_target(x)
         if self.transport is None:
             return
         z = self.to_z(x)
@@ -896,6 +1043,21 @@ class HarmonicModel:
         # <|F|>/norm: sum sqrt(dV/V)^2 |F| / norm = sum sw3 |rF|
         Fa = jnp.sum(const["sw3"] * jnp.linalg.norm(rF0, axis=-1))
         return jnp.sum(rF**2) + jnp.sum(rJ**2) + jnp.sum(rP**2), Wp, Fa
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _bgp_chunk(self, tables, z, const, eps):
+        cols = self._synth(tables)
+        J, B, p, gp, J0 = self._fields(cols, z, const, eps)
+        Bn = jnp.linalg.norm(B, axis=-1)
+        return jnp.sum(const["sw3"] ** 2 * jnp.abs(jnp.sum(B * gp, -1)) / jnp.where(Bn > 0, Bn, 1.0))
+
+    def bgradp(self, x, eps):
+        """<|B . grad p| / |B|>_vol / norm at x: the part of the force along B, in the units of <|F|>/norm."""
+        z = self.to_z(x)
+        tot = 0.0
+        for k in range(self.n_chunks):
+            tot += float(self._bgp_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps))
+        return tot / self.norm
 
     def fields(self, x, eps):
         """J, B, p, grad p (cylindrical) and F at all collocation points, numpy, (n_r, n_t, n_z, .)."""
@@ -945,16 +1107,28 @@ class HarmonicModel:
         K = D.shape[1]
         fs, Ws, Fs = (np.zeros(K) for _ in range(3))
         R = 0.0
+        devs = self._devs() if (self.transport is None and self.mom is None and self.rough is None) else self._devs()[:1]
+        nd = len(devs)
+        zD = [(jax.device_put(z, d), jax.device_put(D, d)) for d in devs] if nd > 1 else [(z, D)]
+        outs = []
         for k in range(self.n_chunks):
-            tab, con = self._chunk_tables(k), self._chunk_const(k)
-            s, w_, Fa = self._trial_chunk(tab, z, D, con, eps)
-            fs, Ws, Fs = fs + np.asarray(s), Ws + np.asarray(w_), Fs + np.asarray(Fa)
+            g = k % nd
+            dev = devs[g] if nd > 1 else None
+            tab, con = self._chunk_tables(k, dev), self._chunk_const(k, dev)
+            outs.append(self._trial_chunk(tab, zD[g][0], zD[g][1], con, eps))  # async: summed below
             if self.transport is not None:
                 R = R + self._trial_R_chunk(tab, z, D, con, eps)  # (K, n_pc)
+        for s, w_, Fa in outs:
+            fs, Ws, Fs = fs + np.asarray(s), Ws + np.asarray(w_), Fs + np.asarray(Fa)
         g2 = (self.weights["W"] * (Ws - self.W_t) / self.W_t) ** 2
         if self.transport is not None:
             sc = self.transport["w"] / self._snorm
             g2 = g2 + np.asarray(jnp.sum((sc * (R - self._s[None])) ** 2, 1))
+        if self.mom is not None:
+            S = 0.0
+            for k in range(self.n_chunks):
+                S = S + self._mom_trial_chunk(self._chunk_tables(k), z, D, self._chunk_const(k), eps)
+            g2 = g2 + np.asarray(jnp.sum(self._mom_resid(S) ** 2, -1))
         if self.rough is not None:
             ri = self._rough_idx
             g2 = g2 + np.asarray(jnp.sum((self._dvec_j[ri, None] * (z[ri, None] + D[ri])) ** 2, 0))
@@ -975,9 +1149,17 @@ class HarmonicModel:
 
     def _evict(self):
         """Free the resident tables (the Gram step needs the room); ``_reload`` puts them back."""
+        if self.speed.get("resident"):
+            return
         self._dev = [None] * len(self._dev)
 
     def _reload(self):
+        if self.speed.get("resident") and self._loaded:
+            return
+        self._loaded = True
+        if len(self._devs()) > 1:  # several devices: the tables are streamed from the host to each
+            self._dev = [None] * len(self.tables)
+            return 0.0
         n_r = len(self.rho)
         pad = self.n_chunks * self.chunk - n_r
         budget = 0.9 * _device_bytes() - self.n**2 * 8 - 6e9  # beside the kept Cholesky factor
@@ -1063,60 +1245,565 @@ class HarmonicModel:
                                                  "mu/lambda_max": mu / P["lam"], "|g|": float(jnp.linalg.norm(b))}
 
     # --- QR (no normal equations: sigma_min / sigma_max ~ 1e-13 here, squared it is lost)
-    def _tsqr(self, z, eps, merge_rows=22000):
-        """R of [A | r] (n + 1, n + 1) by a streamed QR of the row blocks (with the <p> row), and f."""
+    def _tsqr(self, z, eps, merge_rows=None, cperm=None):
+        """R of [A | r] (n + 1, n + 1) by a streamed QR of the row blocks (with the <p> row), and f.
+        speed merge=M: rows per factorization (the QR runs at ~24 TFLOP/s whatever the block, and each
+        merge re-factors the n rows of R); gpus=G: one Python thread per device (the cuSOLVER calls
+        block the host thread, so one thread would run them one after the other), chunks round-robin,
+        the R factors merged on the first device; fp32: single precision. cperm: a column order of
+        [A | r] for the factorization (speed elim: [p | u | r])."""
+        from concurrent.futures import ThreadPoolExecutor
+        merge_rows = int(self.speed.get("merge", 22000)) if merge_rows is None else merge_rows
         self._evict()
+        prof = bool(self.speed.get("profile"))
+        self._tt = {}
+        tg = time.time()
         gv, G = self._global(z, eps)  # the global rows (<p>, transport, roughness), appended last
-        R, buf, nb = None, [], 0
-        for k in range(self.n_chunks):
-            blk, _, _ = self._rows_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps)
-            buf.append(blk)
-            nb += blk.shape[0]
-            if nb >= merge_rows or k == self.n_chunks - 1:
-                if k == self.n_chunks - 1:
-                    buf.append(jnp.concatenate([G, gv[:, None]], 1))
+        if prof:
+            self._tt["global"] = time.time() - tg
+        devs = self._devs()
+        nd = len(devs)
+        dt = jnp.float32 if self.speed.get("fp32") else None
+        cast = (lambda a: a.astype(dt)) if dt is not None else (lambda a: a)
+        zs = [jax.device_put(z, d) for d in devs] if nd > 1 else [z]
+
+        def leaf(g):
+            dev = devs[g] if nd > 1 else None
+            R, buf, nb = None, [], 0
+            t_rows = t_qr = 0.0
+            t_start = time.time()
+            for k in range(g, self.n_chunks, nd):
+                t0 = time.time()
+                blk, _, _ = self._rows_chunk(self._chunk_tables(k, dev), zs[g], self._chunk_const(k, dev), eps)
+                if cperm is not None:
+                    blk = blk[:, cperm]
+                if prof:
+                    jax.block_until_ready(blk)
+                    t_rows += time.time() - t0
+                buf.append(cast(blk))
+                nb += blk.shape[0]
+                if nb >= merge_rows:
+                    t0 = time.time()
+                    R = _qr_r(jnp.concatenate(([R] if R is not None else []) + buf))
+                    if prof:
+                        jax.block_until_ready(R)
+                        t_qr += time.time() - t0
+                    buf, nb = [], 0
+            if buf:
+                t0 = time.time()
                 R = _qr_r(jnp.concatenate(([R] if R is not None else []) + buf))
-                buf, nb = [], 0
+                if prof:
+                    jax.block_until_ready(R)
+                    t_qr += time.time() - t0
+            if prof:
+                self._tt[f"dev{g}"] = f"rows {t_rows:.2f} qr {t_qr:.2f} span {t_start % 1000:.1f}-{time.time() % 1000:.1f} nrows {nb}"
+            return jax.block_until_ready(R) if R is not None else None
+
+        tq = time.time()
+        if nd > 1:
+            with ThreadPoolExecutor(nd) as ex:
+                Rs = list(ex.map(leaf, range(nd)))
+        else:
+            Rs = [leaf(0)]
+        if prof:
+            self._tt["leaves"] = time.time() - tq
+        parts = [jax.device_put(R, devs[0]) if nd > 1 else R for R in Rs if R is not None]
+        Gr = jnp.concatenate([G, gv[:, None]], 1)
+        parts.append(cast(Gr if cperm is None else Gr[:, cperm]))
         del G
-        return R
+        R = _qr_r(jnp.concatenate(parts))
+        return R.astype(jnp.float64) if dt is not None else R
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _hess2_chunk(self, tables, z, const, eps):
+        """sum over the chunk's points of J_a . (B_b x v), v = swF^2 F: half of the residual-curvature
+        term sum_i r_i grad^2 r_i of the force rows (J x B is bilinear in the unknowns)."""
+        cols = self._synth(tables)
+        J, B, p, gp, J0 = self._fields(cols, z, const, eps)
+        v = const["swF"][..., None] ** 2 * (self._cross(J, B) - gp)
+        Jm = jnp.moveaxis(jnp.concatenate([V[..., :3, :] for (kind, *_), V in zip(self._blocks_static, cols)
+                                           if kind == "u"], -1), -1, 0)  # (K, c, t, z, 3)
+        Bm = jnp.moveaxis(jnp.concatenate([V[..., 3:, :] for (kind, *_), V in zip(self._blocks_static, cols)
+                                           if kind == "u"], -1), -1, 0)
+        X = self._cross(Bm, v[None])
+        return jnp.einsum("arstj,brstj->ab", Jm, X)
+
+    def _hess2(self, z, eps):
+        """The residual-curvature term of the Hessian on the u block, (n_uc, n_uc)."""
+        M = 0.0
+        for k in range(self.n_chunks):
+            M = M + self._hess2_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps)
+        return M + M.T
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _metric_chunk(self, tables, const):
+        """A chunk's share of M = sum_points w (J_i . J_j / rms_J^2 + p_i p_j / rms_p^2), (n, n)."""
+        cols = self._synth(tables)
+        X = []
+        for (kind, n, P, a, b), V in zip(self._blocks_static, cols):
+            if kind == "u":  # (c, t, z, 3, k) -> J / rms J, p part 0
+                X.append(jnp.concatenate([V[..., :3, :] / self.rms["J"], jnp.zeros_like(V[..., :1, :])], -2))
+            else:            # (c, t, z, 4, k): p, grad p -> J part 0, p / rms p
+                X.append(jnp.concatenate([jnp.zeros_like(V[..., 1:, :]), V[..., :1, :] / self.rms["p"]], -2))
+        X = jnp.concatenate(X, -1)
+        w = const["sw3"] ** 2
+        return jnp.einsum("rtzck,rtzcl->kl", X * w[..., None, None], X)
+
+    def _phys_L(self, jit=1e-10):
+        """Cholesky factor of the physical metric (built once: it depends only on the tables)."""
+        if getattr(self, "_Lm", None) is None:
+            t0 = time.time()
+            order = [a for (_, _, _, a, _) in self._blocks_static]
+            assert order == sorted(order) and self._blocks_static[-1][4] == self.n, "blocks not contiguous"
+            M = 0.0
+            for k in range(self.n_chunks):
+                M = M + self._metric_chunk(self._chunk_tables(k), self._chunk_const(k))
+            M = 0.5 * (M + M.T)
+            d = jnp.diag(M)
+            M = M.at[jnp.arange(self.n), jnp.arange(self.n)].add(jit * float(jnp.mean(d)))
+            self._Lm = jnp.linalg.cholesky(M)
+            ok = bool(jnp.all(jnp.isfinite(self._Lm)))
+            self._log(f"    physical metric: built in {time.time() - t0:.1f} s, diag min/max "
+                      f"{float(d.min()):.2e}/{float(d.max()):.2e}, jitter {jit:g} x mean, cholesky ok {ok}")
+            assert ok, "physical metric not positive definite: raise the jitter"
+            del M
+        return self._Lm
+
+    def _tr_step(self, z, eps, RD, c, Hs, gs, Sc, lam, f_here, max_tries=8, trials=None):
+        """Trust-region step (speed tr): y(mu) = -(Hs + mu I)^-1 gs with |y(mu)| = Delta in the scaled
+        variables of Sc (the physical rms change of J and p with speed phys), mu by safeguarded Newton on
+        the secular equation (one Cholesky per mu); the step evaluated exactly; DESC's radius rule (x2 above
+        ratio 0.75 on the boundary, 0.25 |y| below 0.25); a rejected step shrinks Delta and is retried.
+        As DESC: the undamped Gauss-Newton step when it fits in the radius (mu = 0), no floor on mu.
+        trials (speed elim): z, D (steps of the reduced variables) -> f, F and the full z-steps."""
+        n = Hs.shape[0]
+        Delta = self._Delta
+        mu = self._mu_tr if self._mu_tr else 1e-8 * lam
+        rho2 = max(2.0 * f_here - float(c @ c), 0.0)
+        ii = jnp.arange(n)
+
+        def solve(m):
+            L = jnp.linalg.cholesky(Hs.at[ii, ii].add(m))
+            return L, -jax.scipy.linalg.cho_solve((L, True), gs)
+
+        # DESC's exact-QR rule (desc.optimize.tr_subproblems.trust_region_step_exact_qr): the undamped
+        # Gauss-Newton step y_N = -(R D)^-1 c (one triangular solve; R D is upper triangular for both
+        # scalings) is taken whenever |y_N| <= Delta; otherwise mu on the boundary |y(mu)| = Delta. There is
+        # no floor on mu: the former floor 1e-13 lambda_max held every step of the production closure runs
+        # (2026-10-23) there and damped exactly the soft directions that carry K.
+        dr = jnp.diag(RD)
+        dri = jnp.where(dr == 0, 0.0, 1.0 / jnp.where(dr == 0, 1.0, dr))  # as solve_triangular_regularized
+        yN = -dri * jax.scipy.linalg.solve_triangular(RD * dri[:, None], c, lower=False, unit_diagonal=True)
+        nN = float(jnp.linalg.norm(yN))
+        mu_chol = 1e-10 * lam  # below this the Cholesky of Hs + mu I is not trusted (Hs squares kappa)
+        tries = 0
+        for _ in range(max_tries):
+            tries += 1
+            if np.isfinite(nN) and nN <= Delta:
+                y, ny, mu, hit = yN, nN, 0.0, False
+            else:
+                hit = True
+                L, y = solve(mu_chol)
+                ny = float(jnp.linalg.norm(y))
+                if np.isfinite(ny) and ny <= Delta:  # the root lies in (0, mu_chol): log bisection by QR
+                    lo, hi, yh, nh = 1e-12 * mu_chol, mu_chol, y, ny
+                    for _ in range(10):
+                        mid = np.sqrt(lo * hi)
+                        ym, _Rt = _damped_qr(RD, c, np.sqrt(mid))
+                        del _Rt
+                        nm = float(jnp.linalg.norm(ym))
+                        if np.isfinite(nm) and nm <= Delta:
+                            hi, yh, nh = mid, ym, nm
+                        else:
+                            lo = mid
+                        if nh >= 0.95 * Delta:
+                            break
+                    y, ny, mu = yh, nh, hi
+                else:  # the root lies above mu_chol: safeguarded Newton on the secular equation
+                    mu, lo, hi = max(mu, mu_chol), mu_chol, np.inf
+                    for _ in range(25):
+                        L, y = solve(mu)
+                        ny = float(jnp.linalg.norm(y))
+                        if not np.isfinite(ny):
+                            lo = mu
+                            mu = np.sqrt(mu * hi) if np.isfinite(hi) else 10.0 * mu
+                            continue
+                        phi = ny - Delta
+                        if abs(phi) <= 0.05 * Delta:
+                            break
+                        if phi > 0:
+                            lo = mu
+                        else:
+                            hi = mu
+                        q = jax.scipy.linalg.solve_triangular(L, y, lower=True)
+                        mu_new = mu + (ny / float(jnp.linalg.norm(q))) ** 2 * phi / Delta
+                        if not (np.isfinite(mu_new) and lo < mu_new < hi):
+                            mu_new = np.sqrt(lo * hi) if np.isfinite(hi) else 10 * mu
+                        mu = mu_new
+            d = Sc.back(y)
+            if trials is None:
+                fs, Fs = self._trials(z, d[:, None], eps)
+            else:
+                fs, Fs, Dz = trials(z, d[:, None], eps)
+                d = Dz[:, 0]
+            f_new, F_new = float(fs[0]), float(Fs[0])
+            r_lin = RD @ y + c
+            pred = f_here - 0.5 * (float(r_lin @ r_lin) + rho2)
+            ratio = (f_here - f_new) / pred if pred > 0 else 0.0
+            if not np.isfinite(ratio) or ratio < 0.25:
+                Delta = 0.25 * ny
+            elif ratio > 0.75 and hit:
+                Delta = max(2.0 * ny, Delta)
+            if f_new < f_here:
+                break
+        self._Delta, self._mu_tr = Delta, mu
+        return d, f_new, F_new, mu, {"tr ratio": float(ratio), "tr tries": tries, "Delta": float(Delta)}
 
     def _qr_step(self, z, eps, decades):
         """Exact LM steps from the QR of [A | r]: for each mu, the QR of [R D, c; sqrt(mu) I, 0];
-        each step evaluated exactly, the best kept (with its factor, the LSQR preconditioner)."""
+        each step evaluated exactly, the best kept (with its factor, the LSQR preconditioner).
+        Speed options: chol (Cholesky of (RD)^T RD + mu I for kd <= 10 instead of a QR per mu),
+        narrow (mu scan only around the last best), newton (+ D H2 D, the residual curvature)."""
+        if self.speed.get("elim"):
+            return self._elim_step(z, eps, decades)
         n = self.n
+        sp = self.speed
+        prof = bool(sp.get("profile"))
+        tm = {}
+
+        def tick(name, t0, *arrs):
+            if prof:
+                for a_ in arrs:
+                    jax.block_until_ready(a_)
+                tm[name] = tm.get(name, 0.0) + time.time() - t0
+
         self._prec = None
+        t0 = time.time()
         Ra = self._tsqr(z, eps)
+        tick("tsqr", t0, Ra)
         R, c = Ra[:n, :n], Ra[:n, n]
         f_here = 0.5 * float(c @ c + Ra[n, n] ** 2)
         # what a full Gauss-Newton step could still remove: f - |r_perp|^2 / 2, r_perp the part of r
         # outside the range of A (the exact linear model's minimum)
         gn_share = float(c @ c) / float(c @ c + Ra[n, n] ** 2)
+        self._gn_last = gn_share
         Dsc = self._scaling(jnp.sum(R**2, axis=0))
-        RD = R * Dsc[None, :]
+        if sp.get("phys"):  # damping in the physical (J, p) metric instead of Jacobi
+            assert self._steps == "qr" and not sp.get("newton"), "phys: QR steps only, without newton"
+            Sc = _Scale(L=self._phys_L())
+        else:
+            Sc = _Scale(D=Dsc)
+        RD = Sc.cols(R)
         del Ra, R
         v = jnp.ones(n) / np.sqrt(n)
         for _ in range(30):  # lambda_max of (R D)^T (R D)
             v = RD.T @ (RD @ v)
             lam = float(jnp.linalg.norm(v))
             v = v / lam
-        steps, mus = [], []
-        for kd in np.arange(decades[0] - 3, decades[1] + 0.5, 2.0):
-            mu = lam * 10.0 ** (-kd)
-            y, Rt = _damped_qr(RD, c, np.sqrt(mu))
-            del Rt
-            if bool(jnp.all(jnp.isfinite(y))):
-                steps.append(Dsc * y)
-                mus.append(mu)
-        D = jnp.stack(steps, 1)
+        chol = bool(sp.get("chol") or sp.get("newton") or sp.get("reuse") or sp.get("soc"))
+        Hs = gs = None
+        if chol:
+            t0 = time.time()
+            Hs = RD.T @ RD
+            gs = RD.T @ c
+            if sp.get("newton"):
+                assert self._par == 1.0
+                H2 = self._hess2(z, eps)
+                K = H2.shape[0]
+                Hs = Hs.at[:K, :K].add(Dsc[:K, None] * H2 * Dsc[None, :K])
+                del H2
+            tick("gram", t0, Hs)
+        use_tr = bool(sp.get("tr")) and self._Delta is not None
+        if use_tr:  # trust region: mu from |y(mu)| = Delta (the metric of Sc), exact trial, DESC radius rule
+            t0 = time.time()
+            if Hs is None:
+                Hs, gs = RD.T @ RD, RD.T @ c
+            d, fbest, Fbest, mu, trinfo = self._tr_step(z, eps, RD, c, Hs, gs, Sc, lam, f_here)
+            kdl, j = [float("nan")], 0
+            tick("tr", t0)
+        else:
+            t0 = time.time()
+            kds = list(np.arange(decades[0] - 3, decades[1] + 0.5, 2.0))
+            if sp.get("narrow") and self._kd_last is not None:
+                kds = [k for k in kds if abs(k - self._kd_last) <= 4.0]
+            steps, mus, kdl = [], [], []
+            for kd in kds:
+                mu = lam * 10.0 ** (-kd)
+                if chol and (kd <= 10 or sp.get("newton")):
+                    if sp.get("newton") and kd > 12:
+                        continue
+                    y, ok = _damped_step(Hs, mu, gs)
+                    ok = bool(ok)
+                else:
+                    y, Rt = _damped_qr(RD, c, np.sqrt(mu))
+                    del Rt
+                    ok = bool(jnp.all(jnp.isfinite(y)))
+                if ok:
+                    steps.append(Sc.back(y))
+                    mus.append(mu)
+                    kdl.append(kd)
+            D = jnp.stack(steps, 1)
+            tick("scan", t0, D)
+            t0 = time.time()
+            fs, Fs = self._trials(z, D, eps)
+            tick("trials", t0)
+            j = int(np.argmin(fs))
+            fbest, Fbest, d, mu = fs[j], Fs[j], D[:, j], mus[j]
+            self._kd_last = kdl[j]
+            del D
+            if sp.get("tr"):  # first iteration: the scan initializes the trust radius
+                self._Delta, self._mu_tr = float(jnp.linalg.norm(Sc.inv(d))), mu
+            trinfo = {}
+        if sp.get("soc"):  # second-order correction with the kept factor (the exact quadratic part q(d, d))
+            t0 = time.time()
+            L = jnp.linalg.cholesky(Hs.at[jnp.arange(n), jnp.arange(n)].add(mu))
+            y0, dcur = Sc.inv(d), d
+            rs0, gv0 = self._rvec(z, eps)
+            Gz = self._Gz
+            cands = []
+            for _ in range(int(sp["soc"]) if int(sp["soc"]) > 1 else 2):
+                rs1, gv1 = self._rvec(z + dcur, eps)
+                self._Gz = Gz
+                aq, aW = self._Av(z, dcur, eps)
+                q = [r1 - r0 - a_ for r1, r0, a_ in zip(rs1, rs0, aq)]
+                qg = gv1 - gv0 - aW
+                t = self._ATu(z, q, qg, eps)
+                dcur = Sc.back(y0 - jax.scipy.linalg.cho_solve((L, True), Sc.grad(t)))
+                cands.append(dcur)
+            del L, rs0, rs1, q
+            Dc = jnp.stack(cands + [0.5 * cands[-1]], 1)
+            fc, Fc = self._trials(z, Dc, eps)
+            jc = int(np.argmin(fc))
+            if fc[jc] < fbest:
+                fbest, Fbest, d = fc[jc], Fc[jc], Dc[:, jc]
+            tick("soc", t0)
+        if self._steps != "qr":  # the LSQR preconditioner
+            _, Rt = _damped_qr(RD, c, np.sqrt(mu))
+            self._prec = {"Rt": Rt, "Dsc": Dsc, "mu": mu, "lam": lam}
+        if sp.get("reuse"):
+            i = jnp.arange(n)
+            self._chord = {"L": jnp.linalg.cholesky(Hs.at[i, i].add(mu)), "Sc": Sc, "mu": mu, "lam": lam,
+                           "gn": gn_share, "age": 0}
+        del RD, Hs, gs
+        self._reload()
+        if prof:
+            self._log("    tsqr parts: " + ", ".join(f"{k} {v_ if isinstance(v_, str) else format(v_, '.2f')}"
+                                                    for k, v_ in getattr(self, "_tt", {}).items()))
+            self._log("    time: " + ", ".join(f"{k} {v_:.1f} s" for k, v_ in tm.items())
+                      + f"; kd {kdl[j]:g} of {len(kdl)} scanned")
+        return d, f_here, fbest, Fbest, {"mu/lambda_max": mu / lam, "GN share": gn_share, **trinfo}
+
+    # ------------------------------------------------------------------ speed elim: p eliminated
+    # The force rows are affine in p with constant coefficients (par = 1, w_pos = 0, no transport), so
+    # min_p |r(u, p)| is the weak Poisson equation of force balance with the force rows' weights,
+    #   sum_points w grad(phi_i) . grad p = sum_points w grad(phi_i) . (J x B)   (+ the constant <p> row),
+    # on the pressure space (p(1) = 0). The LM / trust-region step is taken on u alone with the reduced
+    # Jacobian (I - P) A_u (exact: P is constant): the trailing block of the QR of [A_p | A_u | r]. Every
+    # trial re-solves p exactly, so every accepted iterate has p = p*(u) (variable projection).
+    def _elim_check(self, steps="qr"):
+        sp = self.speed
+        bad = [k for k in ("newton", "soc", "reuse", "pproj", "accel") if sp.get(k)]
+        assert not bad, f"speed elim: not with {bad}"
+        assert steps == "qr", "speed elim: QR steps only"
+        assert self._par == 1.0, "speed elim: needs par = 1 (A_p depends on b otherwise)"
+        assert self.transport is None, "speed elim: not with transport (A_p depends on b)"
+        assert float(self.weights["pos"]) == 0.0, "speed elim: needs w_pos = 0 (p<0 rows are not affine in p)"
+        if not hasattr(self, "_elim_cols"):
+            nu, n = self.n_uc, self.n
+            self._elim_cols = np.r_[np.arange(nu, n), np.arange(nu), [n]]  # numpy: valid on every device (gpus=G)
+            self._Rpp, self._Gpp0 = None, None
+
+    def _elim_Rpp_build(self, z, eps):
+        """R of the constant A_p (force rows' p columns and the <p> row) by a streamed QR, p columns only."""
+        nu, n = self.n_uc, self.n
+        t0 = time.time()
+        self._global(z, eps, jac=False)  # sets self._gW
+        R, buf, nb = None, [], 0
+        for k in range(self.n_chunks):
+            blk, _, _ = self._rows_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps)
+            buf.append(blk[:, nu:n])
+            nb += blk.shape[0]
+            if nb >= 22000:
+                R, buf, nb = _qr_r(jnp.concatenate(([R] if R is not None else []) + buf)), [], 0
+        buf.append(self.wW * self._gW[None, nu:])
+        R = _qr_r(jnp.concatenate(([R] if R is not None else []) + buf))
+        self._log(f"    elim: R_pp ({self.n_pc}) built in {time.time() - t0:.1f} s, "
+                  f"diag min/max {float(jnp.abs(jnp.diag(R)).min()):.2e}/{float(jnp.abs(jnp.diag(R)).max()):.2e}")
+        return R
+
+    def _elim_set_Rpp(self, Rpp):
+        """Keep R_pp; check that A_p^T A_p is unchanged (it must be constant)."""
+        G = Rpp.T @ Rpp
+        if self._Gpp0 is None:
+            self._Gpp0 = G
+        else:
+            dev = float(jnp.linalg.norm(G - self._Gpp0) / jnp.linalg.norm(self._Gpp0))
+            if dev > 1e-10:
+                self._log(f"    elim WARNING: A_p^T A_p changed by {dev:.1e} (relative); is A_p constant?")
+        self._Rpp = Rpp
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _elim_trial_chunk(self, tables, z, D, const, eps):
+        """Per trial z + D[:, k]: |local rows|^2, the share of <p> and <|F|>, and A_p^T r of the local rows."""
+        cols = self._synth(tables)
+
+        def one(d):
+            J, B, p, gp, J0 = self._fields(cols, z + d, const, eps)
+            rF, rJ, rP, Wp, rF0 = self._residual(J, B, p, gp, J0, const)
+            Fa = jnp.sum(const["sw3"] * jnp.linalg.norm(rF0, axis=-1))
+            wF = self._wF(const, B, rF)
+            g = [-jnp.einsum("rtzck,rtzc->k", V[..., 1:, :], wF)
+                 for (kind, *_), V in zip(self._blocks_static, cols) if kind == "p"]
+            return jnp.sum(rF**2) + jnp.sum(rJ**2) + jnp.sum(rP**2), Wp, Fa, jnp.concatenate(g)
+
+        return jax.lax.map(one, D.T)
+
+    def _elim_trials(self, z, Du, eps):
+        """Trials u + Du[:, k] with p re-solved exactly: f*(u + Du_k), <|F|>/norm before the p update
+        (the accepted step is re-evaluated), and the full z-steps [Du_k; dp_k] (n, K)."""
+        nu = self.n_uc
+        K = Du.shape[1]
+        D = jnp.concatenate([Du, jnp.zeros((self.n_pc, K), Du.dtype)], 0)
+        fs, Ws, Fs, Gp = 0.0, 0.0, 0.0, 0.0
+        for k in range(self.n_chunks):
+            s, w_, Fa, g = self._elim_trial_chunk(self._chunk_tables(k), z, D, self._chunk_const(k), eps)
+            fs, Ws, Fs, Gp = fs + s, Ws + w_, Fs + Fa, Gp + g
+        fs, Ws, Fs = np.asarray(fs), np.asarray(Ws), np.asarray(Fs)
+        rW = self.weights["W"] * (Ws - self.W_t) / self.W_t
+        g2 = rW**2
+        if self.mom is not None:
+            S = 0.0
+            for k in range(self.n_chunks):
+                S = S + self._mom_trial_chunk(self._chunk_tables(k), z, D, self._chunk_const(k), eps)
+            g2 = g2 + np.asarray(jnp.sum(self._mom_resid(S) ** 2, -1))
+        if self.rough is not None:
+            ri = self._rough_idx
+            g2 = g2 + np.asarray(jnp.sum((self._dvec_j[ri, None] * (z[ri, None] + D[ri])) ** 2, 0))
+        gP = Gp + (self.wW * self._gW[nu:])[None, :] * jnp.asarray(rW)[:, None]  # (K, n_pc): A_p^T r
+        y = jax.scipy.linalg.solve_triangular(self._Rpp, gP.T, lower=False, trans="T")  # R_pp^-T A_p^T r
+        dP = -jax.scipy.linalg.solve_triangular(self._Rpp, y, lower=False)
+        f_star = 0.5 * (fs + g2) - 0.5 * np.asarray(jnp.sum(y**2, 0))
+        return f_star, Fs, jnp.concatenate([Du, dP], 0)
+
+    def _elim_project(self, z, eps):
+        """p <- p*(u) (the weak Poisson solve) at the start; returns z."""
+        self._elim_set_Rpp(self._elim_Rpp_build(z, eps))
+        f_star, _, Dz = self._elim_trials(z, jnp.zeros((self.n_uc, 1)), eps)
+        self._log(f"    elim: start projection p -> p*(u), f* {float(f_star[0]):.6e}, "
+                  f"|dp|/|p| {float(jnp.linalg.norm(Dz[self.n_uc:, 0]) / max(float(jnp.linalg.norm(z[self.n_uc:])), 1e-300)):.2e}")
+        return z + Dz[:, 0]
+
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def _prange_chunk(self, tables, z, const, eps):
+        J, B, p, gp, J0 = self._fields(self._synth(tables), z, const, eps)
+        return jnp.min(p), jnp.max(p)
+
+    def p_range(self, z, eps):
+        """min p and max p over the collocation points (p >= 0 is not enforced with speed elim)."""
+        lo, hi = np.inf, -np.inf
+        for k in range(self.n_chunks):
+            a, b = self._prange_chunk(self._chunk_tables(k), z, self._chunk_const(k), eps)
+            lo, hi = min(lo, float(a)), max(hi, float(b))
+        return lo, hi
+
+    def _elim_step(self, z, eps, decades):
+        """One LM / trust-region step on u with p eliminated (see above); returns as ``_qr_step``."""
+        n, nu, npc = self.n, self.n_uc, self.n_pc
+        sp = self.speed
+        t0 = time.time()
+        Ra = self._tsqr(z, eps, cperm=self._elim_cols)
+        t_qr = time.time() - t0
+        self._elim_set_Rpp(Ra[:npc, :npc])
+        cp = Ra[:npc, n]
+        T = Ra[npc:, npc:]  # QR of (I - P)[A_u | r]
+        R, c, rho = T[:nu, :nu], T[:nu, nu], float(T[nu, nu])
+        del Ra
+        cc = float(c @ c)
+        f_here = 0.5 * (cc + rho**2)
+        cp_rel = float(jnp.linalg.norm(cp)) / np.sqrt(float(cp @ cp) + cc + rho**2)
+        gn_share = cc / (cc + rho**2)
+        self._gn_last = gn_share
+        Dsc = self._scaling(jnp.concatenate([jnp.sum(R**2, axis=0), jnp.ones(npc)]))[:nu]
+        Sc = _Scale(L=self._phys_L()[:nu, :nu]) if sp.get("phys") else _Scale(D=Dsc)  # metric block diagonal
+        RD = Sc.cols(R)
+        del R
+        v = jnp.ones(nu) / np.sqrt(nu)
+        for _ in range(30):
+            v = RD.T @ (RD @ v)
+            lam = float(jnp.linalg.norm(v))
+            v = v / lam
+        Hs, gs = RD.T @ RD, RD.T @ c
+        trinfo = {}
+        if sp.get("tr") and self._Delta is not None:
+            d, fbest, Fbest, mu, trinfo = self._tr_step(z, eps, RD, c, Hs, gs, Sc, lam, f_here,
+                                                        trials=self._elim_trials)
+        else:
+            kds = list(np.arange(decades[0] - 3, decades[1] + 0.5, 2.0))
+            if sp.get("narrow") and self._kd_last is not None:
+                kds = [k for k in kds if abs(k - self._kd_last) <= 4.0]
+            steps, mus, kdl = [], [], []
+            for kd in kds:
+                mu = lam * 10.0 ** (-kd)
+                if sp.get("chol") and kd <= 10:
+                    y, ok = _damped_step(Hs, mu, gs)
+                    ok = bool(ok)
+                else:
+                    y, _Rt = _damped_qr(RD, c, np.sqrt(mu))
+                    del _Rt
+                    ok = bool(jnp.all(jnp.isfinite(y)))
+                if ok:
+                    steps.append(Sc.back(y))
+                    mus.append(mu)
+                    kdl.append(kd)
+            fs, Fs, Dz = self._elim_trials(z, jnp.stack(steps, 1), eps)
+            j = int(np.argmin(fs))
+            fbest, d, mu = float(fs[j]), Dz[:, j], mus[j]
+            self._kd_last = kdl[j]
+            if sp.get("tr"):
+                self._Delta, self._mu_tr = float(jnp.linalg.norm(Sc.inv(d[:nu]))), mu
+        del RD, Hs, gs
+        self._reload()
+        f_chk, F_chk = self.evaluate(self.to_x(z + d), eps)  # the accepted point, p re-solved
+        p_lo, p_hi = self.p_range(z + d, eps)
+        info = {"mu/lambda_max": mu / lam, "GN share": gn_share, "|c_p|/|r|": cp_rel, "p min/max": p_lo / p_hi,
+                "f* check": abs(f_chk - fbest) / max(abs(fbest), 1e-300), "qr time": t_qr, **trinfo}
+        return d, f_here, f_chk, F_chk, info
+
+    def _chord_step(self, z, eps):
+        """A step from the exact gradient at z with the kept Cholesky factor of the last QR step's
+        (scaled) Gauss-Newton matrix, evaluated exactly with its halvings."""
+        P = self._chord
+        g, f_here, _ = self._grad(z, eps)
+        d = P["Sc"].back(-jax.scipy.linalg.cho_solve((P["L"], True), P["Sc"].grad(g)))
+        D = jnp.stack([d, 0.5 * d, 0.25 * d, 0.125 * d], 1)
         fs, Fs = self._trials(z, D, eps)
         j = int(np.argmin(fs))
-        fbest, Fbest, d, mu = fs[j], Fs[j], D[:, j], mus[j]
-        del D
-        _, Rt = _damped_qr(RD, c, np.sqrt(mu))  # the factor of the best: the LSQR preconditioner
-        del RD
-        self._prec = {"Rt": Rt, "Dsc": Dsc, "mu": mu, "lam": lam}
-        self._reload()
-        return d, f_here, fbest, Fbest, {"mu/lambda_max": mu / lam, "GN share": gn_share}
+        P["age"] += 1
+        return D[:, j], f_here, fs[j], Fs[j], {"mu/lambda_max": P["mu"] / P["lam"], "GN share": P["gn"],
+                                               "chord": P["age"]}
+
+    def _pproj(self, z, eps, f_new, F):
+        """The exact minimization over p alone (the force rows are affine in p): z_p -= (A_p^T A_p)^-1 g_p,
+        the Cholesky factor of A_p^T A_p built once (A_p is constant); returns z, f, <|F|>/norm."""
+        n, n_uc = self.n, self.n_uc
+        if getattr(self, "_Hpp_L", None) is None:
+            t0 = time.time()
+            H = jnp.zeros((n - n_uc, n - n_uc))
+            for k in range(self.n_chunks):
+                blk, _, _ = self._rows_chunk(self._chunk_tables(k), z, self._chunk_const(k), 0.0)
+                Ap = blk[:, n_uc:n]
+                H = H + Ap.T @ Ap
+            H = H + self.wW**2 * jnp.outer(self._gW[n_uc:], self._gW[n_uc:]) if self._gW is not None else H
+            jit = 1e-9 * float(jnp.mean(jnp.diag(H)))
+            self._Hpp_L = jnp.linalg.cholesky(H + jit * jnp.eye(n - n_uc))
+            self._log(f"    pproj: A_p^T A_p built in {time.time() - t0:.1f} s")
+        g, f0, _ = self._grad(z, eps)
+        dp = -jax.scipy.linalg.cho_solve((self._Hpp_L, True), g[n_uc:])
+        z2 = z.at[n_uc:].add(dp)
+        f1, F1 = self.evaluate(self.to_x(z2), eps)
+        if f1 < f_new:
+            return z2, f1, F1
+        return z, f_new, F
 
     def _rvec(self, z, eps):
         """The local residuals (per chunk) and the global ones; keeps the global Jacobian at z."""
@@ -1211,6 +1898,13 @@ class HarmonicModel:
         (for problems too large to factor every iteration)."""
         z = self.to_z(x)
         hist = []
+        self._steps, self._chord, self._kd_last, self._zhist = steps, None, None, []
+        self._Delta, self._mu_tr = None, None  # speed tr: the trust radius (scaled variables), last mu
+        if self.speed.get("elim"):  # p eliminated: start from p = p*(u)
+            self._elim_check(steps)
+            fj, _ = self.evaluate(self.to_x(z), eps)
+            self._log(f"  eps {eps:g}: speed elim, joint f before the start projection {fj:.6e}")
+            z = self._elim_project(z, eps)
         f0, F0 = self.evaluate(self.to_x(z), eps)
         hist.append({"it": 0, "f": f0, "<|F|>/norm": F0, "time": 0.0})
         self._log(f"  eps {eps:g}: start f {f0:.6e}, <|F|>/norm {F0:.4e}")
@@ -1226,6 +1920,13 @@ class HarmonicModel:
                     kind = "QR"
                 elif info["lsqr"] >= 15:  # still a decrease, but refactor next time
                     self._prec = None
+            if kind == "QR" and self.speed.get("reuse") and self._chord is not None \
+                    and self._chord["age"] < int(self.speed["reuse"]) - 1:
+                dz, f_here, f_new, F, info = self._chord_step(z, eps)
+                if f_new < f_here:
+                    kind = "CHD"
+                else:  # a stale factor: a full QR step instead
+                    self._chord = None
             if kind == "QR":
                 dz, f_here, f_new, F, info = self._qr_step(z, eps, decades)
             if not f_new < f_here:
@@ -1233,12 +1934,31 @@ class HarmonicModel:
                 break
             rel = (f_here - f_new) / f_here
             z = z + dz
+            if self.speed.get("pproj"):  # p re-solved exactly for the new J (the force is affine in p)
+                z, f_new, F = self._pproj(z, eps, f_new, F)
+            if int(self.speed.get("accel", 0)) > 0:  # extrapolate along the last m steps, exact search
+                m_ = int(self.speed["accel"])
+                self._zhist = (getattr(self, "_zhist", []) + [z])[-(m_ + 1):]
+                if len(self._zhist) > m_:
+                    pdir = z - self._zhist[0]
+                    Dx = jnp.stack([al * pdir for al in (0.5, 1.0, 2.0, 4.0, 8.0)], 1)
+                    fx, Fx = self._trials(z, Dx, eps)
+                    jx = int(np.argmin(fx))
+                    if fx[jx] < f_new:
+                        z = z + Dx[:, jx]
+                        f_new, F = fx[jx], Fx[jx]
+                        self._zhist[-1] = z
+            rel = (f_here - f_new) / f_here
             h = {"it": it, "f": float(f_new), "<|F|>/norm": float(F), "|d|/|x|": float(jnp.linalg.norm(dz) / jnp.linalg.norm(z)),
                  "rel decrease": float(rel), "step": kind, "time": time.time() - t0, **info}
             hist.append(h)
             self._log(f"  it {it:2d} {kind:4s} f {f_new:.6e}  <|F|>/norm {F:.4e}  |dx|/|x| {h['|d|/|x|']:.2e}  "
                       f"rel {rel:.1e}  " + (f"lsqr {info['lsqr']} res {info['lsqr res']:.0e}  " if kind == "LSQR" else
-                                            f"mu/lam {info['mu/lambda_max']:.0e}  GN share {info['GN share']:.1e}  ")
+                                            f"mu/lam {info['mu/lambda_max']:.0e}  GN share {info['GN share']:.1e}  "
+                                            + (f"ratio {info['tr ratio']:.2f} tries {info['tr tries']}  " if 'tr ratio' in info else "")
+                                            + (f"|c_p|/|r| {info['|c_p|/|r|']:.0e} f* chk {info['f* check']:.0e}  "
+                                               f"p min/max {info['p min/max']:.1e}  "
+                                               if '|c_p|/|r|' in info else ""))
                       + f"{h['time']:.0f} s")
             if callback is not None:
                 callback(self.to_x(z), hist)

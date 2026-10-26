@@ -28,7 +28,13 @@ sys.path.insert(0, os.path.join(ROOT, "nest"))
 
 from desc import set_device  # noqa: E402
 
+_cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
 set_device(os.environ.get("NEST_DEVICE", "cpu"))
+if any("gpus=" in t for t in sys.argv):  # desc.set_device keeps one GPU: give the solver all it was allocated
+    if _cvd is None:
+        os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+    else:
+        os.environ["CUDA_VISIBLE_DEVICES"] = _cvd
 
 import jax  # noqa: E402
 import jax.numpy as jnp  # noqa: E402
@@ -63,7 +69,9 @@ def setup(a):
     kw = {"edge_power": ep} if ep != 2 else {}
     fac = tuple(run["factors"])
     cur3 = fit_cache.fit(BoundaryPotential, inp, factors=fac, N=a.N, **kw)
-    pre3 = fit_cache.fit(Pressure, inp, factors=fac, N=a.N, edge_order=2)
+    # the pressure space (speed elim: the space of the weak Poisson solve) may be richer than the current's
+    pfac = tuple(getattr(a, "p_factors", None) or fac)
+    pre3 = fit_cache.fit(Pressure, inp, factors=pfac, N=a.N, edge_order=2)
     if x2 is None:
         x = np.concatenate([cur3.u, pre3.c])
         nu, npp = harmonics(cur3, pre3)
@@ -87,11 +95,17 @@ def model_kwargs(a, run, cur, fr):
         weights["J"] = a.w_J
     if getattr(a, "w_W", None) is not None:
         weights["W"] = a.w_W
+    if getattr(a, "w_pos", None) is not None:
+        weights["pos"] = a.w_pos
     kw = {"weights": weights, "j_nodes": run.get("j_nodes") or "flux", "j_mode": getattr(a, "j_mode", "full")}
     if getattr(a, "transport", None):
         kw["transport"] = {"kappa": a.transport, "w": a.w_T}
     if getattr(a, "par", None):
         kw["par"] = a.par
+    if getattr(a, "speed", None):
+        kw["speed"] = {k: (int(v) if v.isdigit() else True) for k, _, v in (t.partition("=") for t in a.speed.split(","))}
+    if getattr(a, "moments", None):
+        kw["moments"] = {"w": a.moments}
     if getattr(a, "rough", None):
         kw["rough"] = {"w": a.rough, "q": a.rough_q}
     if a.base and run.get("j_target") == "start":
@@ -151,6 +165,8 @@ def main():
     ap.add_argument("--edge-power", type=int, default=3)
     ap.add_argument("--frac", type=int, default=320)
     ap.add_argument("--N", type=int, default=1, help="toroidal modes |n| <= N of J and p")
+    ap.add_argument("--p-factors", type=float, nargs=3, default=None,
+                    help="resolution factors of the pressure basis (default: --factors / the base run's)")
     ap.add_argument("--m", type=int, default=2)
     ap.add_argument("--n", type=int, default=-1, help="Phi = sin(m theta - n zeta): n = -1 resonates on q = 2")
     ap.add_argument("--eps", type=float, nargs="+", default=[0, 30, 100, 300, 1000], help="amplitudes [A]")
@@ -177,6 +193,9 @@ def main():
                          "embedded in these bases, when this scan has none yet")
     ap.add_argument("--w-J", type=float, default=None, help="the J term's weight (default: the base run's)")
     ap.add_argument("--w-W", type=float, default=None, help="the <p> term's weight (default: the base run's)")
+    ap.add_argument("--moments", type=float, default=None,
+                    help="weight of the current moments (I, R_geo, Z_geo, V_eff / V) held at the start's")
+    ap.add_argument("--w-pos", type=float, default=None, help="the p >= 0 term's weight (default: the base run's)")
     ap.add_argument("--j-mode", default="full", choices=["full", "n0"],
                     help="the J term on the full J (as the 2-D runs) or on its toroidal average only")
     ap.add_argument("--transport", type=float, default=None,
@@ -188,6 +207,9 @@ def main():
     ap.add_argument("--rough-q", type=float, default=2.0)
     ap.add_argument("--par", type=float, default=None,
                     help="weight of the force component along B (B . grad p = 0) against the rest of F")
+    ap.add_argument("--speed", default=None,
+                    help="solver speed options, comma separated: chol, narrow, newton, gpus=G, reuse=k, fp32, profile, "
+                         "phys (damping in the physical J, p metric instead of Jacobi; QR steps)")
     ap.add_argument("--name", default="isl")
     a = ap.parse_args()
     t0 = time.time()
@@ -264,8 +286,11 @@ def main():
 
         x, hist = model.lm(x, eps, iters=a.iters, rtol=a.rtol, callback=save, steps=a.steps, gn_tol=a.gn_tol)
         hist = save(x, hist, done=True)
+        bgp = model.bgradp(x, eps)
+        print(f"eps {eps:g} A: <|B.grad p|/|B|>/norm {bgp:.4e} (<|F|>/norm {hist[-1]['<|F|>/norm']:.4e}); last step: "
+              f"GN share {hist[-1].get('GN share', float('nan')):.3e}", flush=True)
         summary["runs"] = [r for r in summary["runs"] if r["eps"] != eps]
-        summary["runs"].append({"eps": eps, "f": hist[-1]["f"], "<|F|>/norm": hist[-1]["<|F|>/norm"],
+        summary["runs"].append({"eps": eps, "f": hist[-1]["f"], "<|F|>/norm": hist[-1]["<|F|>/norm"], "bgradp": bgp,
                                 "iters": len(hist) - 1, "time": time.time() - t1})
         summary["runs"].sort(key=lambda r: r["eps"])
         print(f"eps {eps:g} A: <|F|>/norm {hist[0]['<|F|>/norm']:.3e} -> {hist[-1]['<|F|>/norm']:.3e} in "
