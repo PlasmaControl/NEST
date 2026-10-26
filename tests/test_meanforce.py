@@ -178,6 +178,13 @@ def main():
     print(f"D dense [J L^-T | r] vs J L^-T y: {eD:.1e}, r {eR:.1e}")
     ok &= eD < 1e-10 and eR < 1e-14
 
+    # B: a bound sitting exactly at c = 0 with nu = 0 keeps its curvature row in the model
+    Wb = mf.Weights(0.7 * float(s0["M"]), float(s0["Bn_rms"]), float(s0["Psi"]), rho=1.0)
+    rb = mf.Rows(A, s0, Wb, ref["norm"])
+    nb = float(jnp.linalg.norm(rb.aB))
+    print(f"B penalty curvature row at c_B = 0, nu_B = 0: |a_B| {nb:.2e} (psi'_B {rb.d1[1]:.1e})")
+    ok &= nb > 0
+
     # R: the model's gradient is the merit's
     gL = rows.grad()
     v = rng.normal(size=A.n)

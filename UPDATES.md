@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-10-26: the step model keeps a bound's penalty curvature near the bound (branch closest-poisson)
+- First sweep (jobs 6203, 6204, cancelled): GLTR's radius collapsed at the start of outer 2, ratios down to -3e5. Stall diagnostic: Jacobian vs differences 4e-8, adjoint 5e-15; d'Hd = 4270 against d'(J^T J)d = 0.38 along the step. The B.n bound sat at c_B = 0 with nu_B = 0, so the model had neither B.n rows nor the penalty's curvature, and the steps pushed B.n above beta. Now the model's penalty-curvature rows use rho within `--band` 0.05 of a bound (`Weights.d2_model`); gradient unchanged. Gate added. Also: zero residual (at J_fit with inactive bounds) ends the inner solve instead of dividing by zero.
+- Resubmitted: gates 6230, retry smoke 6231, sweeps 6232 (QR), 6233 (GLTR).
+
 ## 2026-10-26: the three fixes of the health review, alpha sweep (branch closest-poisson)
 - QR trust region: an undamped Gauss-Newton step (mu = 0) whose model does not decrease is replaced by a damped one (mu = 1e-8 |R|_F^2, cut to the radius); these were all 20 rejected QR steps at alpha 0.7. Logged as "guard".
 - Outer loop: converged only when the constraints are met and the inner solve was stationary (its own stop, or |J - J_fit|^2 flat to `--stat-tol` 1e-3 over its last 10 accepted steps). The inner solve reports why it stopped.

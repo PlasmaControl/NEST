@@ -305,11 +305,13 @@ class Weights:
     """The AL's scalar parts at an iterate: multipliers nu, penalty rho, bounds, and
     the derivatives psi', psi'' that weight the rows."""
 
-    def __init__(self, eps, beta, Psi_t, nu=(0.0, 0.0, 0.0), rho=1.0, tau_frac=1e-3):
+    def __init__(self, eps, beta, Psi_t, nu=(0.0, 0.0, 0.0), rho=1.0, tau_frac=1e-3,
+                 band=0.05):
         self.eps, self.beta, self.Psi_t = float(eps), float(beta), float(Psi_t)
         self.nu = np.array(nu, float)
         self.rho = float(rho)
         self.tau_frac = tau_frac
+        self.band = band  # the model's penalty curvature also within this of the bound
 
     def constraints(self, s):
         return np.array([float(s["M"]) / self.eps - 1.0,
@@ -322,6 +324,14 @@ class Weights:
 
     def d1(self, c, nu):
         return max(0.0, nu + self.rho * c)
+
+    def d2_model(self, c, nu):
+        """The penalty curvature the step model uses: rho also when the constraint is
+        inactive but within ``band`` of its bound (c + nu / rho > -band). The exact
+        psi'' is 0 there, so a model without it cannot see a step that crosses the
+        bound (a bound sitting at c = 0 with nu = 0 made GLTR's radius collapse);
+        with it the model is conservative near the bound, and its gradient is unchanged."""
+        return self.rho if c + nu / self.rho > -self.band else 0.0
 
     def d2(self, c, nu):
         return self.rho if c + nu / self.rho > 0 else 0.0
@@ -359,8 +369,8 @@ class Rows:
                                   jnp.zeros(1)))
         self.grad_cB = self.linT((zeros_g, jnp.zeros(n3),
                                   2.0 * s["rel"] / (W.beta**2 * anchor.n_b), jnp.zeros(1)))
-        self.aF = np.sqrt(W.d2(c[0], W.nu[0])) * self.grad_cF
-        self.aB = np.sqrt(W.d2(c[1], W.nu[1])) * self.grad_cB
+        self.aF = np.sqrt(W.d2_model(c[0], W.nu[0])) * self.grad_cF
+        self.aB = np.sqrt(W.d2_model(c[1], W.nu[1])) * self.grad_cB
         sF3 = jnp.repeat(self.sF, 3)
         self.sF3 = sF3
         self.r = jnp.concatenate([s["g"], sF3 * s["z"].ravel(), self.sB * s["rel"],
@@ -492,6 +502,8 @@ class Solver:
                 qr_cache = None
             r = rows.r
             f_model0 = 0.5 * float(r @ r)
+            if f_model0 == 0.0:  # nothing to reduce (at J_fit with the bounds inactive)
+                return z, hist, "stationary"
             extra = {}
             if self.step == "gltr":
                 y, m_step, hit, k_cg, share, gn, mu_k = pw.lanczos_tr_step(
@@ -510,7 +522,7 @@ class Solver:
                     qr_cache = (R, cc, rp, time.time() - t1)
                 R, cc, rp, t_qr = qr_cache
                 f_lin = 0.5 * (float(cc @ cc) + rp**2)
-                share = float(cc @ cc) / (float(cc @ cc) + rp**2)
+                share = float(cc @ cc) / max(float(cc @ cc) + rp**2, 1e-300)
                 gn = float(jnp.linalg.norm(R.T @ cc))
                 y, mu, hit = pw.qr_tr_step(R, cc, self.Delta, self.mu)
                 rl = R @ y + cc

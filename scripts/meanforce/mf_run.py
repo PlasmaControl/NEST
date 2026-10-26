@@ -75,6 +75,8 @@ def main():
     ap.add_argument("--beta", type=float, default=4.53e-3, help="B.n / |B| rms bound (DESC's)")
     ap.add_argument("--max-disp", type=float, default=2e-3, help="re-anchor beyond this [m]")
     ap.add_argument("--rho0", type=float, default=1.0)
+    ap.add_argument("--band", type=float, default=0.05,
+                    help="the step model keeps a bound's penalty curvature within this of it")
     ap.add_argument("--maxiter", type=int, default=40, help="trust-region steps per inner solve")
     ap.add_argument("--max-outer", type=int, default=25)
     ap.add_argument("--gtol", type=float, default=1e-3)
@@ -189,7 +191,7 @@ def main():
     G_xi = Fb.T @ Fb / Fb.shape[0]
     A_u = A.A_table()
     L1, HJ = mf.metric(A_u, np.asarray(s0["sw"]), rmsJ, G_xi, 1.0)
-    W = mf.Weights(a.alphas[0] * M_desc, a.beta, Psi_t, rho=a.rho0)
+    W = mf.Weights(a.alphas[0] * M_desc, a.beta, Psi_t, rho=a.rho0, band=a.band)
     if a.kappa is None:  # mean diag of J^T J in the metric variables: xi's equal to u's
         rows = mf.Rows(A, s0, W, norm)
         rng = np.random.default_rng(0)
