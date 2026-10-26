@@ -2,6 +2,9 @@
 
 One entry per commit, newest first.
 
+## 2026-10-26: radial distribution of the force error (branch closest-poisson)
+- `scripts/meanforce/radial_force.py`, `plot_radial.py`: |F|/norm per coordinate surface and per rho range, and each range's share of M, for DESC, NEST's start and the alpha 0.7 end states (`results/meanforce/radial_a40.json`, `figures/meanforce/radial_a40.png`). End state vs DESC: 2.0-2.4x lower for rho < 0.6, equal at 0.6-0.95, 2-5x lower for rho > 0.95; 86% of the gain over DESC's M comes from rho > 0.95. Section added to `docs/meanforce_gltr_a40.md`.
+
 ## 2026-10-26: mean-force runs at alpha 0.7, GLTR and QR (branch closest-poisson)
 - NCSX_fb_L16M16N12, NEST 16/16/12, annulus a/40, free boundary (Stellar-AI jobs 6149, 6150): both reach M = 0.70 M_DESC (from 5.74) with |J - J_fit|/rms 1.50e-2 (GLTR) / 1.49e-2 (QR), B.n/|B| 4.53e-3 = beta, Psi within 4e-4; Hessians positive on the tangent space. Annulus B.n vs direct Biot-Savart on the same points: 7e-5 rms (`scripts/meanforce/bn_check.py`). Health review `docs/meanforce_gltr_a40.md`, `scripts/meanforce/health.py`, figures `figures/meanforce/`. Fixed: the inner step budget now holds across re-anchorings; per-step progress in the JSON; `run_sai_cyl.sbatch` excludes sai-n01g4.
 

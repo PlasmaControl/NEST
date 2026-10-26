@@ -149,3 +149,23 @@ sbatch --qos=gpu-medium --time=24:00:00 run_sai_cyl.sbatch scripts/meanforce/mf_
 ```bash
 python scripts/meanforce/health.py gltr=results/meanforce/gltr_a40.json --out figures/meanforce/health
 ```
+
+## Where the force error is (`scripts/meanforce/radial_force.py`)
+
+|F|/norm averaged over each coordinate surface ρ = const (volume-weighted over θ, ζ at the 25 collocation radii) and over ρ ranges, for DESC's own solution (its |F| on NEST's points), NEST's start and the two end states. Each state uses its own flux coordinates: the moved geometry for the end states. NEST's B need not lie on these surfaces, so this is an average over the coordinate surface, not a flux-surface average. Data: `results/meanforce/radial_a40.json` (Stellar-AI job 6173).
+
+![radial](../figures/meanforce/radial_a40.png)
+
+| ρ range | volume | DESC mean | NEST start mean | end (GLTR) mean | DESC part of M | end part of M |
+|---|---|---|---|---|---|---|
+| 0–0.6 | 37% | 2.9–3.5e-4 | 2.3–4.1e-3 | 1.2–1.8e-4 | 1.10e-4 | 0.56e-4 |
+| 0.6–0.95 | 56% | 3.8e-4 … 1.6e-3 | 2.6e-3 … 7.2e-3 | 3.7e-4 … 1.5e-3 | 4.39e-4 | 4.57e-4 |
+| 0.95–0.98 | 4% | 3.1e-3 | 1.5e-2 | 1.6e-3 | 1.18e-4 | 0.59e-4 |
+| 0.98–1 | 4% | 5.9e-3 | 2.6e-2 | 1.2e-3 | 2.08e-4 | 0.41e-4 |
+| all (M) | | 8.76e-4 | 5.04e-3 | 6.13e-4 | | |
+
+- **Against NEST's start:** the reduction is everywhere, 8–23× in every range. It is largest in the core (28×) and at the edge (23×).
+- **Against DESC:** the end state is 2.0–2.4× below DESC in the core (ρ < 0.6), about equal to DESC at 0.6–0.95 (0.95–1.2× DESC's), and 2–5× below DESC for ρ > 0.95.
+- **Where the gain over DESC comes from:** M is 2.64e-4 below DESC's. Of that, 2.27e-4 (86%) comes from the outer 5% in ρ (8% of the volume) and 0.55e-4 from the core. The mid-radius band is slightly worse (+0.18e-4).
+- **The edge advantage is partly structural.** NEST's current vanishes on the LCFS (edge factor) and p* = 0 there, so |F| → 0 at ρ = 1 by construction. DESC's |F| rises to its largest values there. The max over each surface shows the same: NEST's end state has its largest |F| (≈ 2e-2) at ρ ≈ 0.97, where DESC's is 3e-2 to 3e-1.
+- **The 0.6–0.95 band, where the islands and rational surfaces sit (iota 0.5 at ρ = 0.59, 0.6 at ρ = 0.80), is where the end state is no better than DESC.** At α < 0.7 it is where further reduction must come from.
