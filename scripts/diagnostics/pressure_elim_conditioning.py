@@ -65,8 +65,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--p-factors", nargs="*", default=["1.5,1.5,1", "2,2,1"])
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "lm", "pressure_elim_conditioning.json"))
+    ap.add_argument("--eq", default=None)
+    ap.add_argument("--factors", type=float, nargs=3, default=None)
+    ap.add_argument("--frac", type=int, default=None)
     a = ap.parse_args()
-    stage = np.load(os.path.join(ROOT, "results", "lm", "L16a20_full_stage_eps1000_wJ0.001.npz"))["x"]
+    lm_ab.configure(a.eq, a.factors, a.frac)
+    stage = np.load(os.path.join(ROOT, "results", "lm", lm_ab.prefix("full") + "_stage_eps1000_wJ0.001.npz"))["x"]
     out = {}
 
     def report(tag, r):
@@ -81,6 +85,7 @@ def main():
     cur, pre1 = c["cur"], c["pre"]
     for pf in a.p_factors:
         fac = tuple(float(v) for v in pf.split(","))
+        fac = tuple(f * g for f, g in zip(fac, lm_ab.CONFIG["factors"]))  # relative to the current factors
         pre = fit_cache.fit(Pressure, c["inp"], factors=fac, N=1, edge_order=2)
         m = HarmonicModel(c["inp"], cur, pre, c["fr"], c["run"]["frac"], 2.0, pert=c["pert"],
                           weights={"J": 1e-7, "J_rho": None, "W": 0.0, "pos": 0.0}, j_nodes="flux",

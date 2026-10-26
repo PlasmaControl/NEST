@@ -41,14 +41,29 @@ from harmonic_dense import HarmonicModel  # noqa: E402
 from perturbation import Perturbation  # noqa: E402
 
 TOK = os.path.join(ROOT, "desc_input", "tokamak_free_boundary")
+# the laptop model (default) or a larger one: configure(eq, factors, frac) before the first build
+CONFIG = {"eq": "tokamak_L16M16", "factors": (1.0, 1.0, 1.0), "frac": 20}
+
+
+def configure(eq=None, factors=None, frac=None):
+    for k, v in (("eq", eq), ("factors", factors), ("frac", frac)):
+        if v is not None:
+            CONFIG[k] = tuple(float(q) for q in v) if k == "factors" else (int(v) if k == "frac" else v)
+
+
+def prefix(j_mode):
+    """File prefix of the model's states: L16a20_<j_mode> for the default, else <eq>_f<factors>_a<frac>_<j_mode>."""
+    if CONFIG == {"eq": "tokamak_L16M16", "factors": (1.0, 1.0, 1.0), "frac": 20}:
+        return f"L16a20_{j_mode}"
+    return f"{CONFIG['eq'].replace('tokamak_', '')}_f{'-'.join(f'{v:g}' for v in CONFIG['factors'])}_a{CONFIG['frac']}_{j_mode}"
 OUT = os.path.join(ROOT, "results", "lm")
 
 
 def build(wJ, j_mode, setup_cache={}, p_factors=None):  # noqa: B006
     if not setup_cache:
-        a = types.SimpleNamespace(base=None, eq=os.path.join(TOK, "tokamak_L16M16_fb.h5"),
-                                  coils=os.path.join(TOK, "tokamak_L16M16_field.h5"), factors=(1.0, 1.0, 1.0),
-                                  edge_power=3, frac=20, N=1)
+        a = types.SimpleNamespace(base=None, eq=os.path.join(TOK, CONFIG["eq"] + "_fb.h5"),
+                                  coils=os.path.join(TOK, CONFIG["eq"] + "_field.h5"), factors=CONFIG["factors"],
+                                  edge_power=3, frac=CONFIG["frac"], N=1)
         inp, cur, pre, x0, fr, run = isl_scan.setup(a)
         g = TensorGrid(np.asarray(fr.tgrid.rho), np.asarray(fr.tgrid.theta), np.array([0.0]), inp.eq.NFP)
         tc = TensorCurrent(cur.S, cur._RZ, g, factored=True)
@@ -92,12 +107,16 @@ def main():
     ap.add_argument("--tag", default="ab")
     ap.add_argument("--p-factors", type=float, nargs=3, default=None,
                     help="pressure basis factors of the A/B model (base and stage use the default 1 1 1)")
+    ap.add_argument("--eq", default=None, help="tokamak_free_boundary/<eq>_fb.h5 and <eq>_field.h5 (default tokamak_L16M16)")
+    ap.add_argument("--factors", type=float, nargs=3, default=None, help="current basis factors (default 1 1 1)")
+    ap.add_argument("--frac", type=int, default=None, help="annulus spacing a / frac (default 20)")
     ap.add_argument("--start", default="stage", choices=["stage", "base"],
                     help="A/B start: the eps stage state (default) or the eps = 0 base (solves the stage)")
     a = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
     t0 = time.time()
-    pre = f"L16a20_{a.j_mode}"
+    configure(a.eq, a.factors, a.frac)
+    pre = prefix(a.j_mode)
     m0, c = build(a.wJ_base, a.j_mode)
     xb = converge(m0, c["x0"], 0.0, f"{pre}_base_wJ{a.wJ_base:g}")
     xs = converge(m0, xb, a.eps, f"{pre}_stage_eps{a.eps:g}_wJ{a.wJ_base:g}")
