@@ -78,7 +78,13 @@ def main():
     ap.add_argument("--maxiter", type=int, default=40, help="trust-region steps per inner solve")
     ap.add_argument("--max-outer", type=int, default=25)
     ap.add_argument("--gtol", type=float, default=1e-3)
-    ap.add_argument("--cg", type=int, default=100, help="GLTR: Lanczos iterations at most")
+    ap.add_argument("--cg", type=int, default=200, help="GLTR: Lanczos iterations at most")
+    ap.add_argument("--stat-tol", type=float, default=1e-3,
+                    help="outer convergence also needs |J - J_fit|^2 flat to this (relative) over "
+                         "the last 10 accepted inner steps, or the inner solve's own stop")
+    ap.add_argument("--retries", type=int, default=3,
+                    help="a bound not met: go to the geometric mean of it and the last one met, then "
+                         "retry it; at most this many retries in the sweep, then stop")
     ap.add_argument("--cg-tol", type=float, default=1e-2)
     ap.add_argument("--chunk", type=int, default=64, help="unit vectors per batch (columns)")
     ap.add_argument("--hessian-k", type=int, default=40, help="Lanczos steps (0: none)")
@@ -244,7 +250,9 @@ def main():
                        reanchor=reanchor, cg_tol=a.cg_tol, cg_maxiter=a.cg,
                        stall_dir=os.path.dirname(a.out) or ".", run_name=name)
     z = z0
-    for alpha in a.alphas:
+    queue, last_ok, retries = list(a.alphas), None, 0
+    while queue:
+        alpha = queue.pop(0)
         t1 = time.time()
         W.eps = alpha * M_desc
         print(f"alpha {alpha}: eps {W.eps:.4e}", flush=True)
@@ -264,7 +272,7 @@ def main():
         solver.on_step = on_step
 
         z, outer = solver.solve_alpha(z, max_outer=a.max_outer, maxiter=a.maxiter, gtol=a.gtol,
-                                      callback=cb)
+                                      callback=cb, stat_tol=a.stat_tol)
         A = solver.A
         s = A.state(z)
         f, phi, c = W.merit(s)
@@ -277,7 +285,9 @@ def main():
                       "|J-J_fit|/rms": float(np.sqrt(2 * phi)), "iota": io.tolist(),
                       "max|D| in anchor [m]": dmax_of(A)(xi), "anchors": state["k"],
                       "stalls": solver.stalls, "galerkin": float(s["galerkin"]),
-                      "slope dPhi/deps": -W.nu[0] / W.eps})
+                      "slope dPhi/deps": -W.nu[0] / W.eps,
+                      "feasible": bool(c[0] <= 1e-2 and c[1] <= 2e-2 and abs(c[2]) <= 1e-2),
+                      "stationary": bool(outer[-1]["stationary"])})
         eq_f = A.extra[3].apply(xi)
         tag = f"{a.out}_a{alpha:g}"
         eq_f.save(tag + "_eq.h5")
@@ -297,11 +307,22 @@ def main():
               f"{entry['Bn/|B| rms']:.3e} (direct {bn['Bn/|B| rms']:.3e}), Psi/Psi_t "
               f"{1 + c[2]:.5f}, nu {W.nu}, rho {W.rho:.1e}, anchors {state['k']}", flush=True)
         dump()
-        if a.hessian_k > 0:
+        if a.hessian_k > 0 and entry["feasible"]:
             t2 = time.time()
             entry["hessian"] = mf.hessian_lanczos(A, W, z, met, norm, k=a.hessian_k)
             entry["hessian"]["time"] = time.time() - t2
             dump()
+        if entry["feasible"]:
+            last_ok = alpha
+        else:
+            print(f"alpha {alpha} not met (c = {c})", flush=True)
+            if last_ok is None or retries >= a.retries:
+                print("sweep stopped", flush=True)
+                break
+            retries += 1
+            # a smaller step from the last bound met, then the missed bound again, then on
+            queue = [float(np.sqrt(last_ok * alpha)), alpha] + queue
+            print(f"  retry at alpha {queue[0]:.4g}", flush=True)
     print(f"saved {a.out}.json; total {time.time() - t0:.0f} s, GPU peak {peak():.1f} GB",
           flush=True)
 

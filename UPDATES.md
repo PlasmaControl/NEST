@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-26: the three fixes of the health review, alpha sweep (branch closest-poisson)
+- QR trust region: an undamped Gauss-Newton step (mu = 0) whose model does not decrease is replaced by a damped one (mu = 1e-8 |R|_F^2, cut to the radius); these were all 20 rejected QR steps at alpha 0.7. Logged as "guard".
+- Outer loop: converged only when the constraints are met and the inner solve was stationary (its own stop, or |J - J_fit|^2 flat to `--stat-tol` 1e-3 over its last 10 accepted steps). The inner solve reports why it stopped.
+- GLTR: Lanczos cap 200 (`--cg`). Sweep: a bound not met goes to the geometric mean of it and the last one met, then retries it (`--retries` 3 in all), then stops; per-alpha `feasible`, `stationary`; Hessian only for met bounds.
+- Sweep 0.7, 0.5, 0.3, 0.2, 0.1, 0.05 at a/40, both methods (Stellar-AI jobs 6203 QR, 6204 GLTR), after the gates (6201) and a retry smoke run (6202).
+
 ## 2026-10-26: radial distribution of the force error (branch closest-poisson)
 - `scripts/meanforce/radial_force.py`, `plot_radial.py`: |F|/norm per coordinate surface and per rho range, and each range's share of M, for DESC, NEST's start and the alpha 0.7 end states (`results/meanforce/radial_a40.json`, `figures/meanforce/radial_a40.png`). End state vs DESC: 2.0-2.4x lower for rho < 0.6, equal at 0.6-0.95, 2-5x lower for rho > 0.95; 86% of the gain over DESC's M comes from rho > 0.95. Section added to `docs/meanforce_gltr_a40.md`.
 

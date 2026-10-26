@@ -514,8 +514,19 @@ class Solver:
                 gn = float(jnp.linalg.norm(R.T @ cc))
                 y, mu, hit = pw.qr_tr_step(R, cc, self.Delta, self.mu)
                 rl = R @ y + cc
+                guard = False
+                if mu == 0.0 and not float(rl @ rl) < float(cc @ cc):
+                    # the undamped Gauss-Newton step of a near-singular R is unreliable
+                    # (its model does not decrease): a damped step, mu = 1e-8 |R|_F^2
+                    guard = True
+                    mu = 1e-8 * float(jnp.sum(R * R))
+                    y = pw._damped_qr(R, cc, np.sqrt(mu))
+                    ny_ = float(jnp.linalg.norm(y))
+                    if ny_ > self.Delta:
+                        y, hit = y * (self.Delta / ny_), True
+                    rl = R @ y + cc
                 m_step = f_model0 - f_lin + 0.5 * (float(rl @ rl) + rp**2)
-                extra = {"mu": float(mu), "t_qr": t_qr}
+                extra = {"mu": float(mu), "t_qr": t_qr, "guard": guard}
             d = met.back(y)
             ny = float(jnp.linalg.norm(y))
             z_new = z + d
@@ -570,14 +581,17 @@ class Solver:
                     h["reanchor"] = True
                     return z, hist, "reanchor"
                 if dec < ftol or share < gn_tol or gn < gtol * g_first:
-                    break
+                    return z, hist, "stationary"
             elif self.Delta < 1e-14:
-                break
-        return z, hist, "done"
+                return z, hist, "radius"
+        return z, hist, "budget"
 
     def solve_alpha(self, z, max_outer=25, tol=(1e-2, 2e-2, 1e-2), maxiter=40, rho_max=1e8,
-                    gtol=1e-3, callback=None):
-        """AL outer loop at one bound eps (``self.W.eps``)."""
+                    gtol=1e-3, callback=None, stat_tol=1e-3, stat_window=10):
+        """AL outer loop at one bound eps (``self.W.eps``). Converged when the three
+        constraints are met to ``tol`` and the inner solve was stationary: it stopped on
+        its own tests, or |J - J_fit|^2 / 2 changed by less than ``stat_tol`` (relative)
+        over its last ``stat_window`` accepted steps."""
         W = self.W
         outer = []
         viol_prev = np.inf
@@ -596,20 +610,26 @@ class Solver:
                 self.log(f"  re-anchored in {time.time() - t0:.0f} s")
             s, f, phi, c = self.evaluate(z)
             viol = max(max(c[0], 0.0), max(c[1], 0.0) / 2.0, abs(c[2]))
+            phis = [h["phi"] for h in hist if h["accepted"]]
+            flat = (len(phis) > stat_window
+                    and abs(phis[-stat_window - 1] - phis[-1]) <= stat_tol * abs(phis[-1]))
+            stationary = status == "stationary" or flat
             nu_old = W.nu.copy()
             W.nu = np.array([W.d1(c[0], W.nu[0]), W.d1(c[1], W.nu[1]), W.nu[2] + W.rho * c[2]])
             o = {"outer": k, "rho": W.rho, "nu_before": nu_old.tolist(), "nu": W.nu.tolist(),
                  "c": c.tolist(), "phi": phi, "M": float(s["M"]), "rmsF": float(s["rmsF"]),
                  "Bn_rms": float(s["Bn_rms"]), "Psi": float(s["Psi"]), "viol": viol,
-                 "galerkin": self.A.galerkin(s), "inner": hist}
+                 "galerkin": self.A.galerkin(s), "inner stop": status, "flat": bool(flat),
+                 "stationary": bool(stationary), "inner": hist}
             outer.append(o)
             self.log("  outer {:2d} rho {:.1e}: M/eps {:.4f} Bn/beta {:.4f} dPsi {:+.2e} "
-                     "phi {:.6e} nu {} galerkin {:.1e} ({} inner)".format(
+                     "phi {:.6e} nu {} galerkin {:.1e} ({} inner, {}{})".format(
                          k, W.rho, 1 + c[0], np.sqrt(max(1 + c[1], 0)), c[2], phi,
-                         np.array2string(W.nu, precision=3), o["galerkin"], len(hist)))
+                         np.array2string(W.nu, precision=3), o["galerkin"], len(hist), status,
+                         ", flat" if flat else ""))
             if callback is not None:
                 callback(z, s, outer)
-            if c[0] <= tol[0] and c[1] <= tol[1] and abs(c[2]) <= tol[2] and k > 0:
+            if c[0] <= tol[0] and c[1] <= tol[1] and abs(c[2]) <= tol[2] and k > 0 and stationary:
                 break
             if viol > 0.25 * viol_prev and W.rho < rho_max:
                 W.rho *= 10.0
