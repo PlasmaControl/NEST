@@ -142,12 +142,16 @@ class Anchor:
     (held across anchors); ``norm``: DESC's <|grad |B|^2 / 2 mu0|>_vol; ``chunk``:
     unit vectors per batch of the column builds."""
 
-    def __init__(self, fields, u0, rmsJ, norm, chunk=64, rank_tol=1e-12, log=print):
+    def __init__(self, fields, u0, rmsJ, norm, chunk=64, rank_tol=1e-12, log=print,
+                 tan_chunk=None):
         self.fields, self.log = fields, log
         self.n_u, self.n_p, self.n_xi = fields.n_u, fields.n_p, fields.n_xi
         self.n = self.n_u + self.n_xi
         self.u0 = jnp.asarray(u0)
         self.rmsJ, self.norm, self.chunk = float(rmsJ), float(norm), int(chunk)
+        # vectors per batch of field-solve products (tables, xi columns): the annulus'
+        # memory per product grows with its size, the local columns' does not
+        self.tan_chunk = int(tan_chunk or chunk)
         self.n_pts = len(fields.phi)
         self.n_b = fields.n_bnd
         # the pressure columns kept: rank check at xi = 0
@@ -188,9 +192,9 @@ class Anchor:
         E = np.eye(self.n_u)
         keys = ("J", "B", "Bn", "B_bnd", "Psi")
         parts = {k: [] for k in keys}
-        for i in range(0, self.n_u, self.chunk):
-            e = np.zeros((min(self.chunk, self.n_u - i), self.fields.n))
-            e[:, : self.n_u] = E[i : i + self.chunk]
+        for i in range(0, self.n_u, self.tan_chunk):
+            e = np.zeros((min(self.tan_chunk, self.n_u - i), self.fields.n))
+            e[:, : self.n_u] = E[i : i + self.tan_chunk]
             d = _tan_batch(self.fields, jnp.asarray(e), base)
             for k in keys:
                 parts[k].append(d[k])
@@ -422,8 +426,9 @@ class Rows:
         LxT = LxiT_inv
         cols = []
         aux = _aux(s, A)
-        for i in range(0, A.n_xi, A.chunk):
-            V = jnp.zeros((min(A.chunk, A.n_xi - i), A.n)).at[:, n_u:].set(LxT[:, i : i + A.chunk].T)
+        for i in range(0, A.n_xi, A.tan_chunk):
+            V = jnp.zeros((min(A.tan_chunk, A.n_xi - i), A.n)).at[:, n_u:].set(
+                LxT[:, i : i + A.tan_chunk].T)
             dg, dz_, drel_, dP_ = _xi_cols(A.fields, V, aux, n_u, A.n_p)
             cols.append(jnp.concatenate([dg, self.sF3[None] * dz_, self.sB * drel_,
                                          self.sP * dP_.reshape(-1, 1),
@@ -486,7 +491,12 @@ class Solver:
         f, phi, c = self.W.merit(s)
         return s, f, phi, c
 
-    def inner(self, z, maxiter=40, ftol=1e-12, gn_tol=1e-8, gtol=1e-3, hist=None):
+    def inner(self, z, maxiter=40, ftol=1e-12, gn_tol=1e-8, gtol=1e-3, hist=None,
+              flat_tol=None, flat_window=10):
+        """Trust-region steps on L_A at fixed multipliers. Stops on its own tests
+        ("stationary", also when L_A changed by less than ``flat_tol`` relative over the
+        last ``flat_window`` accepted steps), when the radius vanishes ("radius"), at the
+        step budget ("budget") or for a re-anchoring ("reanchor")."""
         met, W = self.met, self.W
         s, f, phi, c = self.evaluate(z)
         hist = [] if hist is None else hist
@@ -594,6 +604,10 @@ class Solver:
                     return z, hist, "reanchor"
                 if dec < ftol or share < gn_tol or gn < gtol * g_first:
                     return z, hist, "stationary"
+                fs = [e["f_new"] for e in hist if e["accepted"]]
+                if (flat_tol is not None and len(fs) > flat_window
+                        and abs(fs[-flat_window - 1] - fs[-1]) <= flat_tol * abs(fs[-1])):
+                    return z, hist, "stationary"
             elif self.Delta < 1e-14:
                 return z, hist, "radius"
         return z, hist, "budget"
@@ -611,7 +625,8 @@ class Solver:
             hist = []
             while True:  # one budget of maxiter steps across the re-anchorings
                 z, hist, status = self.inner(z, maxiter=maxiter - len(hist), hist=hist,
-                                             gtol=gtol)
+                                             gtol=gtol, flat_tol=0.1 * stat_tol,
+                                             flat_window=stat_window)
                 if status != "reanchor" or len(hist) >= maxiter:
                     break
                 t0 = time.time()

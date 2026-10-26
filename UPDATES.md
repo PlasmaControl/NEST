@@ -2,6 +2,13 @@
 
 One entry per commit, newest first.
 
+## 2026-10-26: inner flat stop, --start, field-solve batch scaled with the annulus (branch closest-poisson)
+- `Solver.inner(flat_tol)`: stops once L_A is flat to 0.1 stat_tol over 10 accepted steps (the QR sweep spent ~25 steps at a converged alpha 0.3 shrinking its radius to 4e-9).
+- `mf_run.py --start <out>_a<alpha>`: continue from a saved state and its geometry (targets, rms J_fit and metric from DESC's start), for a/100, a/120 from the a/40 states.
+- `Anchor(tan_chunk)`, `--tan-chunk` (default 32 (40/frac)^3, at most 32): the a/80 QR job (6280) needed 186 GB for 32 xi columns at once; resubmitted as 6298. a/60 QR peaks at 137 GB.
+- Probes: a/100 301 M nodes, 53 GB GPU, 74 GB host, 3.5-5.3 min per GLTR step; a/120 518 M nodes, 76 GB, 124 GB, 5.8-8.8 min (vs ~40 s at a/40).
+- Gates pass on Stellar-AI (6295); start-from-state smoke (6296) reproduces the saved state's M, B.n, Psi.
+
 ## 2026-10-26: alpha 0.7 re-run after the fixes; the convergence studies submitted (branch closest-poisson)
 - Sweep jobs 6232 (QR), 6233 (GLTR) at a/40: both stop alpha 0.7 on the stationarity test; |J - J_fit|/rms 1.4882e-2 (QR), 1.4868e-2 (GLTR), within 0.1% (0.35% before); M = 0.700 M_DESC, B.n = beta, Psi within 3e-5. GLTR still loses ~3 steps at the start of an outer iteration (B.n at its bound with nu_B = 0: the penalty grows like |step|^4 there, which no quadratic model sees); the trust region recovers.
 - `scripts/meanforce/submit_studies.sh`: study 1 (a/20, a/60, a/80, QR and GLTR) and study 2 (GLTR, L = M 20, 24) submitted as jobs 6276-6283; L = M 28 and 16/16/16 wait for gpu-medium slots (10 submitted jobs per user); probes a/100, a/120 (6285, 6286, gpu-short).

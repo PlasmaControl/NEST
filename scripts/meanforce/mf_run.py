@@ -89,10 +89,17 @@ def main():
                          "retry it; at most this many retries in the sweep, then stop")
     ap.add_argument("--cg-tol", type=float, default=1e-2)
     ap.add_argument("--chunk", type=int, default=64, help="unit vectors per batch (columns)")
+    ap.add_argument("--tan-chunk", type=int, default=None,
+                    help="vectors per batch of field-solve products (tables, xi columns); default "
+                         "32 (40 / frac)^3, the annulus' size relative to a/40 (a/80: 4)")
     ap.add_argument("--hessian-k", type=int, default=40, help="Lanczos steps (0: none)")
     ap.add_argument("--kappa", type=float, default=None,
                     help="metric weight of xi (default: probed so the columns match u's)")
     ap.add_argument("--psi-target", default="start", choices=["start", "desc"])
+    ap.add_argument("--start", default=None,
+                    help="continue from a saved state: <out>_a<alpha> of another run (its .npz: u, "
+                         "nu, rho; its _eq.h5: the geometry). Gates, targets, rms J_fit and the "
+                         "metric still come from DESC's start, as in the run it came from")
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "meanforce", "run"))
     a = ap.parse_args()
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
@@ -130,6 +137,7 @@ def main():
     del fr_r, dF
 
     grid0 = annulus(inp0, inp0.a / a.frac, a.pad, a.N_phi)
+    tan_chunk = a.tan_chunk or max(1, min(32, int(32 * (40 / a.frac) ** 3)))
     state = {"solver": None, "eq": eq0, "k": 0}
 
     def make(eq_k, x_u):
@@ -146,7 +154,7 @@ def main():
                                     mode_chunk=a.mode_chunk, cyl_fused=True, cyl_rblock=a.rblock,
                                     cyl_order=a.interp_order or None)
         state["solver"] = fields.solver
-        A = mf.Anchor(fields, cur0.u, 1.0, norm, chunk=a.chunk)
+        A = mf.Anchor(fields, cur0.u, 1.0, norm, chunk=a.chunk, tan_chunk=tan_chunk)
         A.info = {"anchor": state["k"], "setup [s]": time.time() - t1}
         if a.method == "qr":
             A.info["tables [s]"] = A.build_tables(jnp.asarray(x_u))
@@ -247,11 +255,36 @@ def main():
         dump()
         return An, zn
 
+    z = z0
+    if a.start is not None:  # the saved state's geometry as the first anchor, xi = 0
+        import desc.io
+        st = np.load(a.start + ".npz")
+        eq_s = desc.io.load(a.start + "_eq.h5")
+        release(*A.extra[:3])
+        A.tables = None
+        del A.extra
+        jax.clear_caches()
+        gc.collect()
+        state["k"] += 1
+        A = make(eq_s, np.asarray(st["u"]))
+        A.rmsJ = rmsJ
+        z = jnp.concatenate([jnp.asarray(st["u"]), jnp.zeros(A.n_xi)])
+        W.nu, W.rho = np.asarray(st["nu"], float), float(st["rho"])
+        s1 = A.state(z)
+        run["start state"] = {"from": a.start, "M/M_desc": float(s1["M"]) / M_desc,
+                              "Bn/|B| rms": float(s1["Bn_rms"]), "Psi": float(s1["Psi"]),
+                              "|J-J_fit|/rms": float(jnp.sqrt(jnp.sum(s1["g"] ** 2))),
+                              "nu": W.nu.tolist(), "rho": W.rho}
+        print(f"start from {a.start}: M/M_desc {run['start state']['M/M_desc']:.4f}, B.n/|B| "
+              f"{float(s1['Bn_rms']):.4e}, Psi {float(s1['Psi']):.6f}, |J - J_fit|/rms "
+              f"{run['start state']['|J-J_fit|/rms']:.4e} (on this annulus)", flush=True)
+        del s1
+        dump()
+
     name = os.path.basename(a.out)
     solver = mf.Solver(A, met, W, norm, step=a.method, dmax=dmax_of(A), max_disp=a.max_disp,
                        reanchor=reanchor, cg_tol=a.cg_tol, cg_maxiter=a.cg,
                        stall_dir=os.path.dirname(a.out) or ".", run_name=name)
-    z = z0
     queue, last_ok, retries = list(a.alphas), None, 0
     while queue:
         alpha = queue.pop(0)
