@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-26: NCSX pointwise force bound: augmented Lagrangian, matrix-free GLTR and multi-GPU QR trust regions
+- `nest/pointwise.py`: min |J - J_fit|^2 s.t. |F(x_i)|/norm <= eps at every collocation point, p free; augmented Lagrangian (smoothed plus function), trust region in the physical metric of J and p, solved either matrix-free (Lanczos/GLTR on the annulus Fields) or dense (QR of the stacked Jacobian by jaxmg/cuSOLVERMp, DESC's exact-QR rule); exact Hessians and diagnostics. `nest/pointwise_tables.py`: column tables (J, B_plasma, p per coefficient).
+- `scripts/pointwise/`: tables, runs, Hessians, Poincare on the annulus field, cross-resolution check, plots, summary tables, QR benchmark; `run_mg.sbatch` (jaxmg, one process per GPU, env `nest_mg`), `run_sai_bash.sbatch`; `run_sai.sbatch` excludes `sai-n01g4` (GPU 2 fails cuInit).
+- `tests/test_pointwise.py`: adjoint, exact Hessian vs differences (1e-10), GLTR and QR reach the same optimum.
+- Report `docs/pointwise_al_ncsx.md` (figures in `figures/pointwise/`); plan of the next study `docs/mean_force_poisson_plan.md`.
+
 ## 2026-10-21: DSHAPE islands: the force-only runs' states, sections and logs from Stellar
 - `results/isl/<name>_eps<eps>.npz/.json` and `<name>_sections.npz` of `a120n1`, `a120n2` (eps 0-1000 A), `a120w2`, `a120w4`; the scans' logs of Stellar (`results/isl/logs/stellar/`, XLA warnings removed). The base `results/gs/hN_a120D_iter.{json,npz}` is now Stellar's original (the copy of the previous commit was regenerated on Stellar AI).
 
