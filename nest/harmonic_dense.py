@@ -1610,7 +1610,7 @@ class HarmonicModel:
         assert float(self.weights["pos"]) == 0.0, "speed elim: needs w_pos = 0 (p<0 rows are not affine in p)"
         if not hasattr(self, "_elim_cols"):
             nu, n = self.n_uc, self.n
-            self._elim_cols = jnp.asarray(np.r_[np.arange(nu, n), np.arange(nu), [n]])
+            self._elim_cols = np.r_[np.arange(nu, n), np.arange(nu), [n]]  # numpy: valid on every device (gpus=G)
             self._Rpp, self._Gpp0 = None, None
 
     def _elim_Rpp_build(self, z, eps):

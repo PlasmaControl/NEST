@@ -2,6 +2,19 @@
 
 One entry per commit, newest first.
 
+## 2026-10-27: speed elim on larger laptop models (L-ladder), production hand-off (branch pressure-poisson)
+- `lm_ab.py --eq --factors --frac` (default file names unchanged), `pressure_elim_conditioning.py` likewise (its --p-factors now relative to the current factors), `scripts/diagnostics/pressure_elim_conditioning_isl.py` (isl_scan model + a scan state, device SVDs; for production), `docs/pressure_poisson_handoff.md` (sbatch lines). `_elim_cols` is a numpy index (valid with gpus=G).
+- Ladder:
+
+| model (current basis, a/h, unknowns) | kappa phys w_J 1e-3: joint / reduced | kappa phys w_J 1e-7: joint / reduced | f/f0 after 30 its, w_J 1e-7: phys,tr / elim,phys,tr / elim + p 1.5x | s/it (same three) | its (time) to converge w_J 1e-3: phys,tr / elim,phys,tr |
+|---|---|---|---|---|---|
+| L16M16 f1, a/20, 750 | 7.2e3 / 275 | 2.4e5 / 1.4e4 | 0.527 / 0.424 / 0.378 | 3.5 / 3.6 / 5.6 | 21 (65 s) / 11 (48 s) |
+| L16M16 f1.5 (L24), a/30, 1,554 | 1.45e4 / 277 | 1.0e6 / 3.0e4 | 0.464 / 0.409 / 0.330 | 18 / 18 / 33 | 24 (390 s) / 9 (186 s) |
+| L32M32 f1 (L32, production eq), a/40, 2,646 | 2.3e4 / 283 | 2.5e6 / 4.7e4 | 0.471 / 0.288 / 0.280 | 109 / 108 / 200 | 18 (1926 s) / 16 (1685 s) |
+- f0: the joint start (the w_J 1e-3 stage state); both variants reach the same converged f at w_J 1e-3 (2.534e-10 at L32).
+The reduced kappa at w_J 1e-3 is flat in L (275, 277, 283) while the joint one grows (~L^1.6). At w_J 1e-7 both grow
+(the w_J floor), the reduced one ~50x lower at L32. `results/lm/lad_*`, `lad_cond_*`.
+
 ## 2026-10-26: `--p-factors` (pressure space decoupled from the current basis), T8, the pressure ladder E2 (branch pressure-poisson)
 - `isl_scan.py --p-factors`, `lm_ab.py --p-factors` (states of the default space embedded), `lm_ab.py` saves each variant's final state; `HarmonicModel.p_range` and `p min/max` in the elim log line.
 - T8 (weak Poisson, manufactured q outside every V_h, pole at x = 1.15): error 2.3e-3, 2.4e-4, 2.8e-5, 3.9e-7, 5.6e-9 at L 8, 12, 16, 24, 32 (0.11-0.12 per +4 in L).

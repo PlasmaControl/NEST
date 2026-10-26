@@ -156,6 +156,9 @@ E1 result (30 its; `results/lm/e1_*.json`):
   L32 / L64 a/120 production bases (16k unknowns).
 - [ ] sbatch lines for the collaborator: A/B `tr` vs `elim,tr` vs `elim,phys,tr` from a120Cn2d1000,
   w_J 1e-7, 30 its, streaming logs (as `docs/lm_solver_handoff.md`).
+- [x] Local L-ladder (overnight 2026-10-26, no remote jobs): models L16 / L24 / L32 (production eq), see
+  `docs/pressure_poisson_handoff.md` section 2. Production-size conditioning: `scripts/diagnostics/pressure_elim_conditioning_isl.py`
+  (isl_scan setup, state npz, device SVDs); production commands in the hand-off section 3.
 **STOP S3** before any GPU or cluster job.
 
 ### P4. Deferred (not in scope until S3)
