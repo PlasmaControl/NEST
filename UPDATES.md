@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-10-26: QR forced re-anchor on a collapsed radius; flat test ignores vanishing steps (branch closest-poisson)
+- a/20 QR (6276) at alpha 0.05 stalled: |g| 0.19 with the radius at 2e-13 and ratios 0.05-0.18 at tiny steps, i.e. a wrong model gradient: QR's u columns are the anchor's tables (exact at xi = 0), off by O(xi) once the boundary has moved (1.85 mm), and near a hard optimum that error dominates. Its "flat" test took the stall for convergence (|J - J_fit|/rms 0.205 against 6.5e-2 at alpha 0.1; not a valid point of the front).
+- Now: QR re-anchors (exact tables) when the radius is below 1e-8 with accepted ratios < 0.25 and the boundary moved; "flat" (outer and inner) does not count when the radius has collapsed. a/20 QR alpha 0.05 redone from its 0.1 state (6370); gates 6369. L = M = 28 GLTR submitted.
+
 ## 2026-10-26: inner flat stop, --start, field-solve batch scaled with the annulus (branch closest-poisson)
 - `Solver.inner(flat_tol)`: stops once L_A is flat to 0.1 stat_tol over 10 accepted steps (the QR sweep spent ~25 steps at a converged alpha 0.3 shrinking its radius to 4e-9).
 - `mf_run.py --start <out>_a<alpha>`: continue from a saved state and its geometry (targets, rms J_fit and metric from DESC's start), for a/100, a/120 from the a/40 states.

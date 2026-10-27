@@ -602,10 +602,19 @@ class Solver:
                 if dm > self.max_disp and self.reanchor is not None:
                     h["reanchor"] = True
                     return z, hist, "reanchor"
+                # QR's u columns come from the anchor's tables (exact at xi = 0, off by
+                # O(xi) after): when the radius has collapsed with small ratios while the
+                # boundary has moved, the model's gradient is that error. Re-anchor (exact
+                # tables) instead of stalling.
+                if (self.step == "qr" and self.reanchor is not None and self.Delta < 1e-8
+                        and ratio < 0.25 and dm > 1e-5):
+                    h["reanchor"], h["forced reanchor"] = True, True
+                    self.log("    radius collapsed with the boundary moved: re-anchoring")
+                    return z, hist, "reanchor"
                 if dec < ftol or share < gn_tol or gn < gtol * g_first:
                     return z, hist, "stationary"
                 fs = [e["f_new"] for e in hist if e["accepted"]]
-                if (flat_tol is not None and len(fs) > flat_window
+                if (flat_tol is not None and len(fs) > flat_window and self.Delta > 1e-8
                         and abs(fs[-flat_window - 1] - fs[-1]) <= flat_tol * abs(fs[-1])):
                     return z, hist, "stationary"
             elif self.Delta < 1e-14:
@@ -638,8 +647,10 @@ class Solver:
             s, f, phi, c = self.evaluate(z)
             viol = max(max(c[0], 0.0), max(c[1], 0.0) / 2.0, abs(c[2]))
             phis = [h["phi"] for h in hist if h["accepted"]]
+            # (not when the steps were vanishing: then flat means stalled, not converged)
             flat = (len(phis) > stat_window
-                    and abs(phis[-stat_window - 1] - phis[-1]) <= stat_tol * abs(phis[-1]))
+                    and abs(phis[-stat_window - 1] - phis[-1]) <= stat_tol * abs(phis[-1])
+                    and hist[-1]["Delta_next"] > 1e-8)
             stationary = status == "stationary" or flat
             nu_old = W.nu.copy()
             W.nu = np.array([W.d1(c[0], W.nu[0]), W.d1(c[1], W.nu[1]), W.nu[2] + W.rho * c[2]])
