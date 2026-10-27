@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-10-27: common-apparatus evaluation (branch closest-poisson)
+- `scripts/meanforce/eval_common.py`: saved states evaluated on one grid (L = M = 28's), annulus (a/40) and pressure space, against DESC's own current (|J - J_DESC|/rms) instead of each run's fit. alpha 0.1: L = M 16, 20, 24, 28 give 6.70e-2, 5.77e-2, 5.49e-2, 5.37e-2; alpha 0.05: 1.199e-1, 7.19e-2, 6.59e-2, 6.36e-2 (monotone; the non-monotone own-fit values at loose bounds are the per-basis J_fit). The L28 state reproduces M = 0.1000 and 0.0500 M_DESC.
+- Hessians at h = 1e-9: all positive for L = M 20, 24, 28 at alpha 0.1, 0.05. a/100 alpha 0.1: |J - J_fit|/rms 5.352e-2 (a/60 GLTR 5.350e-2, a/40 5.392e-2). `scripts/meanforce/collect.py` (tables, front, spacing and basis plots).
+
 ## 2026-10-27: a/40 GLTR sweep done; basis-size and spacing results; --delta0, --stat-window (branch closest-poisson)
 - a/40 GLTR sweep, all six bounds; Hessian at h = 1e-9 positive for all (smallest 1.08, 3.6, 7.9, 15.6, 154, 7.4e3 at alpha 0.7 ... 0.05); the default Hessian step is 1e-9 (1e-8 still showed spurious negatives at alpha 0.2, 0.1).
 - L = M = 20 and 24 sweeps done: |J - J_fit|/rms at alpha 0.05 is 0.113 (16), 0.064 (20), 0.059 (24). a/20's alpha 0.05 point is a discretization artifact (M on a/40, a/60: 0.0446 for the 0.0500 solved on a/20); a/40 state re-evaluated on a/60: M 0.0496.
