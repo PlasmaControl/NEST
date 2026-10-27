@@ -2,6 +2,11 @@
 
 One entry per commit, newest first.
 
+## 2026-10-27: a/40 GLTR sweep done; basis-size and spacing results; --delta0, --stat-window (branch closest-poisson)
+- a/40 GLTR sweep, all six bounds; Hessian at h = 1e-9 positive for all (smallest 1.08, 3.6, 7.9, 15.6, 154, 7.4e3 at alpha 0.7 ... 0.05); the default Hessian step is 1e-9 (1e-8 still showed spurious negatives at alpha 0.2, 0.1).
+- L = M = 20 and 24 sweeps done: |J - J_fit|/rms at alpha 0.05 is 0.113 (16), 0.064 (20), 0.059 (24). a/20's alpha 0.05 point is a discretization artifact (M on a/40, a/60: 0.0446 for the 0.0500 solved on a/20); a/40 state re-evaluated on a/60: M 0.0496.
+- a/100, a/120 from the a/40 alpha 0.5 state (6483, 6484): converged start (M 0.4997 on both) but the first radius 1e-2 gave 5 rejected steps and the flat stop needs 11 accepted steps at 8-14 min each. New `--delta0` (first radius) and `--stat-window`; alpha 0.1 at a/100, a/120 submitted with 1e-4 and 5 (6521, 6522).
+
 ## 2026-10-26: Hessian step, penalty rule, host-built metric (branch closest-poisson)
 - Hessian-vector products: the old step 1e-6 gave spurious negative Ritz values (a/40 QR alpha 0.1 state: -1e4, -175, +169 at h = 1e-4, 1e-6, 1e-8). Default now 1e-8; `mf_run.py --hessian-only --start <state> --hessian-h ...` recomputes at saved states. a/40 QR alpha 0.05: +9.29e3 (1e-8), +9.33e3 (1e-9): a local minimum; a/20 QR alpha 0.05: -6e5 .. +8e4 depending on h (not stationary; not used).
 - Penalty rho rises only while a constraint is outside its tolerance (the alpha 0.05 redo went 1 -> 1e3 on a Psi drift of 6e-4).

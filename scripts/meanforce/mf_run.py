@@ -84,6 +84,10 @@ def main():
     ap.add_argument("--stat-tol", type=float, default=1e-3,
                     help="outer convergence also needs |J - J_fit|^2 flat to this (relative) over "
                          "the last 10 accepted inner steps, or the inner solve's own stop")
+    ap.add_argument("--delta0", type=float, default=1e-2,
+                    help="first trust radius (metric units); 1e-4 for a start that is converged")
+    ap.add_argument("--stat-window", type=int, default=10,
+                    help="accepted steps over which the flat stop looks (5 where a step costs minutes)")
     ap.add_argument("--retries", type=int, default=3,
                     help="a bound not met: go to the geometric mean of it and the last one met, then "
                          "retry it; at most this many retries in the sweep, then stop")
@@ -305,6 +309,7 @@ def main():
     solver = mf.Solver(A, met, W, norm, step=a.method, dmax=dmax_of(A), max_disp=a.max_disp,
                        reanchor=reanchor, cg_tol=a.cg_tol, cg_maxiter=a.cg,
                        stall_dir=os.path.dirname(a.out) or ".", run_name=name)
+    solver.delta0 = a.delta0
     queue, last_ok, retries = list(a.alphas), None, 0
     while queue:
         alpha = queue.pop(0)
@@ -327,7 +332,7 @@ def main():
         solver.on_step = on_step
 
         z, outer = solver.solve_alpha(z, max_outer=a.max_outer, maxiter=a.maxiter, gtol=a.gtol,
-                                      callback=cb, stat_tol=a.stat_tol)
+                                      callback=cb, stat_tol=a.stat_tol, stat_window=a.stat_window)
         A = solver.A
         s = A.state(z)
         f, phi, c = W.merit(s)

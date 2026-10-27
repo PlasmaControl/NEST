@@ -487,6 +487,7 @@ class Solver:
         self.stall_dir, self.run_name = stall_dir, run_name
         self.stalls, self.anchors = [], []
         self.on_step = None  # callback(hist) after every trust-region step
+        self.delta0 = 1e-2  # the first trust radius (metric units)
         self.t_tables = []
 
     def _metric_inv(self):
@@ -516,7 +517,7 @@ class Solver:
         hist = [] if hist is None else hist
         g_first = None
         if self.Delta is None:
-            self.Delta = 1e-2
+            self.Delta = self.delta0
         tiny_run, rej_run = 0, 0
         rows, qr_cache = None, None
         for it in range(maxiter):
