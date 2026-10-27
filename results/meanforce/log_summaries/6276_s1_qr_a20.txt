@@ -1,0 +1,95 @@
+# job 6276 s1_qr_a20 COMPLETED
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 16/16/12, collocation resolution (48, 48, 36) (25, 97, 37); DESC <|F|>_vol / norm 8.7788e-04; 11 s
+gate: DESC's |F| on NEST's points 8.7619e-04 vs DESC's quadrature 8.7788e-04 (-0.19%)
+start: M 5.0540e-03 = 5.757 M_DESC, rms|F| 8.738e-03, B.n/|B| rms 4.585e-03 (DESC 4.53e-3), Psi 0.496970 (DESC 0.497070), Galerkin 2.0e-14
+gate: B.n/|B| of the start by direct Biot-Savart: rms 2.712e-03 (area-weighted), max 2.937e-02; annulus 4.585e-03
+metric: kappa 1.736e+02 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+alpha 0.7: eps 6.1452e-04
+  re-anchor 1: |D| 4.25 mm; M 1.0256e-03 -> 1.0248e-03, B.n 4.644e-03 -> 4.645e-03, Psi 0.495871 -> 0.495871
+  re-anchored in 61 s
+  re-anchor 2: |D| 2.10 mm; M 7.3536e-04 -> 7.3531e-04, B.n 4.592e-03 -> 4.592e-03, Psi 0.497547 -> 0.497547
+  re-anchored in 61 s
+  re-anchor 3: |D| 3.06 mm; M 6.1860e-04 -> 6.1829e-04, B.n 4.537e-03 -> 4.537e-03, Psi 0.497707 -> 0.497708
+  re-anchored in 61 s
+  re-anchor 4: |D| 2.05 mm; M 6.1489e-04 -> 6.1471e-04, B.n 4.532e-03 -> 4.531e-03, Psi 0.497232 -> 0.497232
+  re-anchored in 61 s
+  re-anchor 5: |D| 2.07 mm; M 6.1468e-04 -> 6.1468e-04, B.n 4.531e-03 -> 4.531e-03, Psi 0.497180 -> 0.497180
+  re-anchored in 61 s
+  outer  0 rho 1.0e+00: M/eps 1.0002 Bn/beta 1.0002 dPsi +3.89e-04 phi 1.131005e-04 nu [0. 0. 0.] galerkin 4.2e-13 (40 inner, budget)
+  re-anchor 6: |D| 2.02 mm; M 6.1450e-04 -> 6.1444e-04, B.n 4.530e-03 -> 4.529e-03, Psi 0.496971 -> 0.496971
+  re-anchored in 61 s
+  outer  1 rho 1.0e+00: M/eps 1.0000 Bn/beta 0.9998 dPsi -2.42e-05 phi 1.118727e-04 nu [0. 0. 0.] galerkin 6.6e-13 (40 inner, budget, flat)
+alpha 0.7 done in 930 s: |J - J_fit| / rms 1.4958e-02, M/M_desc 0.7000, B.n/|B| rms 4.529e-03 (direct 2.939e-03), Psi/Psi_t 0.99998, nu [0.0001523  0.0001262  0.00036507], rho 1.0e+00, anchors 6
+  H_Lag: Ritz values min -1.341e+00, max 1.411e+03, 1 negative of 40
+  GN (|g|^2 part): Ritz values min 2.654e-05, max 1.146e+00, 0 negative of 40
+alpha 0.5: eps 4.3894e-04
+  re-anchor 7: |D| 2.08 mm; M 4.4153e-04 -> 4.4141e-04, B.n 4.543e-03 -> 4.543e-03, Psi 0.497165 -> 0.497165
+  re-anchored in 61 s
+  re-anchor 8: |D| 2.04 mm; M 4.3979e-04 -> 4.3982e-04, B.n 4.535e-03 -> 4.535e-03, Psi 0.497109 -> 0.497109
+  re-anchored in 61 s
+  re-anchor 9: |D| 2.02 mm; M 4.3900e-04 -> 4.3897e-04, B.n 4.530e-03 -> 4.530e-03, Psi 0.497066 -> 0.497066
+  re-anchored in 61 s
+  outer  0 rho 1.0e+00: M/eps 1.0001 Bn/beta 1.0000 dPsi +1.72e-04 phi 1.830313e-04 nu [2.866e-04 7.753e-05 5.367e-04] galerkin 1.8e-13 (40 inner, budget)
+  outer  1 rho 1.0e+00: M/eps 1.0000 Bn/beta 1.0000 dPsi +3.14e-05 phi 1.831307e-04 nu [2.861e-04 2.232e-06 5.681e-04] galerkin 2.0e-13 (34 inner, stationary, flat)
+alpha 0.5 done in 594 s: |J - J_fit| / rms 1.9138e-02, M/M_desc 0.5000, B.n/|B| rms 4.530e-03 (direct 2.812e-03), Psi/Psi_t 1.00003, nu [2.86090644e-04 2.23215592e-06 5.68119044e-04], rho 1.0e+00, anchors 9
+  H_Lag: Ritz values min 1.070e+00, max 5.806e+03, 0 negative of 40
+  GN (|g|^2 part): Ritz values min 3.306e-05, max 1.129e+00, 0 negative of 40
+alpha 0.3: eps 2.6336e-04
+  re-anchor 10: |D| 2.16 mm; M 2.6404e-04 -> 2.6323e-04, B.n 4.532e-03 -> 4.532e-03, Psi 0.497404 -> 0.497405
+  re-anchored in 61 s
+    stall detector fired: running diagnostics
+    stall diagnostic saved: results/meanforce/stall_s1_qr_a20_0.json
+  outer  0 rho 1.0e+00: M/eps 1.0004 Bn/beta 1.0000 dPsi +8.48e-04 phi 5.304375e-04 nu [6.854e-04 6.729e-05 1.416e-03] galerkin 4.6e-13 (40 inner, budget)
+  re-anchor 11: |D| 2.36 mm; M 2.6341e-04 -> 2.6326e-04, B.n 4.531e-03 -> 4.532e-03, Psi 0.496864 -> 0.496864
+  re-anchored in 62 s
+  re-anchor 12: |D| 2.16 mm; M 2.6336e-04 -> 2.6336e-04, B.n 4.531e-03 -> 4.531e-03, Psi 0.496902 -> 0.496902
+  re-anchored in 61 s
+  outer  1 rho 1.0e+00: M/eps 1.0000 Bn/beta 1.0000 dPsi -8.94e-05 phi 4.135168e-04 nu [6.439e-04 6.718e-05 1.326e-03] galerkin 7.8e-13 (40 inner, budget, flat)
+alpha 0.3 done in 648 s: |J - J_fit| / rms 2.8758e-02, M/M_desc 0.3000, B.n/|B| rms 4.530e-03 (direct 2.618e-03), Psi/Psi_t 0.99991, nu [6.43891644e-04 6.71816586e-05 1.32649749e-03], rho 1.0e+00, anchors 12
+  H_Lag: Ritz values min -8.530e+01, max 4.099e+04, 1 negative of 40
+  GN (|g|^2 part): Ritz values min 5.493e-05, max 1.160e+00, 0 negative of 40
+alpha 0.2: eps 1.7558e-04
+  re-anchor 13: |D| 2.03 mm; M 1.7578e-04 -> 1.7503e-04, B.n 4.532e-03 -> 4.532e-03, Psi 0.497378 -> 0.497378
+  re-anchored in 60 s
+    stall detector fired: running diagnostics
+    stall diagnostic saved: results/meanforce/stall_s1_qr_a20_1.json
+  re-anchor 14: |D| 2.07 mm; M 1.7565e-04 -> 1.7549e-04, B.n 4.531e-03 -> 4.531e-03, Psi 0.497355 -> 0.497355
+  re-anchored in 61 s
+  outer  0 rho 1.0e+00: M/eps 0.9995 Bn/beta 1.0001 dPsi +7.76e-04 phi 7.529252e-04 nu [0.    0.    0.002] galerkin 5.1e-13 (40 inner, budget)
+    stall detector fired: running diagnostics
+    stall diagnostic saved: results/meanforce/stall_s1_qr_a20_2.json
+  outer  1 rho 1.0e+00: M/eps 1.0008 Bn/beta 0.9998 dPsi +3.18e-04 phi 7.482440e-04 nu [1.026e-03 1.988e-06 2.420e-03] galerkin 8.7e-13 (35 inner, stationary, flat)
+alpha 0.2 done in 527 s: |J - J_fit| / rms 3.8684e-02, M/M_desc 0.2002, B.n/|B| rms 4.529e-03 (direct 2.568e-03), Psi/Psi_t 1.00032, nu [1.02550736e-03 1.98827087e-06 2.41962420e-03], rho 1.0e+00, anchors 14
+  H_Lag: Ritz values min -7.996e+01, max 1.281e+05, 1 negative of 40
+  GN (|g|^2 part): Ritz values min 8.334e-05, max 1.188e+00, 0 negative of 40
+alpha 0.1: eps 8.7788e-05
+  re-anchor 15: |D| 2.44 mm; M 1.1341e-04 -> 1.1336e-04, B.n 4.570e-03 -> 4.570e-03, Psi 0.497557 -> 0.497557
+  re-anchored in 61 s
+  re-anchor 16: |D| 2.15 mm; M 9.3346e-05 -> 9.3282e-05, B.n 4.561e-03 -> 4.562e-03, Psi 0.498774 -> 0.498775
+  re-anchored in 61 s
+  outer  0 rho 1.0e+00: M/eps 1.0152 Bn/beta 1.0038 dPsi +4.29e-03 phi 2.597363e-03 nu [0.016 0.008 0.007] galerkin 1.4e-12 (40 inner, budget)
+  re-anchor 17: |D| 2.17 mm; M 8.7657e-05 -> 8.7511e-05, B.n 4.517e-03 -> 4.517e-03, Psi 0.498464 -> 0.498464
+  re-anchored in 61 s
+  re-anchor 18: |D| 2.01 mm; M 8.6763e-05 -> 8.6752e-05, B.n 4.514e-03 -> 4.514e-03, Psi 0.498064 -> 0.498064
+  re-anchored in 61 s
+  outer  1 rho 1.0e+00: M/eps 0.9884 Bn/beta 0.9959 dPsi +2.00e-03 phi 2.124945e-03 nu [0.005 0.    0.009] galerkin 1.1e-12 (40 inner, budget, flat)
+alpha 0.1 done in 722 s: |J - J_fit| / rms 6.5191e-02, M/M_desc 0.0988, B.n/|B| rms 4.511e-03 (direct 2.104e-03), Psi/Psi_t 1.00200, nu [0.00455784 0.         0.00871283], rho 1.0e+00, anchors 18
+  H_Lag: Ritz values min -1.250e+03, max 2.371e+06, 1 negative of 40
+  GN (|g|^2 part): Ritz values min 2.024e-04, max 1.253e+00, 0 negative of 40
+alpha 0.05: eps 4.3894e-05
+  re-anchor 19: |D| 2.45 mm; M 8.0386e-05 -> 8.0297e-05, B.n 3.815e-03 -> 3.815e-03, Psi 0.498373 -> 0.498373
+  re-anchored in 61 s
+  re-anchor 20: |D| 2.31 mm; M 7.0112e-05 -> 6.9882e-05, B.n 3.048e-03 -> 3.048e-03, Psi 0.499583 -> 0.499583
+  re-anchored in 61 s
+  re-anchor 21: |D| 2.05 mm; M 5.4593e-05 -> 5.4124e-05, B.n 2.392e-03 -> 2.391e-03, Psi 0.500649 -> 0.500649
+  re-anchored in 61 s
+  outer  0 rho 1.0e+00: M/eps 1.1288 Bn/beta 0.5043 dPsi +8.15e-03 phi 1.452235e-02 nu [0.133 0.    0.017] galerkin 1.7e-12 (40 inner, budget)
+  re-anchor 22: |D| 2.01 mm; M 4.4678e-05 -> 4.4323e-05, B.n 1.956e-03 -> 1.956e-03, Psi 0.500846 -> 0.500846
+  re-anchored in 61 s
+  outer  1 rho 1.0e+00: M/eps 0.9452 Bn/beta 0.4221 dPsi +8.02e-03 phi 2.291101e-02 nu [0.079 0.    0.025] galerkin 5.5e-12 (40 inner, budget)
+  outer  2 rho 1.0e+00: M/eps 0.9751 Bn/beta 0.4268 dPsi +7.56e-03 phi 2.105221e-02 nu [0.054 0.    0.032] galerkin 1.9e-12 (32 inner, stationary, flat)
+alpha 0.05 done in 842 s: |J - J_fit| / rms 2.0519e-01, M/M_desc 0.0488, B.n/|B| rms 1.933e-03 (direct 1.050e-03), Psi/Psi_t 1.00756, nu [0.05370672 0.         0.03243498], rho 1.0e+00, anchors 22
+  H_Lag: Ritz values min -3.381e+04, max 9.866e+07, 1 negative of 40
+  GN (|g|^2 part): Ritz values min 1.002e-03, max 1.519e+00, 0 negative of 40
+saved results/meanforce/s1_qr_a20.json; total 4659 s, GPU peak nan GB

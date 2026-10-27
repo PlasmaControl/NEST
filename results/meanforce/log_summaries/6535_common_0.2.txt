@@ -1,0 +1,7 @@
+# job 6535 common_0.2 COMPLETED
+evaluation: pressure space 28/28/12, collocation (66, 66, 36), annulus a/40.0; M_DESC 8.7788e-04; 10 s
+L28: M/M_DESC 0.2000, |J - J_DESC|/rms 4.5080e-02, B.n 4.530e-03, Psi 0.497070; 44 s
+L24: M/M_DESC 0.2026, |J - J_DESC|/rms 4.5985e-02, B.n 4.531e-03, Psi 0.497062; 43 s
+L20: M/M_DESC 0.1988, |J - J_DESC|/rms 4.8266e-02, B.n 4.530e-03, Psi 0.496995; 43 s
+L16: M/M_DESC 0.1852, |J - J_DESC|/rms 5.3987e-02, B.n 4.530e-03, Psi 0.497089; 38 s
+saved results/meanforce/common_L28_a0.2.json; 181 s

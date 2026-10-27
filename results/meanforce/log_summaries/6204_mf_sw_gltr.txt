@@ -1,0 +1,24 @@
+# job 6204 mf_sw_gltr CANCELLED+
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 16/16/12, collocation resolution (48, 48, 36) (25, 97, 37); DESC <|F|>_vol / norm 8.7788e-04; 9 s
+gate: DESC's |F| on NEST's points 8.7619e-04 vs DESC's quadrature 8.7788e-04 (-0.19%)
+start: M 5.0429e-03 = 5.744 M_DESC, rms|F| 8.732e-03, B.n/|B| rms 4.582e-03 (DESC 4.53e-3), Psi 0.497005 (DESC 0.497070), Galerkin 2.1e-14
+gate: B.n/|B| of the start by direct Biot-Savart: rms 2.712e-03 (area-weighted), max 2.937e-02; annulus 4.582e-03
+metric: kappa 1.739e+02 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+alpha 0.7: eps 6.1452e-04
+  re-anchor 1: |D| 2.21 mm; M 1.5636e-03 -> 1.5638e-03, B.n 4.625e-03 -> 4.625e-03, Psi 0.498187 -> 0.498187
+  re-anchored in 38 s
+  re-anchor 2: |D| 2.07 mm; M 6.1605e-04 -> 6.1606e-04, B.n 4.533e-03 -> 4.533e-03, Psi 0.497548 -> 0.497548
+  re-anchored in 38 s
+  re-anchor 3: |D| 2.01 mm; M 6.1466e-04 -> 6.1476e-04, B.n 4.531e-03 -> 4.531e-03, Psi 0.497269 -> 0.497269
+  re-anchored in 38 s
+  outer  0 rho 1.0e+00: M/eps 1.0002 Bn/beta 1.0002 dPsi +4.23e-04 phi 1.120745e-04 nu [0. 0. 0.] galerkin 1.0e-13 (40 inner, budget)
+  re-anchor 4: |D| 2.29 mm; M 6.1457e-04 -> 6.1455e-04, B.n 4.530e-03 -> 4.530e-03, Psi 0.496998 -> 0.496997
+  re-anchored in 38 s
+  re-anchor 5: |D| 2.05 mm; M 6.1450e-04 -> 6.1451e-04, B.n 4.530e-03 -> 4.530e-03, Psi 0.496971 -> 0.496971
+  re-anchored in 39 s
+  outer  1 rho 1.0e+00: M/eps 1.0000 Bn/beta 0.9999 dPsi -7.14e-05 phi 1.106832e-04 nu [0. 0. 0.] galerkin 1.1e-13 (40 inner, budget)
+    stall detector fired: running diagnostics
+    stall diagnostic saved: results/meanforce/stall_sweep_gltr_a40_0.json
+    stall detector fired: running diagnostics
+    stall diagnostic saved: results/meanforce/stall_sweep_gltr_a40_1.json

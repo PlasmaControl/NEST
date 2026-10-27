@@ -1,0 +1,10 @@
+# job 6145 mf_gltr CANCELLED+
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 16/16/12, collocation resolution (48, 48, 36) (25, 97, 37); DESC <|F|>_vol / norm 8.7788e-04; 50 s
+gate: DESC's |F| on NEST's points 8.7619e-04 vs DESC's quadrature 8.7788e-04 (-0.19%)
+start: M 5.0429e-03 = 5.744 M_DESC, rms|F| 8.732e-03, B.n/|B| rms 4.582e-03 (DESC 4.53e-3), Psi 0.497005 (DESC 0.497070), Galerkin 1.7e-14
+gate: B.n/|B| of the start by direct Biot-Savart: rms 2.712e-03 (area-weighted), max 2.937e-02; annulus 4.582e-03
+metric: kappa 1.739e+02 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+alpha 0.7: eps 6.1452e-04
+  re-anchor 1: |D| 2.62 mm; M 9.9305e-04 -> 9.9330e-04, B.n 4.588e-03 -> 4.588e-03, Psi 0.498517 -> 0.498516
+  re-anchored in 42 s

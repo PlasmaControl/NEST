@@ -1,0 +1,19 @@
+# job 6202 mf_smoke COMPLETED
+DESCInput(NCSX_L12M12N8.h5: NFP=3, (L,M,N)=(12, 12, 8), current prescribed, a=0.3226 m, R0=1.442 m, <beta>=0.0409, field=MixedCoilSet)
+basis 6/6/4, collocation resolution (18, 18, 12) (10, 37, 13); DESC <|F|>_vol / norm 3.1103e-03; 8 s
+gate: DESC's |F| on NEST's points 3.0366e-03 vs DESC's quadrature 3.1103e-03 (-2.37%)
+start: M 4.5932e-02 = 14.768 M_DESC, rms|F| 6.256e-02, B.n/|B| rms 4.132e-03 (DESC 4.53e-3), Psi 0.496201 (DESC 0.497070), Galerkin 1.4e-15
+gate: B.n/|B| of the start by direct Biot-Savart: rms 3.433e-03 (area-weighted), max 2.089e-02; annulus 4.132e-03
+metric: kappa 4.146e+01 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+alpha 0.7: eps 2.1772e-03
+  re-anchor 1: |D| 1.53 mm; M 3.3679e-02 -> 3.3677e-02, B.n 4.268e-03 -> 4.247e-03, Psi 0.500752 -> 0.500735
+  re-anchored in 25 s
+  outer  0 rho 1.0e+00: M/eps 8.7218 Bn/beta 1.0443 dPsi +2.06e-02 phi 2.342950e-03 nu [7.722 0.091 0.021] galerkin 3.2e-15 (3 inner, reanchor)
+  re-anchor 2: |D| 6.24 mm; M 7.5731e-03 -> 7.5752e-03, B.n 4.948e-03 -> 4.957e-03, Psi 0.511327 -> 0.511268
+  re-anchored in 24 s
+  re-anchor 3: |D| 2.73 mm; M 3.1443e-03 -> 3.1435e-03, B.n 5.007e-03 -> 5.008e-03, Psi 0.513256 -> 0.513256
+  re-anchored in 25 s
+  outer  1 rho 1.0e+00: M/eps 0.9037 Bn/beta 1.1372 dPsi +3.31e-02 phi 1.051924e-01 nu [7.625 0.384 0.054] galerkin 2.5e-14 (3 inner, reanchor)
+alpha 0.7 done in 99 s: |J - J_fit| / rms 4.5868e-01, M/M_desc 0.6326, B.n/|B| rms 5.151e-03 (direct 4.847e-03), Psi/Psi_t 1.03312, nu [7.62549675 0.38372692 0.05368292], rho 1.0e+00, anchors 3
+alpha 0.7 not met (c = [-0.09634544  0.29314928  0.03311964])
+saved results/meanforce/smoke/retry.json; total 139 s, GPU peak nan GB

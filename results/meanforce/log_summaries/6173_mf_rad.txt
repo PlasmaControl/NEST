@@ -1,0 +1,2 @@
+# job 6173 mf_rad COMPLETED
+saved results/meanforce/radial_a40.json; 110 s

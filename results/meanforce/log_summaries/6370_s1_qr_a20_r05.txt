@@ -1,0 +1,28 @@
+# job 6370 s1_qr_a20_r05 COMPLETED
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 16/16/12, collocation resolution (48, 48, 36) (25, 97, 37); DESC <|F|>_vol / norm 8.7788e-04; 9 s
+gate: DESC's |F| on NEST's points 8.7619e-04 vs DESC's quadrature 8.7788e-04 (-0.19%)
+start: M 5.0540e-03 = 5.757 M_DESC, rms|F| 8.738e-03, B.n/|B| rms 4.585e-03 (DESC 4.53e-3), Psi 0.496970 (DESC 0.497070), Galerkin 2.0e-14
+gate: B.n/|B| of the start by direct Biot-Savart: rms 2.712e-03 (area-weighted), max 2.937e-02; annulus 4.585e-03
+metric: kappa 1.728e+02 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+start from results/meanforce/s1_qr_a20_a0.1: M/M_desc 0.0988, B.n/|B| 4.5114e-03, Psi 0.497963, |J - J_fit|/rms 6.5191e-02 (on this annulus)
+alpha 0.05: eps 4.3894e-05
+  re-anchor 2: |D| 2.07 mm; M 7.5717e-05 -> 7.5594e-05, B.n 4.482e-03 -> 4.483e-03, Psi 0.498884 -> 0.498885
+  re-anchored in 61 s
+  re-anchor 3: |D| 2.18 mm; M 6.4941e-05 -> 6.4767e-05, B.n 4.473e-03 -> 4.472e-03, Psi 0.500832 -> 0.500833
+  re-anchored in 61 s
+  re-anchor 4: |D| 2.30 mm; M 5.6105e-05 -> 5.5842e-05, B.n 4.459e-03 -> 4.459e-03, Psi 0.502152 -> 0.502152
+  re-anchored in 61 s
+  outer  0 rho 1.0e+00: M/eps 1.0483 Bn/beta 0.9778 dPsi +1.05e-02 phi 1.844497e-02 nu [0.053 0.    0.019] galerkin 3.4e-12 (30 inner, stationary)
+  re-anchor 5: |D| 1.94 mm; M 4.5411e-05 -> 4.5112e-05, B.n 2.855e-03 -> 2.855e-03, Psi 0.502223 -> 0.502222
+  re-anchored in 61 s
+  outer  1 rho 1.0e+00: M/eps 1.0272 Bn/beta 0.6302 dPsi +1.06e-02 phi 1.892190e-02 nu [0.08 0.   0.03] galerkin 4.8e-12 (40 inner, budget, flat)
+  re-anchor 6: |D| 2.03 mm; M 4.3826e-05 -> 4.3714e-05, B.n 2.313e-03 -> 2.313e-03, Psi 0.500728 -> 0.500728
+  re-anchored in 61 s
+  re-anchor 7: |D| 1.54 mm; M 4.3822e-05 -> 4.3767e-05, B.n 2.052e-03 -> 2.051e-03, Psi 0.499424 -> 0.499424
+  re-anchored in 61 s
+  outer  2 rho 1.0e+01: M/eps 0.9971 Bn/beta 0.4529 dPsi +4.94e-03 phi 1.922958e-02 nu [0.051 0.    0.079] galerkin 1.0e-12 (40 inner, budget, flat)
+alpha 0.05 done in 1056 s: |J - J_fit| / rms 1.9611e-01, M/M_desc 0.0499, B.n/|B| rms 2.051e-03 (direct 1.100e-03), Psi/Psi_t 1.00494, nu [0.05090872 0.         0.07913474], rho 1.0e+01, anchors 7
+  H_Lag: Ritz values min -2.896e+04, max 9.223e+07, 1 negative of 40
+  GN (|g|^2 part): Ritz values min 1.058e-03, max 1.487e+00, 0 negative of 40
+saved results/meanforce/s1_qr_a20_r05.json; total 1232 s, GPU peak nan GB

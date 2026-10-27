@@ -2,6 +2,9 @@
 
 One entry per commit, newest first.
 
+## 2026-10-27: handoff and results snapshot (branch closest-poisson)
+- `docs/meanforce_handoff.md` (study, code map, Stellar-AI commands, running jobs, caveats, open work) and `docs/meanforce_results.md` (all results so far: a/40 fronts of both solvers, study 1 spacing a/20-a/120, study 2 basis 16-28 and 16/16/16 with the common-apparatus table, radial force, caveats). `results/meanforce/` (32 MB: run JSONs, saved states, Hessian and evaluation outputs, condensed logs) committed with `git add -f` (the directory is git-ignored).
+
 ## 2026-10-27: 16/16/16 alpha 0.05 not converged; inactive-bound check (branch closest-poisson)
 - 16/16/16 alpha 0.05 (6482) ended at M = 0.0464 M_DESC (bound 0.05), B.n 0.5 beta, nu_F falling 0.17 -> 0.016 and |J - J_fit|/rms 0.104 still decreasing slowly (steps 4e-5 in a radius of 1e-2): the "flat" stop took the slow creep for convergence. Continued from its state with 120 steps and a tighter stop (6540). Now "flat" counts only when the mean-force bound is not slack by more than 1%; `collect.py` marks M < 0.99 alpha with (!).
 - 16/16/16 elsewhere: |J - J_fit|/rms within 1.7% of 16/16/12 for alpha >= 0.1.

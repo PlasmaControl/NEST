@@ -1,0 +1,56 @@
+# job 6231 mf_smoke2 COMPLETED
+DESCInput(NCSX_L12M12N8.h5: NFP=3, (L,M,N)=(12, 12, 8), current prescribed, a=0.3226 m, R0=1.442 m, <beta>=0.0409, field=MixedCoilSet)
+basis 6/6/4, collocation resolution (18, 18, 12) (10, 37, 13); DESC <|F|>_vol / norm 3.1103e-03; 8 s
+gate: DESC's |F| on NEST's points 3.0366e-03 vs DESC's quadrature 3.1103e-03 (-2.37%)
+start: M 4.5932e-02 = 14.768 M_DESC, rms|F| 6.256e-02, B.n/|B| rms 4.132e-03 (DESC 4.53e-3), Psi 0.496201 (DESC 0.497070), Galerkin 1.4e-15
+gate: B.n/|B| of the start by direct Biot-Savart: rms 3.433e-03 (area-weighted), max 2.089e-02; annulus 4.132e-03
+metric: kappa 2.114e+01 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+alpha 20.0: eps 6.2206e-02
+  outer  0 rho 1.0e+00: M/eps 0.7384 Bn/beta 0.9122 dPsi +0.00e+00 phi 0.000000e+00 nu [0. 0. 0.] galerkin 1.4e-15 (0 inner, stationary)
+  outer  1 rho 1.0e+00: M/eps 0.7384 Bn/beta 0.9122 dPsi +0.00e+00 phi 0.000000e+00 nu [0. 0. 0.] galerkin 1.4e-15 (0 inner, stationary)
+alpha 20.0 done in 6 s: |J - J_fit| / rms 0.0000e+00, M/M_desc 14.7676, B.n/|B| rms 4.132e-03 (direct 3.433e-03), Psi/Psi_t 1.00000, nu [0. 0. 0.], rho 1.0e+00, anchors 0
+alpha 0.02: eps 6.2206e-05
+  re-anchor 1: |D| 2.75 mm; M 3.3589e-02 -> 3.3583e-02, B.n 4.525e-03 -> 4.470e-03, Psi 0.504160 -> 0.504089
+  re-anchored in 37 s
+  outer  0 rho 1.0e+00: M/eps 301.2154 Bn/beta 1.1610 dPsi +3.21e-02 phi 2.309702e-03 nu [3.002e+02 3.480e-01 3.212e-02] galerkin 3.1e-15 (3 inner, reanchor)
+  re-anchor 2: |D| 7.48 mm; M 7.1420e-03 -> 7.1391e-03, B.n 6.114e-03 -> 6.119e-03, Psi 0.520323 -> 0.520324
+  re-anchored in 38 s
+  re-anchor 3: |D| 3.60 mm; M 2.9338e-03 -> 2.9332e-03, B.n 6.401e-03 -> 6.401e-03, Psi 0.522658 -> 0.522658
+  re-anchored in 25 s
+  outer  1 rho 1.0e+00: M/eps 31.0484 Bn/beta 1.5095 dPsi +5.39e-02 phi 1.179449e-01 nu [3.303e+02 1.627e+00 8.601e-02] galerkin 2.9e-14 (3 inner, reanchor)
+  re-anchor 4: |D| 11.08 mm; M 1.5918e-03 -> 1.5956e-03, B.n 7.880e-03 -> 7.888e-03, Psi 0.528120 -> 0.528120
+  re-anchored in 37 s
+  re-anchor 5: |D| 6.11 mm; M 1.3874e-03 -> 1.3892e-03, B.n 8.722e-03 -> 8.723e-03, Psi 0.528523 -> 0.528525
+  re-anchored in 38 s
+  outer  2 rho 1.0e+00: M/eps 20.4667 Bn/beta 2.2437 dPsi +7.37e-02 phi 3.368554e-01 nu [3.497e+02 5.661e+00 1.597e-01] galerkin 3.6e-14 (3 inner, reanchor)
+alpha 0.02 done in 265 s: |J - J_fit| / rms 8.2080e-01, M/M_desc 0.4093, B.n/|B| rms 1.016e-02 (direct 9.664e-03), Psi/Psi_t 1.07370, nu [3.49730480e+02 5.66072513e+00 1.59705643e-01], rho 1.0e+01, anchors 5
+alpha 0.02 not met (c = [19.46670031  4.03402576  0.0736964 ])
+  retry at alpha 0.6325
+alpha 0.6324555320336759: eps 1.9671e-03
+  re-anchor 6: |D| 9.30 mm; M 1.2364e-03 -> 1.2364e-03, B.n 8.721e-03 -> 8.720e-03, Psi 0.523814 -> 0.523814
+  re-anchored in 37 s
+  re-anchor 7: |D| 4.50 mm; M 1.2027e-03 -> 1.2026e-03, B.n 7.832e-03 -> 7.832e-03, Psi 0.517877 -> 0.517876
+  re-anchored in 38 s
+  outer  0 rho 1.0e+01: M/eps 0.6080 Bn/beta 1.6256 dPsi +3.51e-02 phi 4.193515e-01 nu [345.811  22.087   0.51 ] galerkin 2.9e-14 (3 inner, reanchor)
+  re-anchor 8: |D| 6.04 mm; M 1.2122e-03 -> 1.2124e-03, B.n 6.771e-03 -> 6.771e-03, Psi 0.508753 -> 0.508753
+  re-anchored in 38 s
+  re-anchor 9: |D| 1.03 mm; M 1.2214e-03 -> 1.2214e-03, B.n 6.544e-03 -> 6.544e-03, Psi 0.506806 -> 0.506806
+  re-anchored in 38 s
+  outer  1 rho 1.0e+01: M/eps 0.6225 Bn/beta 1.4295 dPsi +2.05e-02 phi 4.347036e-01 nu [342.035  32.521   0.715] galerkin 2.3e-14 (3 inner, budget)
+  re-anchor 10: |D| 1.61 mm; M 1.2591e-03 -> 1.2591e-03, B.n 5.977e-03 -> 5.977e-03, Psi 0.503648 -> 0.503648
+  re-anchored in 38 s
+  outer  2 rho 1.0e+02: M/eps 0.6597 Bn/beta 1.2198 dPsi +1.01e-02 phi 3.844255e-01 nu [308.009  81.325   1.728] galerkin 6.5e-14 (3 inner, reanchor)
+alpha 0.6324555320336759 done in 289 s: |J - J_fit| / rms 8.7684e-01, M/M_desc 0.4173, B.n/|B| rms 5.526e-03 (direct 5.398e-03), Psi/Psi_t 1.01013, nu [308.00922453  81.32465139   1.72774833], rho 1.0e+03, anchors 10
+alpha 0.6324555320336759 not met (c = [-0.34026071  0.48803198  0.01012656])
+  retry at alpha 3.557
+alpha 3.5565588200778455: eps 1.1062e-02
+  outer  0 rho 1.0e+03: M/eps 0.5507 Bn/beta 1.1225 dPsi +7.42e-03 phi 3.743469e-01 nu [  0.    341.325   9.149] galerkin 8.6e-15 (3 inner, reanchor)
+  re-anchor 11: |D| 3.85 mm; M 8.9274e-03 -> 8.9272e-03, B.n 4.755e-03 -> 4.760e-03, Psi 0.498017 -> 0.498018
+  re-anchored in 37 s
+  outer  1 rho 1.0e+03: M/eps 1.3322 Bn/beta 0.9637 dPsi +1.05e-03 phi 3.626954e-01 nu [332.17  269.949  10.198] galerkin 4.4e-15 (3 inner, reanchor)
+  re-anchor 12: |D| 2.27 mm; M 1.1862e-02 -> 1.1863e-02, B.n 4.961e-03 -> 4.962e-03, Psi 0.497905 -> 0.497906
+  re-anchored in 38 s
+  outer  2 rho 1.0e+04: M/eps 0.9818 Bn/beta 1.0544 dPsi +2.67e-03 phi 3.546435e-01 nu [ 150.139 1388.399   36.902] galerkin 6.2e-15 (3 inner, budget)
+alpha 3.5565588200778455 done in 121 s: |J - J_fit| / rms 8.4219e-01, M/M_desc 3.4918, B.n/|B| rms 4.777e-03 (direct 4.634e-03), Psi/Psi_t 1.00267, nu [ 150.13861508 1388.39865376   36.90205926], rho 1.0e+04, anchors 12
+alpha 3.5565588200778455 not met (c = [-0.01820314  0.11184499  0.00267037])
+saved results/meanforce/smoke/retry2.json; total 722 s, GPU peak nan GB

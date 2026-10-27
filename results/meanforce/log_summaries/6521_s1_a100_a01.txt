@@ -1,0 +1,13 @@
+# job 6521 s1_a100_a01 COMPLETED
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 16/16/12, collocation resolution (48, 48, 36) (25, 97, 37); DESC <|F|>_vol / norm 8.7788e-04; 9 s
+gate: DESC's |F| on NEST's points 8.7619e-04 vs DESC's quadrature 8.7788e-04 (-0.19%)
+start: M 5.0437e-03 = 5.745 M_DESC, rms|F| 8.732e-03, B.n/|B| rms 4.582e-03 (DESC 4.53e-3), Psi 0.497003 (DESC 0.497070), Galerkin 2.2e-14
+gate: B.n/|B| of the start by direct Biot-Savart: rms 2.712e-03 (area-weighted), max 2.937e-02; annulus 4.582e-03
+metric: kappa 1.731e+02 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+start from results/meanforce/sweep_gltr_a40_a0.1: M/M_desc 0.0990, B.n/|B| 4.5282e-03, Psi 0.497412, |J - J_fit|/rms 5.3919e-02 (on this annulus)
+alpha 0.1: eps 8.7788e-05
+  outer  0 rho 1.0e+00: M/eps 0.9999 Bn/beta 0.9996 dPsi +4.46e-04 phi 1.431686e-03 nu [0.002 0.    0.004] galerkin 1.0e-12 (16 inner, stationary, flat)
+  outer  1 rho 1.0e+00: M/eps 1.0000 Bn/beta 0.9996 dPsi +2.21e-04 phi 1.432352e-03 nu [0.002 0.    0.004] galerkin 9.7e-13 (6 inner, stationary, flat)
+alpha 0.1 done in 9290 s: |J - J_fit| / rms 5.3523e-02, M/M_desc 0.1000, B.n/|B| rms 4.528e-03 (direct 2.412e-03), Psi/Psi_t 1.00022, nu [0.00164536 0.         0.00396071], rho 1.0e+00, anchors 1
+saved results/meanforce/s1c_gltr_a100_a0.1.json; total 9642 s, GPU peak nan GB

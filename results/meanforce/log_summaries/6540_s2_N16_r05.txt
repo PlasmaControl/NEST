@@ -1,0 +1,9 @@
+# job 6540 s2_N16_r05 RUNNING
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 16/16/16, collocation resolution (48, 48, 42) (25, 97, 43); DESC <|F|>_vol / norm 8.7788e-04; 9 s
+gate: DESC's |F| on NEST's points 8.7604e-04 vs DESC's quadrature 8.7788e-04 (-0.21%)
+start: M 5.1044e-03 = 5.814 M_DESC, rms|F| 8.821e-03, B.n/|B| rms 4.582e-03 (DESC 4.53e-3), Psi 0.497006 (DESC 0.497070), Galerkin 2.0e-14
+gate: B.n/|B| of the start by direct Biot-Savart: rms 2.712e-03 (area-weighted), max 2.940e-02; annulus 4.582e-03
+metric: kappa 1.416e+02 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+start from results/meanforce/s2_gltr_L16N16_a0.05: M/M_desc 0.0464, B.n/|B| 2.2455e-03, Psi 0.496448, |J - J_fit|/rms 1.0401e-01 (on this annulus)
+alpha 0.05: eps 4.3894e-05

@@ -1,0 +1,17 @@
+# job 6483 s1_a100_a05 COMPLETED
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 16/16/12, collocation resolution (48, 48, 36) (25, 97, 37); DESC <|F|>_vol / norm 8.7788e-04; 9 s
+gate: DESC's |F| on NEST's points 8.7619e-04 vs DESC's quadrature 8.7788e-04 (-0.19%)
+start: M 5.0437e-03 = 5.745 M_DESC, rms|F| 8.732e-03, B.n/|B| rms 4.582e-03 (DESC 4.53e-3), Psi 0.497003 (DESC 0.497070), Galerkin 2.2e-14
+gate: B.n/|B| of the start by direct Biot-Savart: rms 2.712e-03 (area-weighted), max 2.937e-02; annulus 4.582e-03
+metric: kappa 1.735e+02 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+start from results/meanforce/sweep_gltr_a40_a0.5: M/M_desc 0.4997, B.n/|B| 4.5291e-03, Psi 0.497040, |J - J_fit|/rms 1.8907e-02 (on this annulus)
+alpha 0.5: eps 4.3894e-04
+    stall detector fired: running diagnostics
+    stall diagnostic saved: results/meanforce/stall_s1c_gltr_a100_a0.5_0.json
+  outer  0 rho 1.0e+00: M/eps 1.0000 Bn/beta 1.0000 dPsi +3.87e-06 phi 1.785068e-04 nu [2.677e-04 3.545e-06 5.172e-04] galerkin 1.1e-13 (22 inner, stationary, flat)
+  outer  1 rho 1.0e+00: M/eps 1.0000 Bn/beta 1.0000 dPsi +2.89e-07 phi 1.785084e-04 nu [0.    0.    0.001] galerkin 1.5e-13 (5 inner, stationary)
+alpha 0.5 done in 9712 s: |J - J_fit| / rms 1.8895e-02, M/M_desc 0.5000, B.n/|B| rms 4.530e-03 (direct 2.836e-03), Psi/Psi_t 1.00000, nu [0.00026766 0.         0.00051748], rho 1.0e+00, anchors 1
+  H_Lag: Ritz values min -2.859e+02, max 2.335e+04, 1 negative of 40
+  GN (|g|^2 part): Ritz values min 3.296e-05, max 1.120e+00, 0 negative of 40
+saved results/meanforce/s1c_gltr_a100_a0.5.json; total 10388 s, GPU peak nan GB

@@ -1,0 +1,23 @@
+# job 6203 mf_sw_qr CANCELLED+
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 16/16/12, collocation resolution (48, 48, 36) (25, 97, 37); DESC <|F|>_vol / norm 8.7788e-04; 9 s
+gate: DESC's |F| on NEST's points 8.7619e-04 vs DESC's quadrature 8.7788e-04 (-0.19%)
+start: M 5.0429e-03 = 5.744 M_DESC, rms|F| 8.732e-03, B.n/|B| rms 4.582e-03 (DESC 4.53e-3), Psi 0.497005 (DESC 0.497070), Galerkin 2.1e-14
+gate: B.n/|B| of the start by direct Biot-Savart: rms 2.712e-03 (area-weighted), max 2.937e-02; annulus 4.582e-03
+metric: kappa 1.739e+02 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+alpha 0.7: eps 6.1452e-04
+  re-anchor 1: |D| 2.07 mm; M 1.5652e-03 -> 1.5655e-03, B.n 4.620e-03 -> 4.620e-03, Psi 0.498036 -> 0.498035
+  re-anchored in 140 s
+  re-anchor 2: |D| 3.10 mm; M 7.4385e-04 -> 7.4411e-04, B.n 4.598e-03 -> 4.598e-03, Psi 0.497526 -> 0.497526
+  re-anchored in 139 s
+  re-anchor 3: |D| 2.18 mm; M 6.1866e-04 -> 6.1867e-04, B.n 4.558e-03 -> 4.558e-03, Psi 0.498618 -> 0.498617
+  re-anchored in 155 s
+  re-anchor 4: |D| 2.69 mm; M 6.1673e-04 -> 6.1692e-04, B.n 4.541e-03 -> 4.541e-03, Psi 0.497826 -> 0.497826
+  re-anchored in 155 s
+  re-anchor 5: |D| 2.10 mm; M 6.1630e-04 -> 6.1632e-04, B.n 4.534e-03 -> 4.534e-03, Psi 0.497420 -> 0.497420
+  re-anchored in 154 s
+  re-anchor 6: |D| 2.18 mm; M 6.1494e-04 -> 6.1499e-04, B.n 4.532e-03 -> 4.532e-03, Psi 0.497276 -> 0.497276
+  re-anchored in 154 s
+  re-anchor 7: |D| 2.10 mm; M 6.1467e-04 -> 6.1466e-04, B.n 4.531e-03 -> 4.531e-03, Psi 0.497205 -> 0.497205
+  re-anchored in 154 s
+  outer  0 rho 1.0e+00: M/eps 1.0002 Bn/beta 1.0002 dPsi +3.83e-04 phi 1.121070e-04 nu [0. 0. 0.] galerkin 1.3e-13 (40 inner, budget)

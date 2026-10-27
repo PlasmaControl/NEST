@@ -1,0 +1,17 @@
+# job 6379 hess_a40_005 COMPLETED
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 16/16/12, collocation resolution (48, 48, 36) (25, 97, 37); DESC <|F|>_vol / norm 8.7788e-04; 9 s
+gate: DESC's |F| on NEST's points 8.7619e-04 vs DESC's quadrature 8.7788e-04 (-0.19%)
+start: M 5.0429e-03 = 5.744 M_DESC, rms|F| 8.732e-03, B.n/|B| rms 4.582e-03 (DESC 4.53e-3), Psi 0.497005 (DESC 0.497070), Galerkin 2.1e-14
+gate: B.n/|B| of the start by direct Biot-Savart: rms 2.712e-03 (area-weighted), max 2.937e-02; annulus 4.582e-03
+metric: kappa 1.732e+02 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+start from results/meanforce/sweep_qr_a40_a0.05: M/M_desc 0.0504, B.n/|B| 4.4741e-03, Psi 0.496981, |J - J_fit|/rms 1.1414e-01 (on this annulus)
+  H_Lag: Ritz values min -6.588e+03, max 4.587e+07, 1 negative of 40
+  GN (|g|^2 part): Ritz values min 4.031e-04, max 1.271e+00, 0 negative of 40
+hessian h = 1e-06: min -6.5882e+03, max 4.5869e+07, negative 1
+  H_Lag: Ritz values min 9.289e+03, max 4.700e+07, 0 negative of 40
+  GN (|g|^2 part): Ritz values min 4.031e-04, max 1.271e+00, 0 negative of 40
+hessian h = 1e-08: min 9.2895e+03, max 4.6999e+07, negative 0
+  H_Lag: Ritz values min 9.330e+03, max 4.700e+07, 0 negative of 40
+  GN (|g|^2 part): Ritz values min 4.031e-04, max 1.271e+00, 0 negative of 40
+hessian h = 1e-09: min 9.3298e+03, max 4.6998e+07, negative 0

@@ -1,0 +1,56 @@
+# job 6298 s1_qr_a80 RUNNING
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 16/16/12, collocation resolution (48, 48, 36) (25, 97, 37); DESC <|F|>_vol / norm 8.7788e-04; 9 s
+gate: DESC's |F| on NEST's points 8.7619e-04 vs DESC's quadrature 8.7788e-04 (-0.19%)
+start: M 5.0437e-03 = 5.745 M_DESC, rms|F| 8.732e-03, B.n/|B| rms 4.582e-03 (DESC 4.53e-3), Psi 0.497003 (DESC 0.497070), Galerkin 1.9e-14
+gate: B.n/|B| of the start by direct Biot-Savart: rms 2.712e-03 (area-weighted), max 2.937e-02; annulus 4.582e-03
+metric: kappa 1.738e+02 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+alpha 0.7: eps 6.1452e-04
+  re-anchor 1: |D| 2.11 mm; M 1.5654e-03 -> 1.5657e-03, B.n 4.621e-03 -> 4.621e-03, Psi 0.498065 -> 0.498065
+  re-anchored in 1234 s
+  re-anchor 2: |D| 2.58 mm; M 7.4521e-04 -> 7.4536e-04, B.n 4.597e-03 -> 4.597e-03, Psi 0.497599 -> 0.497599
+  re-anchored in 1236 s
+  re-anchor 3: |D| 2.18 mm; M 6.1825e-04 -> 6.1828e-04, B.n 4.557e-03 -> 4.557e-03, Psi 0.498607 -> 0.498607
+  re-anchored in 1235 s
+  re-anchor 4: |D| 2.43 mm; M 6.1644e-04 -> 6.1653e-04, B.n 4.541e-03 -> 4.540e-03, Psi 0.497791 -> 0.497791
+  re-anchored in 1235 s
+  re-anchor 5: |D| 2.10 mm; M 6.1683e-04 -> 6.1682e-04, B.n 4.534e-03 -> 4.534e-03, Psi 0.497449 -> 0.497449
+  re-anchored in 1235 s
+  re-anchor 6: |D| 2.15 mm; M 6.1527e-04 -> 6.1525e-04, B.n 4.532e-03 -> 4.532e-03, Psi 0.497292 -> 0.497292
+  re-anchored in 1234 s
+  re-anchor 7: |D| 2.00 mm; M 6.1464e-04 -> 6.1463e-04, B.n 4.531e-03 -> 4.531e-03, Psi 0.497206 -> 0.497206
+  re-anchored in 1234 s
+  outer  0 rho 1.0e+00: M/eps 1.0002 Bn/beta 1.0002 dPsi +3.84e-04 phi 1.121072e-04 nu [0. 0. 0.] galerkin 1.2e-13 (40 inner, budget)
+  re-anchor 8: |D| 2.04 mm; M 6.1450e-04 -> 6.1449e-04, B.n 4.529e-03 -> 4.529e-03, Psi 0.496998 -> 0.496998
+  re-anchored in 1235 s
+  outer  1 rho 1.0e+00: M/eps 1.0000 Bn/beta 0.9998 dPsi -4.16e-05 phi 1.106411e-04 nu [0. 0. 0.] galerkin 2.0e-13 (40 inner, budget, flat)
+alpha 0.7 done in 19008 s: |J - J_fit| / rms 1.4876e-02, M/M_desc 0.7000, B.n/|B| rms 4.529e-03 (direct 2.955e-03), Psi/Psi_t 0.99996, nu [0.00014817 0.00012971 0.00034285], rho 1.0e+00, anchors 8
+  H_Lag: Ritz values min 8.783e-01, max 1.341e+03, 0 negative of 40
+  GN (|g|^2 part): Ritz values min 2.479e-05, max 1.142e+00, 0 negative of 40
+alpha 0.5: eps 4.3894e-04
+  re-anchor 9: |D| 2.14 mm; M 4.4044e-04 -> 4.4063e-04, B.n 4.539e-03 -> 4.539e-03, Psi 0.497534 -> 0.497534
+  re-anchored in 1233 s
+  re-anchor 10: |D| 2.06 mm; M 4.3903e-04 -> 4.3910e-04, B.n 4.531e-03 -> 4.531e-03, Psi 0.497072 -> 0.497071
+  re-anchored in 1234 s
+  outer  0 rho 1.0e+00: M/eps 1.0001 Bn/beta 1.0000 dPsi +1.64e-04 phi 1.787375e-04 nu [2.677e-04 6.540e-05 5.068e-04] galerkin 2.6e-13 (40 inner, budget, flat)
+  outer  1 rho 1.0e+00: M/eps 1.0000 Bn/beta 1.0000 dPsi +2.60e-05 phi 1.788331e-04 nu [2.674e-04 2.325e-05 5.329e-04] galerkin 5.7e-13 (16 inner, stationary, flat)
+alpha 0.5 done in 8816 s: |J - J_fit| / rms 1.8912e-02, M/M_desc 0.5000, B.n/|B| rms 4.530e-03 (direct 2.843e-03), Psi/Psi_t 1.00003, nu [2.67429183e-04 2.32539649e-05 5.32860082e-04], rho 1.0e+00, anchors 10
+  H_Lag: Ritz values min -1.518e+01, max 5.586e+03, 1 negative of 40
+  GN (|g|^2 part): Ritz values min 3.264e-05, max 1.130e+00, 0 negative of 40
+alpha 0.3: eps 2.6336e-04
+  re-anchor 11: |D| 2.07 mm; M 2.9487e-04 -> 2.9490e-04, B.n 4.550e-03 -> 4.550e-03, Psi 0.497300 -> 0.497299
+  re-anchored in 1234 s
+  re-anchor 12: |D| 2.01 mm; M 2.6350e-04 -> 2.6360e-04, B.n 4.532e-03 -> 4.532e-03, Psi 0.497166 -> 0.497166
+  re-anchored in 1233 s
+  re-anchor 13: |D| 2.10 mm; M 2.6346e-04 -> 2.6347e-04, B.n 4.531e-03 -> 4.531e-03, Psi 0.497103 -> 0.497103
+  re-anchored in 1235 s
+  re-anchor 14: |D| 2.02 mm; M 2.6344e-04 -> 2.6344e-04, B.n 4.530e-03 -> 4.530e-03, Psi 0.497148 -> 0.497148
+  re-anchored in 1236 s
+  outer  0 rho 1.0e+00: M/eps 1.0003 Bn/beta 1.0001 dPsi +2.62e-04 phi 3.832185e-04 nu [0.001 0.    0.001] galerkin 3.1e-13 (40 inner, budget)
+  outer  1 rho 1.0e+00: M/eps 1.0000 Bn/beta 0.9999 dPsi +8.98e-05 phi 3.833183e-04 nu [5.501e-04 4.702e-05 8.847e-04] galerkin 5.4e-13 (19 inner, stationary, flat)
+alpha 0.3 done in 11700 s: |J - J_fit| / rms 2.7688e-02, M/M_desc 0.3000, B.n/|B| rms 4.530e-03 (direct 2.663e-03), Psi/Psi_t 1.00009, nu [5.50087368e-04 4.70205320e-05 8.84732956e-04], rho 1.0e+00, anchors 14
+  H_Lag: Ritz values min -1.197e+01, max 3.402e+04, 1 negative of 40
+  GN (|g|^2 part): Ritz values min 5.320e-05, max 1.168e+00, 0 negative of 40
+alpha 0.2: eps 1.7558e-04
+  re-anchor 15: |D| 2.07 mm; M 1.7569e-04 -> 1.7585e-04, B.n 4.532e-03 -> 4.532e-03, Psi 0.497493 -> 0.497492
+  re-anchored in 1233 s

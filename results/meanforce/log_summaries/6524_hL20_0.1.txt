@@ -1,0 +1,11 @@
+# job 6524 hL20_0.1 COMPLETED
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 20/20/12, collocation resolution (54, 54, 36) (28, 109, 37); DESC <|F|>_vol / norm 8.7788e-04; 9 s
+gate: DESC's |F| on NEST's points 8.7615e-04 vs DESC's quadrature 8.7788e-04 (-0.20%)
+start: M 4.0231e-03 = 4.583 M_DESC, rms|F| 7.419e-03, B.n/|B| rms 4.581e-03 (DESC 4.53e-3), Psi 0.497009 (DESC 0.497070), Galerkin 2.1e-14
+gate: B.n/|B| of the start by direct Biot-Savart: rms 2.712e-03 (area-weighted), max 2.944e-02; annulus 4.581e-03
+metric: kappa 1.929e+02 (|y| = rms dJ / rms J_fit (+) sqrt(kappa) rms xi [m])
+start from results/meanforce/s2_gltr_L20N12_a0.1: M/M_desc 0.1000, B.n/|B| 4.5297e-03, Psi 0.497023, |J - J_fit|/rms 4.6431e-02 (on this annulus)
+  H_Lag: Ritz values min 2.934e+02, max 8.339e+05, 0 negative of 30
+  GN (|g|^2 part): Ritz values min 2.058e-04, max 1.272e+00, 0 negative of 30
+hessian h = 1e-09: min 2.9338e+02, max 8.3393e+05, negative 0
