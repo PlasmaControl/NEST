@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-26: Hessian step, penalty rule, host-built metric (branch closest-poisson)
+- Hessian-vector products: the old step 1e-6 gave spurious negative Ritz values (a/40 QR alpha 0.1 state: -1e4, -175, +169 at h = 1e-4, 1e-6, 1e-8). Default now 1e-8; `mf_run.py --hessian-only --start <state> --hessian-h ...` recomputes at saved states. a/40 QR alpha 0.05: +9.29e3 (1e-8), +9.33e3 (1e-9): a local minimum; a/20 QR alpha 0.05: -6e5 .. +8e4 depending on h (not stationary; not used).
+- Penalty rho rises only while a constraint is outside its tolerance (the alpha 0.05 redo went 1 -> 1e3 on a Psi drift of 6e-4).
+- `metric()` builds H_J from a host copy of the current-column table in blocks of points (the L = M = 28 table is 46 GB; the device Gram matrix needed >180 GB); `Anchor.A_table(host=True)`.
+- a/40 QR alpha 0.05 redone with the fixed solver (6374): |J - J_fit|/rms 0.1161 (first run 0.1141), M = 0.0500 M_DESC (first 0.0504).
+
 ## 2026-10-26: QR forced re-anchor on a collapsed radius; flat test ignores vanishing steps (branch closest-poisson)
 - a/20 QR (6276) at alpha 0.05 stalled: |g| 0.19 with the radius at 2e-13 and ratios 0.05-0.18 at tiny steps, i.e. a wrong model gradient: QR's u columns are the anchor's tables (exact at xi = 0), off by O(xi) once the boundary has moved (1.85 mm), and near a hard optimum that error dominates. Its "flat" test took the stall for convergence (|J - J_fit|/rms 0.205 against 6.5e-2 at alpha 0.1; not a valid point of the front).
 - Now: QR re-anchors (exact tables) when the radius is below 1e-8 with accepted ratios < 0.25 and the boundary moved; "flat" (outer and inner) does not count when the radius has collapsed. a/20 QR alpha 0.05 redone from its 0.1 state (6370); gates 6369. L = M = 28 GLTR submitted.

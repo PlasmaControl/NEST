@@ -176,12 +176,18 @@ class Anchor:
                        .reshape(min(self.chunk, len(keep) - i), -1))
         return jnp.concatenate(out, 0).T  # (3 n, k)
 
-    def A_table(self, xi=None):
-        """dJ/du (n_u, n, 3) on this anchor (local)."""
+    def A_table(self, xi=None, host=False):
+        """dJ/du (n_u, n, 3) on this anchor (local); ``host``: a NumPy array built chunk
+        by chunk (the L = M = 28 table is 46 GB: no device copy, no transposes)."""
         xi = jnp.zeros(self.n_xi) if xi is None else xi
         E = np.eye(self.n_u)
-        return jnp.concatenate([_A_chunk(self.fields, jnp.asarray(E[i : i + self.chunk]), xi)
-                                for i in range(0, self.n_u, self.chunk)], 0)
+        parts = [_A_chunk(self.fields, jnp.asarray(E[i : i + self.chunk]), xi)
+                 for i in range(0, self.n_u, self.chunk)] if not host else None
+        if host:
+            parts = [np.asarray(_A_chunk(self.fields, jnp.asarray(E[i : i + self.chunk]), xi))
+                     for i in range(0, self.n_u, self.chunk)]
+            return np.concatenate(parts, 0)
+        return jnp.concatenate(parts, 0)
 
     def build_tables(self, x_u):
         """u columns of J, B, B.n, B on the boundary and Psi at xi = 0 (n_u field
@@ -438,12 +444,20 @@ class Rows:
 
 
 # --------------------------------------------------------------- metric
-def metric(A_u, sw, rmsJ, G_xi, kappa, reg=1e-10):
+def metric(A_u, sw, rmsJ, G_xi, kappa, reg=1e-10, pblock=20000):
     """L = blockdiag(L_u, L_xi), L L^T = blockdiag(H_J, kappa G_xi): |L^T d| is the rms
-    change of J / rms J_fit and sqrt(kappa) x the rms boundary displacement [m]."""
-    n_u = A_u.shape[0]
-    Aw = (sw[None, :, None] * A_u).reshape(n_u, -1) / rmsJ
-    HJ = np.asarray(Aw @ Aw.T)
+    change of J / rms J_fit and sqrt(kappa) x the rms boundary displacement [m].
+    H_J = sum over blocks of ``pblock`` points of (sw A / rms J_fit)(sw A / rms J_fit)^T
+    (A_u on the device or the host; one block of it on the device at a time)."""
+    n_u, n = A_u.shape[0], A_u.shape[1]
+    sw = np.asarray(sw)
+    HJ = jnp.zeros((n_u, n_u))
+    for p0 in range(0, n, pblock):
+        blk = jnp.asarray(A_u[:, p0 : p0 + pblock]) * jnp.asarray(sw[p0 : p0 + pblock])[None, :, None]
+        blk = blk.reshape(n_u, -1) / rmsJ
+        HJ = HJ + blk @ blk.T
+        del blk
+    HJ = np.asarray(HJ)
     blocks = []
     for H in (HJ, kappa * np.asarray(G_xi)):
         Hr = H + reg * np.mean(np.diag(H)) * np.eye(len(H))
@@ -669,7 +683,11 @@ class Solver:
                 callback(z, s, outer)
             if c[0] <= tol[0] and c[1] <= tol[1] and abs(c[2]) <= tol[2] and k > 0 and stationary:
                 break
-            if viol > 0.25 * viol_prev and W.rho < rho_max:
+            within = c[0] <= tol[0] and c[1] <= tol[1] and abs(c[2]) <= tol[2]
+            # the penalty rises only while a constraint is outside its tolerance: a violation
+            # already within it that merely fails to shrink by 4 (a Psi drift of 6e-4 at
+            # tolerance 1e-2) sent rho from 1 to 1e3 in the a/40 alpha 0.05 redo
+            if viol > 0.25 * viol_prev and W.rho < rho_max and not within:
                 W.rho *= 10.0
             viol_prev = viol
         return z, outer
@@ -766,7 +784,7 @@ class Solver:
 
 
 # ------------------------------------------------------------ Hessian
-def hessian_lanczos(A, W, z, met, norm, k=60, active=None, h=1e-6, log=print):
+def hessian_lanczos(A, W, z, met, norm, k=60, active=None, h=1e-8, log=print):
     """Extreme eigenvalues of the Hessian of the Lagrangian |g|^2/2 + nu_F c_F + nu_B c_B
     + nu_P c_P in the metric variables, reduced to the tangent space of the active
     constraints, by Lanczos with Hessian-vector products from central differences of

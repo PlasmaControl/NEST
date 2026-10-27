@@ -93,6 +93,11 @@ def main():
                     help="vectors per batch of field-solve products (tables, xi columns); default "
                          "32 (40 / frac)^3, the annulus' size relative to a/40 (a/80: 4)")
     ap.add_argument("--hessian-k", type=int, default=40, help="Lanczos steps (0: none)")
+    ap.add_argument("--hessian-only", action="store_true",
+                    help="with --start: no steps; the Lagrangian's Hessian at the loaded state "
+                         "(bound alphas[0], its multipliers) for each --hessian-h")
+    ap.add_argument("--hessian-h", type=float, nargs="+", default=[1e-8],
+                    help="central-difference step of the Hessian-vector products (metric units)")
     ap.add_argument("--kappa", type=float, default=None,
                     help="metric weight of xi (default: probed so the columns match u's)")
     ap.add_argument("--psi-target", default="start", choices=["start", "desc"])
@@ -197,7 +202,7 @@ def main():
     # the metric: H_J and the boundary displacement's rms, weighted by kappa
     Fb = A.Fb
     G_xi = Fb.T @ Fb / Fb.shape[0]
-    A_u = A.A_table()
+    A_u = A.A_table(host=True)
     L1, HJ = mf.metric(A_u, np.asarray(s0["sw"]), rmsJ, G_xi, 1.0)
     W = mf.Weights(a.alphas[0] * M_desc, a.beta, Psi_t, rho=a.rho0, band=a.band)
     if a.kappa is None:  # mean diag of J^T J in the metric variables: xi's equal to u's
@@ -256,6 +261,8 @@ def main():
         return An, zn
 
     z = z0
+    if a.hessian_only and a.start is None:
+        raise SystemExit("--hessian-only needs --start")
     if a.start is not None:  # the saved state's geometry as the first anchor, xi = 0
         import desc.io
         st = np.load(a.start + ".npz")
@@ -280,6 +287,19 @@ def main():
               f"{run['start state']['|J-J_fit|/rms']:.4e} (on this annulus)", flush=True)
         del s1
         dump()
+
+    if a.hessian_only:
+        W.eps = a.alphas[0] * M_desc
+        run["hessian check"] = {"state": a.start, "alpha": a.alphas[0], "by h": {}}
+        for h_ in a.hessian_h:
+            t2 = time.time()
+            r_ = mf.hessian_lanczos(A, W, z, met, norm, k=a.hessian_k, h=h_)
+            r_["time"] = time.time() - t2
+            run["hessian check"]["by h"][f"{h_:g}"] = r_
+            print(f"hessian h = {h_:g}: min {r_['H_Lag']['min']:.4e}, max {r_['H_Lag']['max']:.4e}, "
+                  f"negative {r_['H_Lag']['negative']}", flush=True)
+            dump()
+        return
 
     name = os.path.basename(a.out)
     solver = mf.Solver(A, met, W, norm, step=a.method, dmax=dmax_of(A), max_disp=a.max_disp,
