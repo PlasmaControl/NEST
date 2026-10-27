@@ -666,7 +666,10 @@ class Solver:
             flat = (len(phis) > stat_window
                     and abs(phis[-stat_window - 1] - phis[-1]) <= stat_tol * abs(phis[-1])
                     and hist[-1]["Delta_next"] > 1e-8)
-            stationary = status == "stationary" or flat
+            # an inactive mean-force bound (slack > 1%) with a still-moving objective is not
+            # stationary: its multiplier is ~0 and J could fall by moving to the bound (the
+            # 16/16/16 alpha 0.05 run ended at M = 0.93 eps this way)
+            stationary = status == "stationary" or (flat and c[0] >= -0.01)
             nu_old = W.nu.copy()
             W.nu = np.array([W.d1(c[0], W.nu[0]), W.d1(c[1], W.nu[1]), W.nu[2] + W.rho * c[2]])
             o = {"outer": k, "rho": W.rho, "nu_before": nu_old.tolist(), "nu": W.nu.tolist(),

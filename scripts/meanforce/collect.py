@@ -63,6 +63,8 @@ def load(d):
 
 
 def table(runs):
+    """(!) after M: the mean-force bound is inactive by more than 1%: the state is not at the
+    optimum of that bound (an inactive bound has a zero multiplier, the objective could fall)."""
     L = ["| run | spacing | basis (L = M / N) | method | alpha | \\|J − J_fit\\| / rms | M / M_DESC | "
          "B·n/\\|B\\| rms | Ψ/Ψ_start − 1 | stationary | time [min] |",
          "|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -71,7 +73,7 @@ def table(runs):
         for x in r["rows"]:
             dpsi = (x["Psi"] / r["Psi_t"] - 1) if r["Psi_t"] else float("nan")
             L.append(f"| {stem} | a/{frac} | {lm} / {n} | {meth} | {x['alpha']:g} | {x['g']:.4e} | "
-                     f"{x['M']:.4f} | {x['Bn']:.3e} | {dpsi:+.1e} | "
+                     f"{x['M']:.4f}{' (!)' if x['M'] < 0.99 * x['alpha'] else ''} | {x['Bn']:.3e} | {dpsi:+.1e} | "
                      f"{'yes' if x['stationary'] else ('no' if x['stationary'] is not None else '-')} | "
                      f"{x['time'] / 60:.0f} |")
     return "\n".join(L)

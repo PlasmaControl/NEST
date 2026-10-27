@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-10-27: 16/16/16 alpha 0.05 not converged; inactive-bound check (branch closest-poisson)
+- 16/16/16 alpha 0.05 (6482) ended at M = 0.0464 M_DESC (bound 0.05), B.n 0.5 beta, nu_F falling 0.17 -> 0.016 and |J - J_fit|/rms 0.104 still decreasing slowly (steps 4e-5 in a radius of 1e-2): the "flat" stop took the slow creep for convergence. Continued from its state with 120 steps and a tighter stop (6540). Now "flat" counts only when the mean-force bound is not slack by more than 1%; `collect.py` marks M < 0.99 alpha with (!).
+- 16/16/16 elsewhere: |J - J_fit|/rms within 1.7% of 16/16/12 for alpha >= 0.1.
+
 ## 2026-10-27: common-apparatus evaluation (branch closest-poisson)
 - `scripts/meanforce/eval_common.py`: saved states evaluated on one grid (L = M = 28's), annulus (a/40) and pressure space, against DESC's own current (|J - J_DESC|/rms) instead of each run's fit. alpha 0.1: L = M 16, 20, 24, 28 give 6.70e-2, 5.77e-2, 5.49e-2, 5.37e-2; alpha 0.05: 1.199e-1, 7.19e-2, 6.59e-2, 6.36e-2 (monotone; the non-monotone own-fit values at loose bounds are the per-basis J_fit). The L28 state reproduces M = 0.1000 and 0.0500 M_DESC.
 - Hessians at h = 1e-9: all positive for L = M 20, 24, 28 at alpha 0.1, 0.05. a/100 alpha 0.1: |J - J_fit|/rms 5.352e-2 (a/60 GLTR 5.350e-2, a/40 5.392e-2). `scripts/meanforce/collect.py` (tables, front, spacing and basis plots).
