@@ -96,7 +96,7 @@ def main():
     ap.add_argument("--hessian-only", action="store_true",
                     help="with --start: no steps; the Lagrangian's Hessian at the loaded state "
                          "(bound alphas[0], its multipliers) for each --hessian-h")
-    ap.add_argument("--hessian-h", type=float, nargs="+", default=[1e-8],
+    ap.add_argument("--hessian-h", type=float, nargs="+", default=[1e-9],
                     help="central-difference step of the Hessian-vector products (metric units)")
     ap.add_argument("--kappa", type=float, default=None,
                     help="metric weight of xi (default: probed so the columns match u's)")

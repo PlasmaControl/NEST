@@ -784,7 +784,7 @@ class Solver:
 
 
 # ------------------------------------------------------------ Hessian
-def hessian_lanczos(A, W, z, met, norm, k=60, active=None, h=1e-8, log=print):
+def hessian_lanczos(A, W, z, met, norm, k=60, active=None, h=1e-9, log=print):
     """Extreme eigenvalues of the Hessian of the Lagrangian |g|^2/2 + nu_F c_F + nu_B c_B
     + nu_P c_P in the metric variables, reduced to the tangent space of the active
     constraints, by Lanczos with Hessian-vector products from central differences of
