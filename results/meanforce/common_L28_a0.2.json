@@ -1,0 +1,77 @@
+{
+ "args": {
+  "eq": "/scratch/gpfs/EKOLEMEN/lk1158/NEST_mf/desc_input/vmec_free_boundary/NCSX/NCSX_fb_L16M16N12.h5",
+  "coils": "/scratch/gpfs/EKOLEMEN/lk1158/NEST_mf/desc_input/vmec_free_boundary/NCSX/NCSX_coils.h5",
+  "factors": [
+   1.75,
+   1.75,
+   1.0
+  ],
+  "colloc": 1.5,
+  "frac": 40.0,
+  "tan_chunk": null,
+  "state": [
+   "L28=results/meanforce/s2_gltr_L28N12_a0.2:1.75,1.75,1",
+   "L24=results/meanforce/s2_gltr_L24N12_a0.2:1.5,1.5,1",
+   "L20=results/meanforce/s2_gltr_L20N12_a0.2:1.25,1.25,1",
+   "L16=results/meanforce/sweep_gltr_a40_a0.2:1,1,1"
+  ],
+  "out": "results/meanforce/common_L28_a0.2"
+ },
+ "M_desc": 0.0008778813738398283,
+ "resolution": [
+  66,
+  66,
+  36
+ ],
+ "states": {
+  "L28": {
+   "M": 0.00017556815261954973,
+   "M/M_desc": 0.19999074801145353,
+   "rms|F|": 0.00042211269235097347,
+   "Bn/|B| rms": 0.004529885218267419,
+   "Psi": 0.4970703195887535,
+   "|J-J_DESC|/rms": 0.04508001935169973,
+   "own |J-J_fit|/rms": null,
+   "galerkin": 1.6285193990563796e-12,
+   "n_u": 11590,
+   "time": 43.82858657836914
+  },
+  "L24": {
+   "M": 0.00017786748661056514,
+   "M/M_desc": 0.20260993331317395,
+   "rms|F|": 0.0003971630483638063,
+   "Bn/|B| rms": 0.004530977719560738,
+   "Psi": 0.4970623088524051,
+   "|J-J_DESC|/rms": 0.04598529353221898,
+   "own |J-J_fit|/rms": null,
+   "galerkin": 8.371825618727402e-13,
+   "n_u": 8738,
+   "time": 42.70199513435364
+  },
+  "L20": {
+   "M": 0.00017454659574039281,
+   "M/M_desc": 0.1988270863715116,
+   "rms|F|": 0.0003671106940728922,
+   "Bn/|B| rms": 0.004529964516263891,
+   "Psi": 0.4969949651533462,
+   "|J-J_DESC|/rms": 0.0482661241732974,
+   "own |J-J_fit|/rms": null,
+   "galerkin": 2.2644904530835238e-12,
+   "n_u": 6286,
+   "time": 42.55383276939392
+  },
+  "L16": {
+   "M": 0.00016260450933938743,
+   "M/M_desc": 0.18522378328652755,
+   "rms|F|": 0.000302725088424015,
+   "Bn/|B| rms": 0.004530228317243964,
+   "Psi": 0.4970893654648627,
+   "|J-J_DESC|/rms": 0.05398669823270406,
+   "own |J-J_fit|/rms": null,
+   "galerkin": 2.361987532246799e-12,
+   "n_u": 4234,
+   "time": 38.3887403011322
+  }
+ }
+}

@@ -1,0 +1,77 @@
+{
+ "args": {
+  "eq": "/scratch/gpfs/EKOLEMEN/lk1158/NEST_mf/desc_input/vmec_free_boundary/NCSX/NCSX_fb_L16M16N12.h5",
+  "coils": "/scratch/gpfs/EKOLEMEN/lk1158/NEST_mf/desc_input/vmec_free_boundary/NCSX/NCSX_coils.h5",
+  "factors": [
+   1.75,
+   1.75,
+   1.0
+  ],
+  "colloc": 1.5,
+  "frac": 40.0,
+  "tan_chunk": null,
+  "state": [
+   "L28=results/meanforce/s2_gltr_L28N12_a0.05:1.75,1.75,1",
+   "L24=results/meanforce/s2_gltr_L24N12_a0.05:1.5,1.5,1",
+   "L20=results/meanforce/s2_gltr_L20N12_a0.05:1.25,1.25,1",
+   "L16=results/meanforce/sweep_gltr_a40_a0.05:1,1,1"
+  ],
+  "out": "results/meanforce/common_L28_a0.05"
+ },
+ "M_desc": 0.0008778813738398283,
+ "resolution": [
+  66,
+  66,
+  36
+ ],
+ "states": {
+  "L28": {
+   "M": 4.3889879203815105e-05,
+   "M/M_desc": 0.049995227728596194,
+   "rms|F|": 0.00010403071740448691,
+   "Bn/|B| rms": 0.004476776029272283,
+   "Psi": 0.4970239625961206,
+   "|J-J_DESC|/rms": 0.06363575435641791,
+   "own |J-J_fit|/rms": null,
+   "galerkin": 6.801578779309991e-12,
+   "n_u": 11590,
+   "time": 39.87312364578247
+  },
+  "L24": {
+   "M": 4.420648118617401e-05,
+   "M/M_desc": 0.05035587096786906,
+   "rms|F|": 9.97573366042191e-05,
+   "Bn/|B| rms": 0.004467892920829524,
+   "Psi": 0.49708218402810034,
+   "|J-J_DESC|/rms": 0.06586376911620705,
+   "own |J-J_fit|/rms": null,
+   "galerkin": 4.120275977166797e-12,
+   "n_u": 8738,
+   "time": 42.92562651634216
+  },
+  "L20": {
+   "M": 4.3289283229473395e-05,
+   "M/M_desc": 0.04931108520975595,
+   "rms|F|": 8.960009175049469e-05,
+   "Bn/|B| rms": 0.004434162836229377,
+   "Psi": 0.49700742574233947,
+   "|J-J_DESC|/rms": 0.07192300994333899,
+   "own |J-J_fit|/rms": null,
+   "galerkin": 4.406289887701701e-12,
+   "n_u": 6286,
+   "time": 42.714287996292114
+  },
+  "L16": {
+   "M": 4.090517606720379e-05,
+   "M/M_desc": 0.04659533427424904,
+   "rms|F|": 6.762833858759313e-05,
+   "Bn/|B| rms": 0.002358405398762563,
+   "Psi": 0.49701173983562735,
+   "|J-J_DESC|/rms": 0.11991414962784878,
+   "own |J-J_fit|/rms": null,
+   "galerkin": 1.2749171218029971e-11,
+   "n_u": 4234,
+   "time": 45.062779903411865
+  }
+ }
+}

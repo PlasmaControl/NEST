@@ -170,6 +170,45 @@ def basis(runs, path):
     plt.close(fig)
 
 
+def common(d, path, md):
+    """Study 2 on one apparatus (``eval_common.py``): |J - J_DESC|/rms against L = M and the
+    common front, from <dir>/common_L28_a<alpha>.json."""
+    data = {}
+    for al in ALPHAS:
+        p = os.path.join(d, f"common_L28_a{al:g}.json")
+        if os.path.exists(p):
+            data[al] = json.load(open(p))["states"]
+    if not data:
+        return
+    labs = ["L16", "L20", "L24", "L28"]
+    L = ["| α | " + " | ".join(f"{l}: \\|J − J_DESC\\| / rms (M/M_DESC)" for l in labs) + " |",
+         "|---|" + "---|" * len(labs)]
+    for al, st in data.items():
+        L.append(f"| {al:g} | " + " | ".join(
+            f"{st[l]['|J-J_DESC|/rms']:.4e} ({st[l]['M/M_desc']:.4f})" if l in st else "-"
+            for l in labs) + " |")
+    open(md, "w").write("\n".join(L) + "\n")
+    fig, ax = plt.subplots(1, 2, figsize=(13, 5))
+    for k, (al, st) in enumerate(data.items()):
+        xs = [int(l[1:]) for l in labs if l in st]
+        ys = [st[l]["|J-J_DESC|/rms"] for l in labs if l in st]
+        ax[0].semilogy(xs, ys, "o-", color=f"C{k}", label=f"α = {al:g}")
+        ax[1].loglog([st[l]["M/M_desc"] for l in labs if l in st], ys, "o-", color=f"C{k}", ms=4,
+                     label=f"α = {al:g}")
+    ax[0].set_xlabel("L = M of the state's basis (N = 12)")
+    ax[0].set_ylabel("|J − J_DESC| / rms J_DESC (common apparatus)")
+    ax[0].set_title("study 2, fixed target")
+    ax[1].set_xlabel("M / M_DESC (common pressure space)")
+    ax[1].set_ylabel("|J − J_DESC| / rms J_DESC")
+    ax[1].set_title("the front on one apparatus (one curve per bound: the 4 bases)")
+    for a_ in ax:
+        a_.legend(fontsize=7)
+        a_.grid(alpha=0.3, which="both")
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default="results/meanforce")
@@ -182,6 +221,7 @@ def main():
     fronts(runs, a.out + "_front.png")
     spacing(runs, a.out + "_spacing.png")
     basis(runs, a.out + "_basis.png")
+    common(a.dir, a.out + "_common.png", a.out + "_common_table.md")
     print(f"{len(runs)} runs; wrote {a.out}_table.md and the three figures")
 
 
