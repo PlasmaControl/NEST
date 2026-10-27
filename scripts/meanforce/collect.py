@@ -35,6 +35,8 @@ RUNS = {
     "s1_qr_a80": (80, 16, 12, "QR"), "s1_gltr_a80": (80, 16, 12, "GLTR"),
     "s1c_gltr_a100_a0.5": (100, 16, 12, "GLTR"), "s1c_gltr_a120_a0.5": (120, 16, 12, "GLTR"),
     "s1c_gltr_a100_a0.1": (100, 16, 12, "GLTR"), "s1c_gltr_a120_a0.1": (120, 16, 12, "GLTR"),
+    "s1c_gltr_a100_a0.05": (100, 16, 12, "GLTR"), "s1c_gltr_a120_a0.05": (120, 16, 12, "GLTR"),
+    "s2_gltr_L16N16_r05": (40, 16, 16, "GLTR"),
     "s2_gltr_L20N12": (40, 20, 12, "GLTR"), "s2_gltr_L24N12": (40, 24, 12, "GLTR"),
     "s2_gltr_L28N12": (40, 28, 12, "GLTR"), "s2_gltr_L16N16": (40, 16, 16, "GLTR"),
 }
@@ -111,7 +113,8 @@ def spacing(runs, path):
     methods = {"GLTR": ["sweep_gltr_a40", "s1_gltr_a20", "s1_gltr_a60", "s1_gltr_a80"],
                "QR": ["sweep_qr_a40", "s1_qr_a20", "s1_qr_a60", "s1_qr_a80"]}
     cont = {0.5: ["s1c_gltr_a100_a0.5", "s1c_gltr_a120_a0.5"],
-            0.1: ["s1c_gltr_a100_a0.1", "s1c_gltr_a120_a0.1"]}
+            0.1: ["s1c_gltr_a100_a0.1", "s1c_gltr_a120_a0.1"],
+            0.05: ["s1c_gltr_a100_a0.05", "s1c_gltr_a120_a0.05"]}
     fig, ax = plt.subplots(1, 2, figsize=(13, 5))
     for k, alpha in enumerate((0.5, 0.3, 0.2, 0.1, 0.05)):
         for meth, stems in methods.items():
