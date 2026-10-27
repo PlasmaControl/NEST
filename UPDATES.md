@@ -2,6 +2,9 @@
 
 One entry per commit, newest first.
 
+## 2026-10-27: full report of the mean-force study (branch closest-poisson)
+- `docs/meanforce_poisson_report.md`: methods (moving boundary, Poisson projection, DESC mean force, augmented Lagrangian, sum-of-squares model, GLTR and QR, diagnostics, gates), all results (a/40 fronts, spacing study, basis study with the common apparatus, radial force), the bugs found and fixed, caveats and remaining work. `results/meanforce/` JSONs refreshed.
+
 ## 2026-10-27: handoff and results snapshot (branch closest-poisson)
 - `docs/meanforce_handoff.md` (study, code map, Stellar-AI commands, running jobs, caveats, open work) and `docs/meanforce_results.md` (all results so far: a/40 fronts of both solvers, study 1 spacing a/20-a/120, study 2 basis 16-28 and 16/16/16 with the common-apparatus table, radial force, caveats). `results/meanforce/` (32 MB: run JSONs, saved states, Hessian and evaluation outputs, condensed logs) committed with `git add -f` (the directory is git-ignored).
 
