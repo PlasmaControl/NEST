@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-10-29: fixed-boundary report, run records, states and diagnostic outputs (branch fixed-boundary)
+- `docs/fixed_boundary_report.md`: the problem, code map, every solver component with the evidence for it, how to run (recipes for alpha 0.7, 0.05, warm start into 48/32/18, 0.005), memory and time, results, diagnostics, caveats and open work.
+- Results (NCSX, a/40, one H200): alpha 0.7 converged at 16/16/12 (|J - J_fit|/rms 0.01795) and 32/32/24 (0.02230); alpha 0.05 converged at 32/32/24 (0.09109, M 0.0500 M_DESC; `--model beta --beta 0.5 --precond force`), 48/32/18 nearly identical (checkpoint 0.0947). alpha 0.01 (32/32/24) and 0.005 (48/32/18, 0.2089 at M 0.0050 M_DESC) are not converged: the 0.005 run's "stationary" flag is set by a flat stop at a collapsed trust radius.
+- Diagnostics: the 3/5 island width at the state's own rational is 0.109 / 0.059 / 0.032 / 0.023 for alpha 0.7 / 0.05 / 0.01 / 0.005, with no pressure flattening. iota drifts upward (+0.026 core at 0.05, ~+0.06 at 0.005). The MDE residual falls (rms R/S near 3/5: DESC 0.13, alpha 0.05 0.028, 0.005 0.006). There is no 1/x Pfirsch-Schlueter tail along field lines, and the resonant closed-orbit dl/B variation (Hamada) at 3/5 falls to x0.54 / x0.24 of the start state.
+- `results/meanforce_fixed/` (added with `git add -f`; `results/` is ignored): `runs/*.json` (fx16g, fxL32h, fxD05b, fxA01, fxR48, fxR48b005, fxT1), `states/*.npz` (u, c_p, nu, rho for warm starts; 2.4 MB), `diagnostics/*.npz` (13 MB). `figures/meanforce_fixed/` (11 figures).
+
 ## 2026-10-29: diagnostics of fixed-boundary states (branch fixed-boundary)
 - `scripts/meanforce/`, all reading `mf_fixed.py` states (npz with u, c_p) and evaluating B = B_ext (coils) + the run's own annulus field:
   - `poincare_fixed.py` (field-line tracing on the annulus field; table-vs-solver gate printed; `--res-seeds rho:m,...`, `--pi-m-seeds`) and `poincare_multi.py` (plots);

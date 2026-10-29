@@ -1,0 +1,176 @@
+{
+ "args": {
+  "eq": "/work/src/desc_input/vmec_free_boundary/NCSX/NCSX_fb_L16M16N12.h5",
+  "coils": "/work/src/desc_input/vmec_free_boundary/NCSX/NCSX_coils.h5",
+  "factors": [
+   1,
+   1,
+   1
+  ],
+  "LMN": [
+   32,
+   32,
+   24
+  ],
+  "colloc": 1.5,
+  "frac": 40.0,
+  "N_phi": null,
+  "pad": 0.02,
+  "mode_chunk": 16,
+  "rblock": 32,
+  "interp_order": 8,
+  "alphas": [
+   0.7
+  ],
+  "rho0": 1.0,
+  "band": 0.05,
+  "maxiter": 40,
+  "max_outer": 25,
+  "gtol": 0.001,
+  "cg": 200,
+  "model": "hvp",
+  "cg_tol": 0.01,
+  "stat_tol": 0.001,
+  "stat_window": 10,
+  "delta0": 0.01,
+  "gram_chunk": 1024,
+  "time_budget": null,
+  "setup_only": false,
+  "cross": "/results/fx/fx16g/fx16g_a0.7.npz",
+  "cross_factors": [
+   1.0,
+   1.0,
+   1.0
+  ],
+  "cross_LMN": null,
+  "cross_ref": "/results/fx/fxL32h/fxL32h_a0.7.npz",
+  "start": null,
+  "out": "../out/fxT1",
+  "mirror": "/results/fx/fxT1",
+  "hvp": true
+ },
+ "setup": {
+  "load + fits + reference": 40.70184874534607,
+  "annulus + locate + ForceResidual": 47.61900019645691,
+  "Fields": 18.064350128173828,
+  "pressure Gram": 27.966164588928223,
+  "start state (first compile)": 5.958501100540161,
+  "state eval [s]": 0.04734039306640625
+ },
+ "alphas": [],
+ "memory": [
+  {
+   "phase": "load + fits + reference",
+   "t": 40.70333814620972,
+   "in use GB": 0.000561152,
+   "peak GB": 0.221367552,
+   "host maxrss GB": 5.298312
+  },
+  {
+   "phase": "annulus + locate + ForceResidual",
+   "t": 88.32400751113892,
+   "in use GB": 0.023730176,
+   "peak GB": 11.635650816,
+   "host maxrss GB": 7.048964
+  },
+  {
+   "phase": "Fields",
+   "t": 106.39027619361877,
+   "in use GB": 2.346906368,
+   "peak GB": 26.910757632,
+   "host maxrss GB": 11.306316
+  },
+  {
+   "phase": "pressure Gram",
+   "t": 134.35824584960938,
+   "in use GB": 3.990793472,
+   "peak GB": 26.910757632,
+   "host maxrss GB": 11.306316
+  },
+  {
+   "phase": "start state (first compile)",
+   "t": 142.7901120185852,
+   "in use GB": 3.941426176,
+   "peak GB": 26.910757632,
+   "host maxrss GB": 11.306316
+  }
+ ],
+ "basis": [
+  32,
+  32,
+  24
+ ],
+ "hvp diag": [],
+ "sizes": {
+  "n_u": 29074,
+  "n_p": 13753,
+  "points": 295075,
+  "annulus": "CylindricalGrid(r [0.9895, 1.8225] n 164, z [-0.6680, 0.6680] n 262, N_phi 475, NFP 3: 20.41M nodes)",
+  "annulus nodes": 20409800
+ },
+ "pressure space": {
+  "rank": 13753,
+  "cond(G)": 2787846.9076865097
+ },
+ "start": {
+  "M": 0.0049318945735774625,
+  "M/M_desc": 5.617951035919004,
+  "rms|F|": 0.011249317901672577,
+  "galerkin": 6.456900989196457e-17,
+  "rms J_fit": 819973.3778005679,
+  "M_desc": 0.0008778813738398283
+ },
+ "cross": {
+  "low basis": [
+   16,
+   16,
+   12
+  ],
+  "low n_u": 4234,
+  "file": "/results/fx/fx16g/fx16g_a0.7.npz",
+  "eps/M_desc": 0.7,
+  "cases": {
+   "J_fit (this basis)": {
+    "|J-J_fit|/rms": 0.0,
+    "M/M_desc": 5.617951035919004,
+    "M/eps": 8.025644337027149,
+    "rms|F|": 0.011249317901672577,
+    "galerkin": 6.456900989196457e-17
+   },
+   "J_fit (low basis, embedded)": {
+    "|J-J_fit|/rms": 0.036553882194018,
+    "M/M_desc": 2.0506985689270567,
+    "M/eps": 2.9295693841815096,
+    "rms|F|": 0.00260339040977127,
+    "galerkin": 2.238314972821344e-16
+   },
+   "low-res optimum (embedded)": {
+    "|J-J_fit|/rms": 0.04090678382853111,
+    "M/M_desc": 0.6678653256266471,
+    "M/eps": 0.9540933223237816,
+    "rms|F|": 0.0009830270384224144,
+    "galerkin": 1.1056111252177663e-16
+   },
+   "this-res optimum": {
+    "|J-J_fit|/rms": 0.022296300780176345,
+    "M/M_desc": 0.6999999294625782,
+    "M/eps": 0.9999998992322545,
+    "rms|F|": 0.0013655665466385063,
+    "galerkin": 1.0298388893560516e-16
+   }
+  },
+  "decomposition": {
+   "|J_lo - J_fit_lo| (solution deviation) ^2": 0.00032172105268628103,
+   "|J_fit_lo - J_fit_hi| (target change) ^2": 0.001336186303454146,
+   "2 <cross> ": 1.5457607053747186e-05,
+   "|J_lo - J_fit_hi| ^2 (total)": 0.001673364963194174,
+   "sqrt: solution, target, total": [
+    0.017936584197842158,
+    0.036553882194018,
+    0.04090678382853111
+   ]
+  },
+  "time [s]": 1.6774086952209473
+ },
+ "stage": "cross evaluation"
+}
