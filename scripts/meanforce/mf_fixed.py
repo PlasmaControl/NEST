@@ -84,16 +84,17 @@ def main():
     ap.add_argument("--maxiter", type=int, default=40)
     ap.add_argument("--max-outer", type=int, default=25)
     ap.add_argument("--gtol", type=float, default=1e-3)
-    ap.add_argument("--cg", type=int, default=200)
+    ap.add_argument("--cg", type=int, default=400, help="Lanczos cap per trust-region subproblem")
     ap.add_argument("--subproblem-test", type=int, nargs="+", default=None,
                     help="Lanczos caps: at the --start state solve the GN trust-region subproblem once per "
                          "cap (radius --test-delta), report step, predicted/actual decrease, residual, Ritz "
                          "extremes, then exit")
     ap.add_argument("--test-delta", type=float, default=1.6e-2)
     ap.add_argument("--test-model", choices=("gn", "hvp"), default="gn")
-    ap.add_argument("--precond", choices=("hj", "force"), default="hj",
-                    help="TR metric: chol(H_J) (misfit only, fixed) or chol(H_J + H_F(local) + a a^T), "
-                         "the GN matrix without the J0 x dB part, rebuilt at every outer iteration")
+    ap.add_argument("--precond", choices=("hj", "force"), default="force",
+                    help="TR metric: chol(H_J + H_F(local) + a a^T), the GN matrix without the J0 x dB part, "
+                         "rebuilt on outer updates and Lanczos-cap / rent-or-buy triggers (default), or "
+                         "chol(H_J) (misfit only, fixed; enough for loose bounds, fails at alpha 0.05)")
     ap.add_argument("--hvp-far", type=float, default=0.1,
                     help="hybrid: use the GN/majorizer model while c_F = M/eps - 1 exceeds this")
     ap.add_argument("--hvp-fallback", type=int, default=5,
@@ -109,15 +110,18 @@ def main():
                          "more than this factor since the last build (always at the first)")
     ap.add_argument("--beta-adapt", action="store_true", help="self-tuning beta (model beta)")
     ap.add_argument("--beta-min", type=float, default=1.0 / 32)
-    ap.add_argument("--model", choices=("hvp", "gn", "hybrid", "beta"), default="hvp",
-                    help="TR model: exact Hessian-vector products (default; indefinite Lanczos-TR) or the "
-                         "Gauss-Newton/majorizer model of meanforce.Rows (collaborator parity)")
+    ap.add_argument("--model", choices=("hvp", "gn", "hybrid", "beta"), default="beta",
+                    help="TR model: beta (default; the majorizer with the force rows' curvature along the "
+                         "active direction scaled by --beta, the only model that converged alpha 0.05), "
+                         "hvp (exact Hessian-vector products, indefinite Lanczos-TR; fastest at loose "
+                         "bounds, collapses near small ones), gn (Gauss-Newton/majorizer of meanforce.Rows, "
+                         "collaborator parity) or hybrid (gn far from the bound, hvp near it)")
     ap.add_argument("--hvp", dest="model", action="store_const", const="hvp", help="alias for --model hvp")
     ap.add_argument("--gn", dest="model", action="store_const", const="gn", help="alias for --model gn")
     ap.add_argument("--cg-tol", type=float, default=1e-2)
     ap.add_argument("--stat-tol", type=float, default=1e-3)
     ap.add_argument("--stat-window", type=int, default=10)
-    ap.add_argument("--delta0", type=float, default=1e-2)
+    ap.add_argument("--delta0", type=float, default=1e-3, help="first trust radius (and the radius at each outer reset)")
     ap.add_argument("--no-delta-reset", action="store_true",
                     help="keep the trust radius across outer iterations / bounds (old behaviour)")
     ap.add_argument("--gram-chunk", type=int, default=1024)
@@ -133,9 +137,10 @@ def main():
     ap.add_argument("--start-LMN", type=int, nargs=3, default=None,
                     help="basis L M N of --start when it differs from this run's (embedded; modes "
                          "this basis lacks are dropped)")
-    ap.add_argument("--lanczos-stop", choices=("both", "tr"), default="both",
-                    help="models gn/beta: Lanczos stops when the TR step and the GN minimizer converged "
-                         "(both) or on the TR residual alone (tr)")
+    ap.add_argument("--lanczos-stop", choices=("both", "tr"), default="tr",
+                    help="models gn/beta: Lanczos stops on the TR residual alone (tr, default) or only when "
+                         "the TR step and the unconstrained GN minimizer have both converged (both: the "
+                         "pointwise.lanczos_tr_step rule; 224-400 iterations per boundary step near the bound)")
     ap.add_argument("--no-lean-metric", action="store_true",
                     help="force metric: the reference build (default: the lean, low-memory build)")
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "meanforce", "fixed"))

@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-10-29: mf_fixed.py defaults are the working configuration (branch fixed-boundary)
+- Defaults now `--model beta --beta 0.5 --precond force --lanczos-stop tr --cg 400 --delta0 1e-3` (were `hvp`, `hj`, `both`, 200, 1e-2). These are the flags of every alpha <= 0.05 run; `hvp`/`hj` did not converge alpha 0.05. `--beta-adapt` stays off (the converged alpha 0.05 run did not use it; no gain in local tests). Old behaviour: pass the old values explicitly. Help texts updated; `docs/fixed_boundary_report.md` commands shortened accordingly.
+- Smoke (CPU, NCSX factors 0.5, a/8, alpha 0.05, 4 steps, no model flags): log reports "beta (beta 0.5); metric force ...; LS multiplier on; Lanczos stop tr"; ratios 1.1-1.2.
+
 ## 2026-10-29: fixed-boundary report, run records, states and diagnostic outputs (branch fixed-boundary)
 - `docs/fixed_boundary_report.md`: the problem, code map, every solver component with the evidence for it, how to run (recipes for alpha 0.7, 0.05, warm start into 48/32/18, 0.005), memory and time, results, diagnostics, caveats and open work.
 - Results (NCSX, a/40, one H200): alpha 0.7 converged at 16/16/12 (|J - J_fit|/rms 0.01795) and 32/32/24 (0.02230); alpha 0.05 converged at 32/32/24 (0.09109, M 0.0500 M_DESC; `--model beta --beta 0.5 --precond force`), 48/32/18 nearly identical (checkpoint 0.0947). alpha 0.01 (32/32/24) and 0.005 (48/32/18, 0.2089 at M 0.0050 M_DESC) are not converged: the 0.005 run's "stationary" flag is set by a flat stop at a collapsed trust radius.

@@ -73,7 +73,7 @@ Each item is opt-in or default as stated. The evidence is from NCSX a/40 on one 
 7. **`--lanczos-stop tr`.** `pointwise.lanczos_tr_step` stops only when both the TR step and the unconstrained Gauss-Newton minimizer have converged. Near the bound that made boundary steps take 224-400 Lanczos iterations (interior 34-48) and fired needless metric rebuilds. `tr` (`lanczos_tr_step_H` on J^T J) stops on the TR residual only; identical steps in a local A/B, and the alpha = 0.005 restart state went from the 400 cap to 79-102 iterations.
 8. **Warm starts across bases (`--start <npz> --start-LMN L M N`).** `embed` zero-pads exactly (`test_embed.py`). `embed_truncate` drops the coefficients missing from the target basis (48/32/18 from 32/32/24 drops the N > 18 part: 7,116 coefficients, 0.33% of \|u\|).
 
-The driver defaults are still `--model hvp --precond hj --lanczos-stop both`. They are kept for parity with earlier runs, but **use the recipe in Section 4 for alpha <= 0.1.**
+The driver defaults are the working configuration: `--model beta --beta 0.5 --precond force --lanczos-stop tr --cg 400 --delta0 1e-3`, with the least-squares multiplier and lean builds on. `--beta-adapt` stays off: the converged alpha = 0.05 run did not use it, and it showed no gain in local tests. For earlier behaviour pass `--model hvp|gn --precond hj --lanczos-stop both --cg 200 --delta0 1e-2`.
 
 ---
 
@@ -87,33 +87,30 @@ export NEST_DEVICE=gpu JAX_PLATFORMS=cuda,cpu XLA_PYTHON_CLIENT_PREALLOCATE=fals
 export NEST_CACHE=<shared cache dir>     # basis fits are cached here
 ```
 
-From scratch at alpha = 0.7 (exact HVP is fastest here):
+From scratch at alpha = 0.7. The defaults work at any bound; at loose bounds `--model hvp --precond hj` (fxL32h) was the fastest measured:
 
 ```
-python scripts/meanforce/mf_fixed.py --LMN 32 32 24 --frac 40 --alphas 0.7 --cg 400 --delta0 1e-3 --out out/a07
+python scripts/meanforce/mf_fixed.py --LMN 32 32 24 --frac 40 --alphas 0.7 --out out/a07
 ```
 
 alpha = 0.05 at 32/32/24, with the flags of the converged run fxD05b. fxD05b itself was continued from partial alpha = 0.05 states (fxD05 -> fxD05h, not committed) at M/eps 1.69. A single run from the alpha = 0.7 state with these flags has not been tried:
 
 ```
-python scripts/meanforce/mf_fixed.py --LMN 32 32 24 --frac 40 --alphas 0.05 --cg 400 --delta0 1e-3 \
-  --model beta --beta 0.5 --precond force --refresh-lz 2 --refresh-dM 0.3 \
+python scripts/meanforce/mf_fixed.py --LMN 32 32 24 --frac 40 --alphas 0.05 --refresh-lz 2 --refresh-dM 0.3 \
   --start results/meanforce_fixed/states/fxL32h_a0.7.npz --out out/a005_32
 ```
 
 Warm start into 48/32/18 (fxR48):
 
 ```
-python scripts/meanforce/mf_fixed.py --LMN 48 32 18 --frac 40 --alphas 0.05 --cg 400 --delta0 1e-3 \
-  --model beta --beta 0.5 --beta-adapt --precond force \
+python scripts/meanforce/mf_fixed.py --LMN 48 32 18 --frac 40 --alphas 0.05 --beta-adapt \
   --start results/meanforce_fixed/states/fxD05b_a0.05.npz --start-LMN 32 32 24 --out out/a005_48
 ```
 
 Small alpha (fxR48b005; a smaller inner budget so the outer multiplier updates happen):
 
 ```
-python scripts/meanforce/mf_fixed.py --LMN 48 32 18 --frac 40 --alphas 0.005 --cg 400 --delta0 1e-3 \
-  --maxiter 25 --gtol 3e-3 --model beta --beta 0.5 --beta-adapt --precond force --lanczos-stop tr \
+python scripts/meanforce/mf_fixed.py --LMN 48 32 18 --frac 40 --alphas 0.005 --maxiter 25 --gtol 3e-3 --beta-adapt \
   --start results/meanforce_fixed/states/fxR48_a0.05_latest.npz --out out/a0005_48
 ```
 
@@ -170,7 +167,7 @@ Reading (provisional): as alpha falls, the solver reshapes |B| on the low-order 
 
 ## 7. Caveats and known issues
 
-1. **Defaults are not the recipe.** `mf_fixed.py` defaults to `--model hvp --precond hj --lanczos-stop both`, which did not converge alpha = 0.05. Use Section 4.
+1. **Defaults changed on 2026-10-29** to the working configuration (Section 3, last paragraph). Runs before that date, and their JSON `args`, used `--model hvp --precond hj --lanczos-stop both --cg 200 --delta0 1e-2` unless overridden. The commands in Section 4 give the recorded runs' flags, with one exception: fxD05b and fxR48 predate `--lanczos-stop` and ran with the old rule `both`, while the commands use the new default `tr`. `tr` gave identical steps in a local A/B with 3-5x fewer Lanczos iterations near the bound.
 2. **The stationarity flag can be fooled by a collapsed trust radius.** `FixedSolver` counts an inner solve as stationary if it is "flat" with the bound active (`stationary = status == "stationary" or (flat and c_F >= -0.01)`). fxR48b005's last outer is flat at Delta ~2e-7 with \|grad\| 0.21 (GN share 0.99, ratios ~1), so it reports `stationary: True` but is not a stationary point. Treat alpha = 0.005 as unconverged. A fix: do not let "flat" count when the radius has collapsed, as `meanforce` already does for its own flat test.
 3. **alpha <= 0.01 is not converged.** fxA01 stalled near M/eps 1.02. fxR48b005 reached the bound but is not stationary. Trends quoted at these alphas are indicative.
 4. **Fixed boundary does not fix the current profile.** iota drifts (Section 6.2). Separating resolution effects from profile drift needs a run with <J.B> or iota pinned.
