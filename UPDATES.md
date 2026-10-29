@@ -2,6 +2,21 @@
 
 One entry per commit, newest first.
 
+## 2026-10-29: peak-force-bound and alpha 0.001 runs, their diagnostics (branch fixed-boundary)
+- Runs (NCSX 48/32/18, one H200; records in `results/meanforce_fixed/runs/`):
+  - `fxPA3` (a/40): composite interior p16 (rho < 0.86, 0.02508 x DESC) + edge-mean (0.005186 x DESC) bound, started from the mean-bound alpha 0.005 state, which satisfies it exactly. After the 2 h budget (not stationary) the misfit is 0.01131, against 0.02181 for the mean-bound state. The volume mean rose to 0.058 x M_DESC.
+  - `fxA001` (a/60): mean bound alpha 0.001 from alpha 0.005; cancelled at M/eps ~1.59 after ~2 h. M fell 3.67 -> 1.59 x eps, about 100x slower late than early, with the penalty >97% of the merit throughout.
+  - `runs/fxEpa3_eval.log`: eval-only p-norm report (interior max location, radial shares) for fxPA3 vs alpha 0.05 / 0.005.
+- States (`states/`): `fxPA3_snapA` (17:57), `fxPA3_snapB` (18:47, used by most diagnostics), `fxPA3_final`, `fxA001_snapC` (21:32, traced), `fxA001_a0.001_latest`.
+- Diagnostics (`diagnostics/`):
+  - Resonant-source decompositions `fxRS48`, `fxRS32`, `fxRSpa3` (see `pa3_resonant_sources.csv`). J_fit over-cancels the coils' (5,-3) field by 15%. dJ adds back +0.105 / +0.155 at alpha 0.05 / 0.005, smoothly (no sheet; the same at 32 and 48 radial orders). The peak bound gives back half of it (+0.080), and its dJ drives a new 3/6 island (+0.87 of the coils' 3/6 field).
+  - Radial force `fxEFpa3` (`pa3_radial_force_bands.csv`): the peak bound puts its extra force in the core and mid-radius, mostly parallel.
+  - Poincare sections `fxPpa3` (snapA, alpha 0.005), `fxPpa3B` (snapB, start), `fxPa001` (alpha 0.001 snapC), `fxP48` (alpha 0.05, start); `*_rt.npz` are the crossings mapped to DESC (rho, theta) on phi = 0.
+  - `pa3_pressure_along_lines.csv`: no island is flattened in any state.
+  - `grid_convergence.csv`: no overfitting; colloc 2.5 and annuli a/60, a/80 change M by <= 12%.
+  - Pressure-plane files (`pressure_sections.py` outputs, ~13 MB) are not committed; regenerate them on CPU from the states.
+- Figures (`figures/meanforce_fixed/`): `resonant_sources.png`, `poincare_pa3_vs_a005.png`, `poincare_matched_mean.png` (alpha 0.005 / peak bound / alpha 0.05 at matched mean), `poincare_alpha_trend.png` (alpha 0.05 / 0.005 / 0.001: the 3/5 chain closes to <= 0.004, p constant along lines).
+
 ## 2026-10-29: p-norm (max-type) force bound, exact enclosed-current / flux constraints, resonant-source diagnostic (branch fixed-boundary)
 - `nest/meanforce_fixed.py`:
   - p-norm force bound: `FixedAnchor.set_pnorm(p, mask, exact_beta, edge_ratio, q)`, `pnorm_measures`, `pnorm_kappa`, `desc_pnorm`. With `edge_ratio`, the bound is one composite constraint C = (M_p^q + (r M_edge)^q)^(1/q), interior p-norm plus edge mean. Note: C = 2^(1/q) when both parts sit exactly at their bounds, so scale the bounds by 2^(1/q) to make a reference state exactly feasible. `FixedRows` / `FixedRowsB` carry the per-point weights (beta = p - 1 inside, the model beta on the edge points). The mean path is unchanged when no p-norm is set.

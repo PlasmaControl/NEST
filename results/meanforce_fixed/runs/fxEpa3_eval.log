@@ -1,0 +1,39 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 48/32/18, collocation resolution (96, 72, 45) (49, 145, 46); DESC <|F|>_vol / norm 8.7788e-04
+[setup] load + fits + reference: 41.5 s; mem {'in use GB': 0.000888064, 'peak GB': 0.447579904, 'host maxrss GB': 5.111956}
+    locate: planes 29/238, 0 inside, 3 s
+    locate: planes 58/238, 0 inside, 4 s
+    locate: planes 87/238, 0 inside, 5 s
+    locate: planes 116/238, 0 inside, 5 s
+    locate: planes 145/238, 0 inside, 6 s
+    locate: planes 174/238, 974,417 inside, 12 s
+    locate: planes 203/238, 974,417 inside, 12 s
+    locate: planes 232/238, 974,417 inside, 13 s
+    locate: 3,015,868 inside, 14 s
+[setup] annulus + locate + ForceResidual: 54.4 s; mem {'in use GB': 0.026209792, 'peak GB': 11.635985152, 'host maxrss GB': 6.769388}
+sizes: {'n_u': 41206, 'n_p': 20011, 'points': 326830, 'annulus': 'CylindricalGrid(r [0.9895, 1.8225] n 164, z [-0.6680, 0.6680] n 262, N_phi 475, NFP 3: 20.41M nodes)', 'annulus nodes': 20409800}
+[setup] Fields: 16.6 s; mem {'in use GB': 3.332293632, 'peak GB': 27.863181824, 'host maxrss GB': 10.903588}
+    G = P^T P: slice 1/49, 3 s
+    G = P^T P: slice 8/49, 8 s
+    G = P^T P: slice 16/49, 14 s
+    G = P^T P: slice 24/49, 20 s
+    G = P^T P: slice 32/49, 26 s
+    G = P^T P: slice 40/49, 31 s
+    G = P^T P: slice 48/49, 37 s
+    G = P^T P: slice 49/49, 38 s
+  G = P^T P Gram (20011 x 20011) by radial slices in 38 s
+[setup] pressure Gram: 38.0 s; mem {'in use GB': 6.55702912, 'peak GB': 27.863181824, 'host maxrss GB': 10.903588}
+  pressure space: 20011 columns, Cholesky; cond(G) ~ 1.65e+06 (diag ratio^2; cond(P) ~ 1.28e+03)
+[p-norm] DESC on the same points, p 16: interior p-norm 3.3688e-03, interior max 6.7528e-03, interior mean 4.1054e-04, edge mean 2.2399e-03 (/ norm); interior rho < 0.86: 246790 of 326830 points, volume 0.746
+start: M/M_desc 6.3058, rms|F| 1.696e-02, Galerkin 7.4e-17
+[setup] start state (first compile): 6.2 s; mem {'in use GB': 6.630443264, 'peak GB': 27.863181824, 'host maxrss GB': 10.903588}
+[eval] start (J_fit), p 16: max at rho 0.845; top-20 rho [0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845]; share of |F|^p by rho bin 0.81-0.84: 0.01, 0.84-0.86: 0.99
+[eval] start (J_fit), p 16: M_p / DESC 6.3058, interior max / DESC 5.9470, edge mean / DESC 6.1366, mean / M_desc 7.1610
+[eval] pa3, p 16: max at rho 0.796; top-20 rho [0.743, 0.77, 0.77, 0.77, 0.77, 0.796, 0.796, 0.796, 0.796, 0.796, 0.796, 0.796, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845]; share of |F|^p by rho bin 0.00-0.50: 0.05, 0.50-0.60: 0.04, 0.60-0.70: 0.05, 0.70-0.75: 0.08, 0.75-0.78: 0.09, 0.78-0.81: 0.31, 0.81-0.84: 0.32, 0.84-0.86: 0.06
+[eval] pa3, p 16: M_p / DESC 0.0230, interior max / DESC 0.0167, edge mean / DESC 0.0051, mean / M_desc 0.0580
+[eval] a0.05, p 16: max at rho 0.796; top-20 rho [0.796, 0.796, 0.796, 0.796, 0.796, 0.796, 0.796, 0.796, 0.796, 0.796, 0.821, 0.821, 0.821, 0.821, 0.821, 0.845, 0.845, 0.845, 0.845, 0.845]; share of |F|^p by rho bin 0.75-0.78: 0.09, 0.78-0.81: 0.52, 0.81-0.84: 0.21, 0.84-0.86: 0.18
+[eval] a0.05, p 16: M_p / DESC 0.2084, interior max / DESC 0.1853, edge mean / DESC 0.0594, mean / M_desc 0.0501
+[eval] a0.005, p 16: max at rho 0.845; top-20 rho [0.821, 0.821, 0.821, 0.821, 0.821, 0.821, 0.821, 0.821, 0.821, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845, 0.845]; share of |F|^p by rho bin 0.81-0.84: 0.44, 0.84-0.86: 0.56
+[eval] a0.005, p 16: M_p / DESC 0.0240, interior max / DESC 0.0231, edge mean / DESC 0.0050, mean / M_desc 0.0050
+eval only: done in 165 s
