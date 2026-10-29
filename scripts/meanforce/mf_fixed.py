@@ -90,7 +90,8 @@ def main():
                          "cap (radius --test-delta), report step, predicted/actual decrease, residual, Ritz "
                          "extremes, then exit")
     ap.add_argument("--test-delta", type=float, default=1.6e-2)
-    ap.add_argument("--test-model", choices=("gn", "hvp"), default="gn")
+    ap.add_argument("--test-model", choices=("gn", "hvp", "beta"), default="gn",
+                    help="gn: base GN rows; hvp: exact Hessian of the merit; beta: the production beta-model rows (--beta)")
     ap.add_argument("--precond", choices=("hj", "force"), default="force",
                     help="TR metric: chol(H_J + H_F(local) + a a^T), the GN matrix without the J0 x dB part, "
                          "rebuilt on outer updates and Lanczos-cap / rent-or-buy triggers (default), or "
@@ -143,8 +144,32 @@ def main():
                          "pointwise.lanczos_tr_step rule; 224-400 iterations per boundary step near the bound)")
     ap.add_argument("--no-lean-metric", action="store_true",
                     help="force metric: the reference build (default: the lean, low-memory build)")
+    ap.add_argument("--force-norm", choices=("mean", "p"), default="mean",
+                    help="bounded force measure: the volume mean of |F| (default) or the interior p-norm "
+                         "(sum_int w |F|^p / sum_int w)^(1/p), eps = alpha x DESC's own interior p-norm on "
+                         "the same points; the mean, interior max and edge mean are logged as monitors")
+    ap.add_argument("--p", type=float, default=8.0, help="--force-norm p: the exponent")
+    ap.add_argument("--p-schedule", type=float, nargs="+", default=None,
+                    help="--force-norm p: a continuation in p (e.g. 2 4 8 16), each warm-started from the last")
+    ap.add_argument("--rho-cut", type=float, default=0.95,
+                    help="--force-norm p: the interior is DESC rho < rho-cut (the edge is monitored only)")
+    ap.add_argument("--edge-alpha", type=float, default=None,
+                    help="--force-norm p: also bound the edge mean (rho >= rho-cut) at edge-alpha x DESC's edge mean, "
+                         "through one composite constraint (M_p^16 + (r M_edge)^16)^(1/16) <= eps, r = eps / eps_edge")
+    ap.add_argument("--p-model-beta", action="store_true",
+                    help="--force-norm p: use --beta along F_i instead of the exact p - 1")
+    ap.add_argument("--eval-only", action="store_true",
+                    help="--force-norm p: report the start (J_fit) and --start states' p-norms, interior max, "
+                         "edge and mean against DESC's, for each p of the schedule, then exit (no metric build)")
+    ap.add_argument("--eval-state", action="append", default=[],
+                    help="--eval-only: extra states name=path.npz (this run's basis); repeatable")
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "meanforce", "fixed"))
     ap.add_argument("--mirror", default=None, help="directory for fsynced copies (Volume)")
+    ap.add_argument("--pin-current", action="store_true",
+                    help="exact constraint: the m = 0 modes of a stay at J_fit's (the current enclosed by every "
+                         "DESC surface, in every cross-section); a --start state is restored onto it")
+    ap.add_argument("--pin-flux", action="store_true",
+                    help="exact constraint: the toroidally averaged toroidal flux stays at J_fit's")
     a = ap.parse_args()
     a.hvp = True  # per-subproblem diagnostics (DIAG_H) are recorded for every model
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
@@ -225,6 +250,44 @@ def main():
     A = mff.FixedAnchor(fields, cur0, pre0, u0, rmsJ, norm, G, log=log)
     del G
     run["pressure space"] = {"rank": A.p_rank, "cond(G)": A.p_cond}
+    M_desc_mean = M_desc
+    p_list = [None]
+    def set_pn(p_, alpha_):
+        r_ = None
+        if a.edge_alpha is not None:
+            r_ = (alpha_ * desc_p[p_]["M_p"]) / (a.edge_alpha * desc_p[p_]["edge"])
+        A.set_pnorm(p_, pmask, exact_beta=not a.p_model_beta, edge_ratio=r_)
+
+    def pn_report(ss, p_):
+        d_ = desc_p[p_]
+        return {"p": p_, "M_p/DESC": float(ss["M_p"]) / d_["M_p"], "max_int/DESC": float(ss["M_max_int"]) / d_["max_int"],
+                "edge/DESC": float(ss["M_edge"]) / d_["edge"], "mean/M_desc": float(ss["M_mean"]) / M_desc_mean}
+
+    if a.force_norm == "p":
+        if a.model in ("hvp", "hybrid"):
+            raise SystemExit("--force-norm p needs --model beta or gn (no exact HVP of the p-norm)")
+        rho_pts = np.asarray(fr.rtz[:, 0])
+        assert len(rho_pts) == A.n_pts, (len(rho_pts), A.n_pts)
+        pmask = rho_pts < a.rho_cut
+        tg = fr.tgrid
+        absF_desc = np.asarray(inp0.compute_tensor(["|F|"], tg.rho, tg.theta, tg.zeta)["|F|"]).ravel()
+        assert absF_desc.size == A.n_pts, (absF_desc.size, A.n_pts)
+        w_pts = np.asarray(sw) ** 2
+        p_list = list(a.p_schedule or [a.p])
+        desc_p = {p_: mff.desc_pnorm(absF_desc, w_pts, pmask, p_, norm) for p_ in p_list}
+        run["pnorm"] = {"rho_cut": a.rho_cut, "interior points": int(pmask.sum()), "points": int(A.n_pts),
+                        "interior volume": float(w_pts[pmask].sum()), "DESC": {str(k): v for k, v in desc_p.items()},
+                        "M_desc (mean)": M_desc_mean}
+        for p_, d_ in desc_p.items():
+            log(f"[p-norm] DESC on the same points, p {p_:g}: interior p-norm {d_['M_p']:.4e}, interior max "
+                f"{d_['max_int']:.4e}, interior mean {d_['mean_int']:.4e}, edge mean {d_['edge']:.4e} (/ norm); "
+                f"interior rho < {a.rho_cut}: {int(pmask.sum())} of {A.n_pts} points, volume {w_pts[pmask].sum():.3f}")
+        A.set_pnorm(p_list[0], pmask, exact_beta=not a.p_model_beta)
+        M_desc = desc_p[p_list[0]]["M_p"]
+        if a.edge_alpha is not None:
+            set_pn(p_list[0], a.alphas[0])
+            log(f"[p-norm] edge bound: mean over rho >= {a.rho_cut} <= {a.edge_alpha:g} x DESC edge mean "
+                f"{desc_p[p_list[0]]['edge']:.4e}, composite q = 16")
 
     t1 = time.time()
     z = u0
@@ -277,6 +340,50 @@ def main():
         log(f"cross evaluation done in {time.time() - t1:.0f} s")
         return
 
+    if a.eval_only:
+        if a.force_norm != "p":
+            raise SystemExit("--eval-only needs --force-norm p")
+        cases = [("start (J_fit)", u0)]
+        if a.start:
+            ue = np.load(a.start)["u"]
+            if a.start_LMN:
+                lo = fit_cache.fit(BoundaryPotential, inp0, L=a.start_LMN[0], M=a.start_LMN[1], N=a.start_LMN[2])
+                ue = mff.embed_truncate(lo, cur0, ue)[0]
+            cases.append((os.path.basename(a.start), jnp.asarray(ue)))
+        for spec in a.eval_state:
+            nm_, pth = spec.split("=", 1)
+            cases.append((nm_, jnp.asarray(np.load(pth)["u"])))
+        run["eval"] = {}
+        for nm_, zz in cases:
+            run["eval"][nm_] = []
+            bins = np.array([x for x in (0.0, 0.5, 0.6, 0.7, 0.75, 0.78, 0.81, 0.84, 0.87, 0.9, 0.93) if x < a.rho_cut] + [a.rho_cut])
+            for p_ in p_list:
+                A.set_pnorm(p_, pmask, exact_beta=not a.p_model_beta)
+                ss = A.state(zz)
+                rep = pn_report(ss, p_)
+                aF_ = np.asarray(ss["absF"])
+                iF = np.where(pmask, aF_, -1.0)
+                imax = int(np.argmax(iF))
+                q_ = np.where(pmask, w_pts * (aF_ / aF_[imax]) ** p_, 0.0)
+                share = np.histogram(rho_pts, bins=bins, weights=q_)[0] / q_.sum()
+                top = np.argsort(iF)[-20:]
+                rep.update({"rho of max": float(rho_pts[imax]), "theta, zeta of max": [float(fr.rtz[imax, 1]), float(fr.rtz[imax, 2])],
+                            "rho of top-20 points": [float(x) for x in np.sort(rho_pts[top])],
+                            "share of |F|^p by rho bin": dict(zip([f"{bins[i]:.2f}-{bins[i + 1]:.2f}" for i in range(len(bins) - 1)],
+                                                                 [float(x) for x in share]))})
+                run["eval"][nm_].append(rep)
+                if p_ == p_list[-1] or p_ == 16:
+                    log(f"[eval] {nm_}, p {p_:g}: max at rho {rep['rho of max']:.3f}; top-20 rho "
+                        f"{np.round(np.sort(rho_pts[top]), 3).tolist()}; share of |F|^p by rho bin "
+                        + ", ".join(f"{k}: {v:.2f}" for k, v in rep["share of |F|^p by rho bin"].items() if v >= 0.01))
+                log(f"[eval] {nm_}, p {p_:g}: M_p / DESC {rep['M_p/DESC']:.4f}, interior max / DESC "
+                    f"{rep['max_int/DESC']:.4f}, edge mean / DESC {rep['edge/DESC']:.4f}, mean / M_desc "
+                    f"{rep['mean/M_desc']:.4f}")
+        run["stage"] = "eval only"
+        dump()
+        log(f"eval only: done in {time.time() - t0:.0f} s")
+        return
+
     t1 = time.time()
     lean = a.precond == "force" and not a.no_lean_metric
     if lean:  # H_J to host memory; the device copy becomes the first metric factor in place
@@ -290,7 +397,13 @@ def main():
         L = mff.metric_L(HJ)
         if a.precond != "force":
             del HJ
-    met = pw.Metric(L)
+    LC = None
+    if a.pin_current or a.pin_flux:
+        t1 = time.time()
+        LC = mff.LinearConstraints(cur0, fields, fr, u0, pin_current=a.pin_current, pin_flux=a.pin_flux, log=log)
+        phase("linear constraints", t1)
+    mk_metric = (lambda LL: LC.metric(LL)) if LC is not None else pw.Metric
+    met = mk_metric(L)
     if lean and not a.subproblem_test:
         del L  # the metric object holds the only reference (released before each rebuild)
     phase("metric (H_J by slices, Cholesky)", t1)
@@ -314,6 +427,24 @@ def main():
         if "nu" in st:
             W.nu, W.rho = np.asarray(st["nu"], float), max(float(st["rho"]), a.rho0)
         log(f"start from {a.start}: nu {W.nu.tolist()}, rho {W.rho}")
+    if LC is not None:
+        v0 = LC.violation(z)
+        s_b = A.state(z)
+        z = LC.restore(z, met.L)
+        s_a = A.state(z)
+        v1 = LC.violation(z)
+        cons_log = lambda tag, sx, vx: log(  # noqa: E731
+            f"[constraints] {tag}: " + ", ".join(f"{k} {v:.3e}" for k, v in vx.items())
+            + f"; M/M_desc {float(sx['M']) / M_desc:.5f}, |J - J_fit|/rms {float(jnp.linalg.norm(sx['g'])):.5f}")
+        cons_log("start before restore", s_b, v0)
+        cons_log("start after restore", s_a, v1)
+        if "dPsi/Psi" in v1 and LC.psi is not None:
+            log(f"[constraints] Psi_bar check at the restored start: direct {float(LC.psi(z)):.9e}, "
+                f"affine {LC.psi_affine(z):.9e}, target {LC.psi_ref:.9e}")
+        run["constraints"] = {"pin_current": bool(a.pin_current), "pin_flux": bool(a.pin_flux),
+                              "n_pinned": int(len(LC.idx)), "before": v0, "after": v1,
+                              "Psi_ref": getattr(LC, "psi_ref", None), "Psi_desc": float(inp0.eq.Psi)}
+        del s_b, s_a
     # one product of each kind, timed (after compile)
     rows = mff.FixedRows(A, s0, W, norm)
     v = jnp.ones(A.n_u) * 1e-6
@@ -361,7 +492,7 @@ def main():
             Lf, tr = mff.force_metric_lean(A, cur0, pre0, HJ_host, ss, W, norm, rows=rr, chunk=a.gram_chunk, log=log)
         else:
             Lf, tr = mff.force_metric(A, cur0, pre0, HJ, ss, W, norm, rows=rr, chunk=a.gram_chunk, log=log)
-        mt = pw.Metric(Lf)
+        mt = mk_metric(Lf)
         Dn = float(jnp.linalg.norm(mt.back_T(rr.JT(rr.r))))
         run.setdefault("metric refreshes", []).append({"t [s]": time.time() - t1, "trace H_J": tr[0],
                                                        "trace H_F": tr[1], "Delta": Dn, **mem()})
@@ -380,8 +511,9 @@ def main():
                                            log=log)
         else:
             Lf, tr = mff.force_metric(A, cur0, pre0, HJ, ss, rows.W, norm, rows=rr, chunk=a.gram_chunk, log=log)
-        mt = pw.Metric(Lf)
+        mt = mk_metric(Lf)
         Dn = float(jnp.linalg.norm(mt.back_T(rows.JT(rows.r))))
+        del mt
         run.setdefault("metric refreshes", []).append({"t [s]": time.time() - t1, "trace H_J": tr[0],
                                                        "trace H_F": tr[1], "Delta": Dn, "inner": True, **mem()})
         dump()
@@ -403,11 +535,14 @@ def main():
     if a.subproblem_test:
         W.eps = a.alphas[0] * M_desc
         s, f, phi, c = solver.evaluate(z)
-        rows = mff.FixedRowsH(A, s, W, norm)
+        if a.test_model == "beta":
+            rows = type("RowsBeta", (mff.FixedRowsB,), {"beta": a.beta})(A, s, W, norm)
+        else:
+            rows = mff.FixedRowsH(A, s, W, norm)
         r = rows.r
         f0 = 0.5 * float(r @ r)
         grad = rows.JT(r)
-        Hv = (lambda v: rows.JT(rows.J(v))) if a.test_model == "gn" else rows.hvp
+        Hv = rows.hvp if a.test_model == "hvp" else (lambda v: rows.JT(rows.J(v)))
         L_hj = L  # the H_J metric factor: |L_hj^T d| measures every step in the same units
         tdelta = a.test_delta
         if a.precond == "force":
@@ -441,49 +576,80 @@ def main():
         log("subproblem test done")
         return
     try:
-        for alpha in a.alphas:
-            t1 = time.time()
-            W.eps = alpha * M_desc
-            log(f"alpha {alpha}: eps {W.eps:.4e}")
-            entry = {"alpha": alpha, "eps": W.eps}
-            run["alphas"].append(entry)
+        stop = False
+        for p_cur in p_list:
+            ptag = "" if p_cur is None else f"p{p_cur:g}_"
+            if p_cur is not None:
+                A.set_pnorm(p_cur, pmask, exact_beta=not a.p_model_beta)
+                M_desc = desc_p[p_cur]["M_p"]
+                if a.edge_alpha is not None:
+                    set_pn(p_cur, a.alphas[0])
+                build_state["psi1"] = None  # new weights: rebuild the force metric at the first outer
+                log(f"[p-norm] p {p_cur:g}: eps = alpha x DESC interior p-norm {M_desc:.4e}")
+            for alpha in a.alphas:
+                t1 = time.time()
+                W.eps = alpha * M_desc
+                if p_cur is not None and a.edge_alpha is not None:
+                    set_pn(p_cur, alpha)
+                log(f"alpha {alpha}: eps {W.eps:.4e}")
+                entry = {"alpha": alpha, "eps": W.eps, "p": p_cur}
+                run["alphas"].append(entry)
 
-            def cb(zz, s, outer, entry=entry):
-                entry["outer"] = outer
-                entry["time"] = time.time() - t1
-                entry.pop("inner (current outer)", None)
-                run["memory"].append({"phase": f"alpha {alpha} outer {len(outer)}",
-                                      "t": time.time() - t0, **mem()})
-                save_state(f"a{alpha}_latest", zz, s, W)
+                def cb(zz, s, outer, entry=entry):
+                    entry["outer"] = outer
+                    entry["time"] = time.time() - t1
+                    entry.pop("inner (current outer)", None)
+                    run["memory"].append({"phase": f"alpha {alpha} outer {len(outer)}",
+                                          "t": time.time() - t0, **mem()})
+                    save_state(f"{ptag}a{alpha}_latest", zz, s, W)
+                    dump()
+
+                def on_step(hist, entry=entry):
+                    entry["inner (current outer)"] = hist
+                    if hist and hist[-1]["accepted"] and A.pnorm is not None:
+                        rep = pn_report(A.last_s, A.pnorm["p"])
+                        hist[-1]["pnorm"] = rep
+                        log(f"      [p-norm] p {rep['p']:g}: M_p/DESC {rep['M_p/DESC']:.4f}, interior max/DESC "
+                            f"{rep['max_int/DESC']:.4f}, edge mean/DESC {rep['edge/DESC']:.4f}, mean/M_desc "
+                            f"{rep['mean/M_desc']:.4f}")
+                    if hist and hist[-1]["accepted"] and LC is not None:
+                        vx = LC.violation(A.last_z)
+                        hist[-1]["constraints"] = vx
+                        log("      [constraints] " + ", ".join(f"{k} {v:.2e}" for k, v in vx.items()))
+                    if hist and hist[-1]["accepted"]:
+                        best["z"], best["s"] = A.last_z, A.last_s
+                        best["n"] += 1
+                        if best["n"] % 5 == 0:
+                            save_state(f"{ptag}a{alpha}_latest", best["z"], best["s"], W)
+                    dump()
+                    if a.time_budget and time.time() - t0 > a.time_budget:
+                        raise Budget()
+
+                solver.on_step = on_step
+                z, outer = solver.solve_alpha(z, max_outer=a.max_outer, maxiter=a.maxiter,
+                                              gtol=a.gtol, callback=cb, stat_tol=a.stat_tol,
+                                              stat_window=a.stat_window)
+                s = A.state(z)
+                c = W.constraints(s)
+                entry.update({"M/M_desc": float(s["M"]) / M_desc, "rms|F|": float(s["rmsF"]),
+                              "|J-J_fit|/rms": float(jnp.sqrt(jnp.sum(s["g"] ** 2))),
+                              "galerkin": float(s["galerkin"]), "feasible": bool(c[0] <= 1e-2),
+                              "nu": W.nu.tolist(), "rho": W.rho, "time": time.time() - t1})
+                if A.pnorm is not None:
+                    entry["pnorm"] = pn_report(s, p_cur)
+                if LC is not None:
+                    entry["constraints"] = LC.violation(z)
+                    if LC.psi is not None:
+                        entry["constraints"]["dPsi/Psi direct"] = (float(LC.psi(z)) - LC.psi_ref) / LC.psi_ref
+                save_state(f"{ptag}a{alpha}", z, s, W)
+                log(f"alpha {alpha} done in {time.time() - t1:.0f} s: |J - J_fit|/rms "
+                    f"{entry['|J-J_fit|/rms']:.4e}, M/M_desc {entry['M/M_desc']:.4f}")
                 dump()
-
-            def on_step(hist, entry=entry):
-                entry["inner (current outer)"] = hist
-                if hist and hist[-1]["accepted"]:
-                    best["z"], best["s"] = A.last_z, A.last_s
-                    best["n"] += 1
-                    if best["n"] % 5 == 0:
-                        save_state(f"a{alpha}_latest", best["z"], best["s"], W)
-                dump()
-                if a.time_budget and time.time() - t0 > a.time_budget:
-                    raise Budget()
-
-            solver.on_step = on_step
-            z, outer = solver.solve_alpha(z, max_outer=a.max_outer, maxiter=a.maxiter,
-                                          gtol=a.gtol, callback=cb, stat_tol=a.stat_tol,
-                                          stat_window=a.stat_window)
-            s = A.state(z)
-            c = W.constraints(s)
-            entry.update({"M/M_desc": float(s["M"]) / M_desc, "rms|F|": float(s["rmsF"]),
-                          "|J-J_fit|/rms": float(jnp.sqrt(jnp.sum(s["g"] ** 2))),
-                          "galerkin": float(s["galerkin"]), "feasible": bool(c[0] <= 1e-2),
-                          "nu": W.nu.tolist(), "rho": W.rho, "time": time.time() - t1})
-            save_state(f"a{alpha}", z, s, W)
-            log(f"alpha {alpha} done in {time.time() - t1:.0f} s: |J - J_fit|/rms "
-                f"{entry['|J-J_fit|/rms']:.4e}, M/M_desc {entry['M/M_desc']:.4f}")
-            dump()
-            if not entry["feasible"]:
-                log(f"alpha {alpha} not met: stopping the sweep")
+                if not entry["feasible"]:
+                    log(f"alpha {alpha} not met: stopping the sweep")
+                    stop = True
+                    break
+            if stop:
                 break
         run["stage"] = "sweep ended"
     except Budget:

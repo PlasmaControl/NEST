@@ -214,11 +214,31 @@ class FixedAnchor:
         self.Jfit = _J(fields, self.u0, fields.I)
         self.tables = None
         self.info = {}
+        self.pnorm = None  # set_pnorm: the force bound on the interior p-norm instead of the mean
+
+    def set_pnorm(self, p, mask, exact_beta=True, edge_ratio=None, q=16.0):
+        """Bound the interior p-norm M_p = (sum_int w |F|^p / sum_int w)^(1/p) / norm instead of
+        the mean M = sum w |F| / norm. ``mask``: bool per collocation point (the interior).
+        state() then reports M_p as s["M"] (so the constraint c_F = M_p / eps - 1) and the mean,
+        the interior max and the edge mean as monitors; FixedRows / FixedRowsB use the exact
+        gradient and the positive semidefinite z-Hessian of M_p (per-point weights kappa_i =
+        (|F_i| / F_p)^(p-1) / W_int and, if ``exact_beta``, beta = p - 1 along F_i).
+        ``edge_ratio`` r (optional): bound the edge mean too, through one smooth composite
+        measure s["M"] = (M_p^q + (r M_edge)^q)^(1/q); with r = eps / eps_edge the constraint
+        s["M"] <= eps holds M_p <= eps and M_edge <= eps_edge to within 2^(1/q). The edge points
+        then carry mean-type rows (curvature 1/|z|, the model beta)."""
+        m = jnp.asarray(np.asarray(mask, bool), dtype=jnp.float64)
+        w = self.sw**2
+        self.pnorm = {"p": float(p), "mask": m, "W": float(jnp.sum(w * m)), "exact_beta": bool(exact_beta),
+                      "W_edge": float(jnp.sum(w * (1.0 - m))),
+                      "edge_ratio": None if edge_ratio is None else float(edge_ratio), "q": float(q)}
 
     def state(self, z):
         u = jnp.asarray(z)[: self.n_u]
         s = _state_impl(self.fields, u, self.Jfit, self.sw, self.Lg, self.rmsJ, self.norm)
         s = dict(s)
+        if self.pnorm is not None:
+            s.update(pnorm_measures(s["absF"], self.sw**2, self.pnorm, self.norm))
         gal = jnp.max(jnp.abs(s["PTf"]) / (self.colnorm * jnp.linalg.norm(s["f"])))
         s.update({"z_vec": jnp.asarray(z), "xi": jnp.zeros(0), "sw": self.sw,
                   "galerkin": gal, "Bn_rms": 0.0, "Psi": 1.0, "rel": jnp.zeros(1),
@@ -248,6 +268,11 @@ class FixedRows:
         d1F = W.d1(c[0], W.nu[0])
         self.d1 = (d1F, 0.0)
         self.sF = jnp.sqrt(d1F / (W.eps * norm * t))
+        pn = getattr(anchor, "pnorm", None)
+        self.kappa = None
+        if pn is not None:  # p-norm: dM_p/dz_i = kappa_i zhat_i / norm, curvature kappa_i / |z_i| (perp)
+            self.kappa = pnorm_kappa(s["absF"], s, norm, pn)
+            self.sF = self.sF * jnp.sqrt(self.kappa)
         self.sF3 = jnp.repeat(self.sF, 3)
         aux = anchor.aux(s)
         f_ = anchor.fields
@@ -256,7 +281,8 @@ class FixedRows:
         self.linT = lambda wg, wz: _linT(f_, (wg, wz), aux, n_u)  # noqa: E731
         n3 = anchor.n_pts * 3
         self.n3 = n3
-        zhat = (s["z"] / jnp.maximum(zn, 1e-300)[:, None]).ravel()
+        zh_ = s["z"] / jnp.maximum(zn, 1e-300)[:, None]
+        zhat = (zh_ if self.kappa is None else self.kappa[:, None] * zh_).ravel()
         self.grad_cF = self.linT(jnp.zeros(n3), zhat / (W.eps * norm))
         self.aF = np.sqrt(W.d2_model(c[0], W.nu[0])) * self.grad_cF
         self.r = jnp.concatenate([s["g"], self.sF3 * s["z"].ravel(), jnp.zeros(1)])
@@ -291,7 +317,12 @@ class FixedRowsB(FixedRows):
         zn = jnp.linalg.norm(s["z"], axis=1)
         act = zn > w * tau
         self.zh = s["z"] / jnp.maximum(zn, 1e-300)[:, None]
-        self.cP = jnp.where(act, 1.0 - np.sqrt(self.beta), 0.0)
+        pn = getattr(anchor, "pnorm", None)
+        beta = pn["p"] - 1.0 if (pn is not None and pn["exact_beta"]) else self.beta
+        self.beta_used = beta
+        if pn is not None and pn.get("edge_ratio") is not None:  # edge points: mean-type rows, model beta
+            beta = jnp.where(pn["mask"] > 0, beta, self.beta)
+        self.cP = jnp.where(act, 1.0 - jnp.sqrt(beta), 0.0)
         zr = (s["z"] / (1.0 - self.cP)[:, None]).ravel()
         self.r = jnp.concatenate([s["g"], self.sF3 * zr, jnp.zeros(1)])
 
@@ -308,6 +339,54 @@ class FixedRowsB(FixedRows):
         out = self.linT(w[:n3], self._P(self.sF3 * w[n3 : 2 * n3]))
         return out + w[2 * n3] * self.aF
 
+
+
+# ------------------------------------------------------------- p-norm force bound
+def pnorm_measures(absF, w, pn, norm):
+    """M_p (interior p-norm, the constrained measure, as "M"), and the monitors: "M_mean" (the
+    whole-volume mean, the usual M), "M_max_int" (interior max), "M_edge" (mean outside the mask),
+    all divided by norm. Scaled by the interior max so |F|^p cannot overflow."""
+    p, m = pn["p"], pn["mask"]
+    Fi = jnp.where(m > 0, absF, 0.0)
+    Fmax = jnp.max(Fi)
+    Q = jnp.sum(w * m * (Fi / Fmax) ** p) / pn["W"]
+    Mp = Fmax * Q ** (1.0 / p) / norm
+    M_edge = jnp.sum(w * (1.0 - m) * absF) / max(pn["W_edge"], 1e-300) / norm
+    out = {"M": Mp, "M_p": Mp, "M_mean": jnp.sum(w * absF) / norm, "M_max_int": Fmax / norm, "M_edge": M_edge}
+    r = pn.get("edge_ratio")
+    if r is not None:  # composite (M_p^q + (r M_edge)^q)^(1/q), scaled by its larger part
+        q = pn["q"]
+        big = jnp.maximum(Mp, r * M_edge)
+        out["M"] = big * ((Mp / big) ** q + (r * M_edge / big) ** q) ** (1.0 / q)
+    return out
+
+
+def pnorm_kappa(absF, s, norm, pn):
+    """d s["M"] / d z_i = kappa_i zhat_i / norm. Interior: kappa_i = (|F_i| / F_p)^(p-1) / W_int
+    (F_p = M_p norm); outside 0, or with the composite edge term (M_p / C)^(q-1) on the interior
+    and (r M_edge / C)^(q-1) r / W_edge on the edge points (C = s["M"])."""
+    p, m = pn["p"], pn["mask"]
+    Fp = s["M_p"] * norm
+    k = jnp.where(m > 0, (jnp.where(m > 0, absF, 0.0) / Fp) ** (p - 1.0), 0.0) / pn["W"]
+    r = pn.get("edge_ratio")
+    if r is None:
+        return k
+    q, C = pn["q"], s["M"]
+    ke = (r * s["M_edge"] / C) ** (q - 1.0) * r / max(pn["W_edge"], 1e-300)
+    return jnp.where(m > 0, k * (s["M_p"] / C) ** (q - 1.0), ke)
+
+
+def desc_pnorm(absF_desc, w, mask, p, norm):
+    """DESC's own interior p-norm, interior max and edge mean of |F| on the same points
+    (the normalization of eps for the p-norm bound)."""
+    m = np.asarray(mask, bool)
+    w = np.asarray(w)
+    F = np.asarray(absF_desc)
+    Fmax = F[m].max()
+    Mp = Fmax * (np.sum(w[m] * (F[m] / Fmax) ** p) / w[m].sum()) ** (1.0 / p) / norm
+    return {"M_p": float(Mp), "max_int": float(Fmax / norm),
+            "edge": float(np.sum(w[~m] * F[~m]) / max(w[~m].sum(), 1e-300) / norm),
+            "mean_int": float(np.sum(w[m] * F[m]) / w[m].sum() / norm)}
 
 def use_fixed_rows():
     """Make ``meanforce.Solver`` build ``FixedRows`` (it looks the class up by name)."""
@@ -1014,3 +1093,145 @@ def embed_truncate(lo, hi, u_lo):
     z[[pos[k] for k, f in zip(keys, keep) if f]] = u_lo[keep]
     frac = float(np.linalg.norm(u_lo[~keep]) / max(np.linalg.norm(u_lo), 1e-300))
     return z, frac, int((~keep).sum())
+
+
+# ------------------------------------------------ exact linear equality constraints
+# (enclosed toroidal current per DESC surface and cross-section; total toroidal flux)
+class ProjectedMetric(mf.pw.Metric):
+    """The trust-region metric restricted to the null space of linear equality constraints
+    C d = 0 (``Ct`` = C^T, n x k, k small). In the metric variables y (d = L^-T y) the
+    feasible steps are y orthogonal to range(L^-1 C^T); with Q an orthonormal basis of that
+    range and P = I - Q Q^T,
+
+        back(y) = L^-T P y,    back_T(d) = P L^-1 d    (still each other's transpose),
+
+    so every Lanczos variant (they see the metric only through back / back_T) works in the
+    feasible subspace, and every step d = back(y) satisfies C d = 0 to rounding. Q is
+    rebuilt whenever L is set (``met.L = L_new`` in the force-metric refresh); L = None
+    (released before a rebuild) leaves Q unset."""
+
+    def __init__(self, L, Ct):
+        self.Ct = jnp.asarray(Ct)
+        self.Q = None
+        self.L = L
+
+    @property
+    def L(self):
+        return self._L
+
+    @L.setter
+    def L(self, L):
+        self._L = None if L is None else jnp.asarray(L)
+        self.Q = None
+        if self._L is not None and self.Ct.shape[1] > 0:
+            Wc = jax.scipy.linalg.solve_triangular(self._L, self.Ct, lower=True)
+            Q, R = jnp.linalg.qr(Wc)
+            d = np.abs(np.asarray(jnp.diag(R)))
+            keep = d > 1e-12 * d.max()
+            self.Q = Q[:, np.where(keep)[0]]
+            self.rank = int(keep.sum())
+
+    def proj(self, y):
+        return y if self.Q is None else y - self.Q @ (self.Q.T @ y)
+
+    def back(self, y):  # d = L^-T P y
+        return jax.scipy.linalg.solve_triangular(self._L, self.proj(y), lower=True, trans="T")
+
+    def back_T(self, d):  # P L^-1 d
+        return self.proj(jax.scipy.linalg.solve_triangular(self._L, d, lower=True))
+
+
+def m0_a_indices(cur):
+    """Indices in u of the m = 0 modes of the series a (all l, n). The current enclosed by
+    the DESC surface rho in the cross-section zeta is 2 pi <T_theta(rho, ., zeta)>_theta =
+    I h_0(rho) + 2 pi rho^2 f(rho) a_bar(rho, zeta) (chi averages out; a_bar is a's m = 0
+    part), so fixing these coefficients fixes I(rho, zeta) for every rho and zeta."""
+    modes = np.asarray(cur.basis.modes)
+    return cur.S.n_chi + np.where(modes[:, 1] == 0)[0]
+
+
+def enclosed_current(cur, u, rho, zeta, n_theta=64):
+    """I(rho, zeta) = 2 pi <T_theta>_theta [A] from the potential itself (cur.T)."""
+    th = 2 * np.pi * np.arange(n_theta) / n_theta
+    R_, T_, Z_ = np.meshgrid(rho, th, zeta, indexing="ij")
+    nodes = np.column_stack([R_.ravel(), T_.ravel(), Z_.ravel()])
+    Tt = np.asarray(cur.with_u(np.asarray(u)).T(nodes))[:, 0].reshape(len(rho), n_theta, len(zeta))
+    return 2 * np.pi * Tt.mean(axis=1)
+
+
+def toroidal_flux_fn(fields, fr):
+    """u -> the toroidally averaged toroidal flux Psi_bar = (1 / 2 pi) int B . grad(zeta) dV
+    [Wb] on the collocation points (B = B_plasma(u) + B_ext; grad zeta = phi_hat / R). For a
+    field with B . n = 0 on the LCFS this is the flux through every cross-section; here it
+    is their average. Affine in u (B_plasma is linear in u at fixed I)."""
+    x = np.asarray(fr.x)
+    R = np.hypot(x[:, 0], x[:, 1])
+    phi = np.asarray(fr.phi)
+    per = 2 * fr.inp.eq.NFP if fr.sym else fr.inp.eq.NFP  # copies of the grid's zeta range
+    w = jnp.asarray(per * np.asarray(fr.dV) / R / (2 * np.pi))
+    c, s = jnp.asarray(np.cos(phi)), jnp.asarray(np.sin(phi))
+    Bext = jnp.asarray(np.asarray(fr.B_ext))
+
+    def psi(u):
+        B = fields.B_plasma(u) + Bext
+        return jnp.sum(w * (-B[:, 0] * s + B[:, 1] * c))
+    return psi
+
+
+class LinearConstraints:
+    """C u = d for the pinned m = 0 modes of a (``pin_current``) and the toroidal flux
+    (``pin_flux``), with the targets taken from u_ref (J_fit). ``Ct`` (n x k) feeds
+    ProjectedMetric; ``restore`` maps a state onto C u = d with the smallest metric-norm
+    change; ``violation`` reports the residuals (cheap: the flux is affine in u)."""
+
+    def __init__(self, cur, fields, fr, u_ref, pin_current=True, pin_flux=True, log=print):
+        n = cur.n_free
+        self.u_ref = jnp.asarray(u_ref)
+        self.idx = m0_a_indices(cur) if pin_current else np.zeros(0, int)
+        cols = []
+        if len(self.idx):
+            E = np.zeros((n, len(self.idx)))
+            E[self.idx, np.arange(len(self.idx))] = 1.0
+            cols.append(E)
+        self.psi = None
+        if pin_flux:
+            self.psi = jax.jit(toroidal_flux_fn(fields, fr))
+            t1 = time.time()
+            self.psi_ref = float(self.psi(self.u_ref))
+            self.a_psi = jax.grad(self.psi)(self.u_ref)
+            cols.append(np.asarray(self.a_psi)[:, None])
+            log(f"[constraints] toroidal flux row in {time.time() - t1:.0f} s: Psi_bar(J_fit) {self.psi_ref:.6e} Wb, "
+                f"DESC Psi {float(fr.inp.eq.Psi):.6e} Wb")
+        self.Ct = np.concatenate(cols, axis=1) if cols else np.zeros((n, 0))
+        log(f"[constraints] {len(self.idx)} pinned m = 0 coefficients of a (enclosed current I(rho, zeta))"
+            + (", 1 flux row" if pin_flux else ""))
+
+    def metric(self, L):
+        return ProjectedMetric(L, self.Ct)
+
+    def psi_affine(self, u):
+        return self.psi_ref + float(self.a_psi @ (jnp.asarray(u) - self.u_ref))
+
+    def violation(self, u):
+        u = jnp.asarray(u)
+        out = {}
+        if len(self.idx):
+            du = u[self.idx] - self.u_ref[self.idx]
+            out["pin max|du|/max|u_ref|"] = float(jnp.max(jnp.abs(du)) / jnp.max(jnp.abs(self.u_ref[self.idx])))
+        if self.psi is not None:
+            out["dPsi/Psi"] = (self.psi_affine(u) - self.psi_ref) / self.psi_ref
+        return out
+
+    def restore(self, u, L):
+        """Set the pinned coefficients to u_ref's, then correct the flux along the
+        metric-steepest feasible direction d = L^-T P L^-1 a_psi (P: pins only). Exact (the
+        flux is affine)."""
+        u = jnp.asarray(u)
+        if len(self.idx):
+            u = u.at[self.idx].set(self.u_ref[self.idx])
+        if self.psi is not None:
+            Cp = self.Ct[:, : len(self.idx)] if len(self.idx) else np.zeros((len(u), 0))
+            mp = ProjectedMetric(L, Cp)
+            d = mp.back(mp.back_T(self.a_psi))
+            u = u + d * (self.psi_ref - self.psi_affine(u)) / float(self.a_psi @ d)
+        return u

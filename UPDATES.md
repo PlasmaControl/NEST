@@ -2,6 +2,24 @@
 
 One entry per commit, newest first.
 
+## 2026-10-29: p-norm (max-type) force bound, exact enclosed-current / flux constraints, resonant-source diagnostic (branch fixed-boundary)
+- `nest/meanforce_fixed.py`:
+  - p-norm force bound: `FixedAnchor.set_pnorm(p, mask, exact_beta, edge_ratio, q)`, `pnorm_measures`, `pnorm_kappa`, `desc_pnorm`. With `edge_ratio`, the bound is one composite constraint C = (M_p^q + (r M_edge)^q)^(1/q), interior p-norm plus edge mean. Note: C = 2^(1/q) when both parts sit exactly at their bounds, so scale the bounds by 2^(1/q) to make a reference state exactly feasible. `FixedRows` / `FixedRowsB` carry the per-point weights (beta = p - 1 inside, the model beta on the edge points). The mean path is unchanged when no p-norm is set.
+  - Exact linear equality constraints (`ProjectedMetric`, `LinearConstraints`, `m0_a_indices`, `enclosed_current`, `toroidal_flux_fn`):
+    - Steps are projected onto C d = 0 inside the metric (back = L^-T P, back_T = P L^-1), so every Lanczos variant stays feasible. The projector is rebuilt whenever the metric is.
+    - Pinned quantities: the m = 0 modes of a (the current enclosed by every DESC surface in every cross-section, I(rho, zeta) = 2 pi <T_theta>_theta), and the toroidally averaged toroidal flux (1/2pi) int B.grad(zeta) dV, affine in u.
+    - `restore()` puts a warm start onto the constraint set.
+- `scripts/meanforce/mf_fixed.py`:
+  - p-norm flags: `--force-norm {mean,p}`, `--p`, `--p-schedule`, `--rho-cut`, `--edge-alpha`, `--p-model-beta`; M_desc becomes DESC's interior p-norm on the same points, with per-step [p-norm] monitor lines.
+  - `--eval-only` / `--eval-state name=path` (p-norm, interior max and its location, radial shares of |F|^p, edge and volume means vs DESC).
+  - `--pin-current` / `--pin-flux` (start restoration logged, per-step violation lines).
+  - `--test-model beta` for `--subproblem-test` (the production beta-model rows).
+- `scripts/meanforce/resonant_sources_fixed.py`: resonant b^rho harmonics split into coils + J_fit + dJ, by radial band and parallel/perpendicular part (pieces sum to the total to ~1e-13). `scripts/meanforce/constraints_drift_fixed.py`: drift of the toroidal flux and of I(rho, zeta) for saved states.
+- `scripts/modal_fixed/`: the Modal job scripts used for the fixed-boundary runs (`fx_run.sh`, `py_run.sh`, `test_run.sh`, `gpu_entry.py`).
+- Tests:
+  - `tests/test_pnorm_fixed.py` (P1 p = 1 equals the mean rows exactly; P2/P3 gradients vs FD to 2e-5; P4/P5 curvature and adjoint; P6-P8 composite bound): all pass (CPU).
+  - `tests/test_constraints_fixed.py` (C1-C7) has NOT been run yet; only a dense random check of `ProjectedMetric` was run (feasibility 1e-17, adjoint 6e-17, no-constraint case identical). Treat `--pin-current` / `--pin-flux` as untested until C1-C7 pass.
+
 ## 2026-10-29: mf_fixed.py defaults are the working configuration (branch fixed-boundary)
 - Defaults now `--model beta --beta 0.5 --precond force --lanczos-stop tr --cg 400 --delta0 1e-3` (were `hvp`, `hj`, `both`, 200, 1e-2). These are the flags of every alpha <= 0.05 run; `hvp`/`hj` did not converge alpha 0.05. `--beta-adapt` stays off (the converged alpha 0.05 run did not use it; no gain in local tests). Old behaviour: pass the old values explicitly. Help texts updated; `docs/fixed_boundary_report.md` commands shortened accordingly.
 - Smoke (CPU, NCSX factors 0.5, a/8, alpha 0.05, 4 steps, no model flags): log reports "beta (beta 0.5); metric force ...; LS multiplier on; Lanczos stop tr"; ratios 1.1-1.2.
