@@ -2,6 +2,18 @@
 
 One entry per commit, newest first.
 
+## 2026-10-29: diagnostics of fixed-boundary states (branch fixed-boundary)
+- `scripts/meanforce/`, all reading `mf_fixed.py` states (npz with u, c_p) and evaluating B = B_ext (coils) + the run's own annulus field:
+  - `poincare_fixed.py` (field-line tracing on the annulus field; table-vs-solver gate printed; `--res-seeds rho:m,...`, `--pi-m-seeds`) and `poincare_multi.py` (plots);
+  - `fieldline_iota.py` (iota per traced line about the field's own axis on phi = pi/NFP);
+  - `shielding_fixed.py` (resonant b^rho against coils alone, harmonics of sigma = J.B/B^2 on DESC's surfaces);
+  - `edge_force_fixed.py` (M on a grid, parallel share b.grad p, radial distribution, LCFS B.n/|B|);
+  - `pressure_sections.py`, `island_p_representability.py` (can the pressure basis carry a flattened pendulum island);
+  - `mde_budget_fixed.py` (residual of B.grad(sigma) = -div(B x grad p/B^2) and its harmonics);
+  - `sigma_lines_fixed.py` (sigma along traced lines: coordinate-free Pfirsch-Schlueter tail test);
+  - `hamada_lines_fixed.py` (closed-orbit integral of dl/B along traced lines: the resonant Pfirsch-Schlueter drive, i.e. the Hamada/Newcomb solvability condition, coordinate-free).
+- Results and how to read them: `docs/fixed_boundary_report.md`.
+
 ## 2026-10-29: fixed-boundary matrix-free mean-force solver (branch fixed-boundary)
 - New files only; no existing module is changed. `nest/meanforce_fixed.py` is a fixed-boundary, matrix-free version of `meanforce`: the unknowns are u only (current potential), p is eliminated by the weak Poisson projection (G = P^T P built once by radial slices and Cholesky-factored, one refinement step; no n x k matrix), H_J is built by radial slices (no n x n_u table), and there is no B.n or flux constraint. It reuses `meanforce.Solver`/`Weights` through `FixedAnchor`/`FixedRows`.
 - Solver additions (`FixedSolver`, `use_models`): complementarity stop, trust radius reset per outer, least-squares multiplier with a [1/4, 4]x clip, beta model rows `FixedRowsB` (force-row curvature along the active direction scaled by beta), exact HVP rows `FixedRowsH` with an indefinite tridiagonal TR solve, local force preconditioner `gram_F_local`/`force_metric` (metric chol(H_J + H_F_loc + a a^T), rebuilt per outer and on Lanczos-growth / |dM/M| triggers), lean builds (`*_lean`, H_J in host RAM; 53 GB instead of ~101 GB peak at 48/32/18), `embed`/`embed_truncate` for warm starts across bases, and `lanczos_stop="tr"` (stop on the TR residual only).
