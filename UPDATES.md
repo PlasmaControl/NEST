@@ -2,6 +2,16 @@
 
 One entry per commit, newest first.
 
+## 2026-10-30: exact line scans of force and misfit in current space (branch fixed-boundary)
+- `scripts/meanforce/line_scan_fixed.py`: on the fixed geometry, F along a straight segment in (u, I) is exactly quadratic in t (J linear, B affine, p a fixed linear projection), so two field evaluations give M(t) and the misfit for all t. Endpoints are checked against FixedAnchor.state; they agree to all printed digits.
+- `constraints_drift_fixed.py`: fixed a missing `scripts/` sys.path entry (optimize_fb).
+- Results (48/32/18 evaluated at a/40; `diagnostics/fxLS.npz`, `runs/fxLS.log`, `figures/meanforce_fixed/line_scan_force.png`):
+  - u = 0 at the fixed net current I (the closest point to "no current" in the solver's space) has M = 21.7 M_DESC and misfit 0.40, against 7.16 for J_fit. J = 0 (F = 0) is reachable only by scaling I too.
+  - Every scaled path from J = 0 to an optimized state passes through M of about 5 M_DESC (F = t a1 + t^2 a2: the external-field and self-field parts cancel only near t = 1).
+  - The chords alpha 0.05 -> 0.005 and 0.005 -> 0.001 rise above their endpoints in the middle (max 0.0525 and 0.0121 M_DESC). Extended past the second state they rise steeply (x60 at t = 3). The low-force set is narrow and curved, so no straight step from one state reaches the next.
+  - J_fit -> alpha 0.001 is a near-linear V: M falls from 7.16 (1 - t) to 0.0037 at t = 1.
+  - Grid caveat: the alpha 0.001 checkpoint (solved at a/60, M = 0.0016 M_DESC there) evaluates to 0.0037 M_DESC at a/40, so at this force level the annulus discretization is a leading-order effect.
+
 ## 2026-10-29: peak-force-bound and alpha 0.001 runs, their diagnostics (branch fixed-boundary)
 - Runs (NCSX 48/32/18, one H200; records in `results/meanforce_fixed/runs/`):
   - `fxPA3` (a/40): composite interior p16 (rho < 0.86, 0.02508 x DESC) + edge-mean (0.005186 x DESC) bound, started from the mean-bound alpha 0.005 state, which satisfies it exactly. After the 2 h budget (not stationary) the misfit is 0.01131, against 0.02181 for the mean-bound state. The volume mean rose to 0.058 x M_DESC.

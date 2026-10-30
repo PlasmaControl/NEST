@@ -14,6 +14,7 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "nest"))
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
 from desc import set_device  # noqa: E402
 
 set_device(os.environ.get("NEST_DEVICE", "cpu"))

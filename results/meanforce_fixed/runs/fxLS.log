@@ -1,0 +1,30 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+  pressure space: 20011 columns, Cholesky; cond(G) ~ 1.65e+06 (diag ratio^2; cond(P) ~ 1.28e+03)
+basis 48/32/18, n_u 41206, points 326830; M_desc 8.7788e-04; setup 217 s
+/opt/conda/lib/python3.11/site-packages/jax/_src/interpreters/mlir.py:1233: UserWarning: A large amount of constants were captured during lowering (3.41GB total). If this is intentional, disable this warning by setting JAX_CAPTURED_CONSTANTS_WARN_BYTES=-1. To obtain a report of where these constants were encountered, set JAX_CAPTURED_CONSTANTS_REPORT_FRAMES=-1.
+  warnings.warn(message)
+E1030 16:11:26.866827     220 message_lite.cc:592] xla.gpu.CompilationResultProto exceeded maximum protobuf size of 2GB: 3416828721
+/opt/conda/lib/python3.11/site-packages/jax/_src/compiler.py:850: UserWarning: Error writing persistent compilation cache entry for 'jit__lambda': XlaRuntimeError: INTERNAL: PjRtStreamExecutorClient::SerializeExecutable proto serialization failed
+  warnings.warn(
+[seg zero -> fit] 57 s; t=1: scan M/M_desc 7.161025e+00 vs state 7.161025e+00, misfit 0.000000e+00 vs 0.000000e+00;
+    min M/M_desc 0.0000e+00 at t 0 (misfit 5.0000e-01)
+    t 0: M 0.0000e+00, mis 5.0000e-01; t 0.0001: M 2.3509e-03, mis 4.9990e-01; t 0.001: M 2.3492e-02, mis 4.9900e-01; t 0.01: M 2.3316e-01, mis 4.9005e-01; t 0.05: M 1.1268e+00, mis 4.5125e-01; t 0.1: M 2.1563e+00, mis 4.0500e-01; t 0.25: M 4.6687e+00, mis 2.8125e-01; t 0.5: M 7.0012e+00, mis 1.2500e-01; t 0.75: M 7.2955e+00, mis 3.1250e-02; t 1: M 7.1610e+00, mis 0.0000e+00
+[seg JI -> fit] 5 s; t=0: scan M/M_desc 2.172913e+01 vs state 2.172913e+01, misfit 4.020848e-01 vs 4.020848e-01; t=1: scan M/M_desc 7.161025e+00 vs state 7.161025e+00, misfit 8.187716e-34 vs 0.000000e+00;
+    min M/M_desc 6.9962e+00 at t 0.95 (misfit 1.0052e-03)
+    t 0: M 2.1729e+01, mis 4.0208e-01; t 0.0001: M 2.1727e+01, mis 4.0200e-01; t 0.001: M 2.1706e+01, mis 4.0128e-01; t 0.01: M 2.1502e+01, mis 3.9408e-01; t 0.05: M 2.0631e+01, mis 3.6288e-01; t 0.1: M 1.9587e+01, mis 3.2569e-01; t 0.25: M 1.6630e+01, mis 2.2617e-01; t 0.5: M 1.2173e+01, mis 1.0052e-01; t 0.75: M 8.4659e+00, mis 2.5130e-02; t 1: M 7.1610e+00, mis 8.1877e-34
+[seg zero -> a005] 6 s; t=1: scan M/M_desc 4.989432e-03 vs state 4.989432e-03, misfit 2.181095e-02 vs 2.181095e-02;
+    min M/M_desc 0.0000e+00 at t 0 (misfit 5.0000e-01)
+    t 0: M 0.0000e+00, mis 5.0000e-01; t 0.0001: M 2.1119e-03, mis 4.9990e-01; t 0.001: M 2.1100e-02, mis 4.9899e-01; t 0.01: M 2.0910e-01, mis 4.8993e-01; t 0.05: M 1.0032e+00, mis 4.5072e-01; t 0.1: M 1.9009e+00, mis 4.0411e-01; t 0.25: M 3.9601e+00, mis 2.8030e-01; t 0.5: M 5.2802e+00, mis 1.2737e-01; t 0.75: M 3.9603e+00, mis 4.1205e-02; t 1: M 4.9894e-03, mis 2.1811e-02
+[seg zero -> a001] 5 s; t=1: scan M/M_desc 3.730698e-03 vs state 3.730698e-03, misfit 4.639660e-02 vs 4.639660e-02;
+    min M/M_desc 0.0000e+00 at t 0 (misfit 5.0000e-01)
+    t 0: M 0.0000e+00, mis 5.0000e-01; t 0.0001: M 2.1547e-03, mis 4.9990e-01; t 0.001: M 2.1527e-02, mis 4.9897e-01; t 0.01: M 2.1333e-01, mis 4.8977e-01; t 0.05: M 1.0236e+00, mis 4.5000e-01; t 0.1: M 1.9394e+00, mis 4.0287e-01; t 0.25: M 4.0404e+00, mis 2.7874e-01; t 0.5: M 5.3873e+00, mis 1.2939e-01; t 0.75: M 4.0406e+00, mis 5.1938e-02; t 1: M 3.7307e-03, mis 4.6397e-02
+[seg a05 -> a005] 6 s; t=0: scan M/M_desc 5.011712e-02 vs state 5.011712e-02, misfit 4.485782e-03 vs 4.485782e-03; t=1: scan M/M_desc 4.989432e-03 vs state 4.989432e-03, misfit 2.181095e-02 vs 2.181095e-02;
+    min M/M_desc 4.9894e-03 at t 1 (misfit 2.1811e-02)
+    t 0: M 5.0117e-02, mis 4.4858e-03; t 0.0001: M 5.0113e-02, mis 4.4860e-03; t 0.001: M 5.0078e-02, mis 4.4879e-03; t 0.01: M 4.9971e-02, mis 4.5084e-03; t 0.05: M 5.0496e-02, mis 4.6294e-03; t 0.1: M 5.1371e-02, mis 4.8491e-03; t 0.25: M 5.2507e-02, mis 5.9645e-03; t 0.5: M 4.6727e-02, mis 9.3450e-03; t 0.75: M 3.0265e-02, mis 1.4627e-02; t 1: M 4.9894e-03, mis 2.1811e-02; t 1.5: M 9.1699e-02, mis 4.1884e-02; t 2: M 2.3037e-01, mis 6.9563e-02
+[seg a005 -> a001] 6 s; t=0: scan M/M_desc 4.989432e-03 vs state 4.989432e-03, misfit 2.181095e-02 vs 2.181095e-02; t=1: scan M/M_desc 3.730698e-03 vs state 3.730698e-03, misfit 4.639660e-02 vs 4.639660e-02;
+    min M/M_desc 3.7307e-03 at t 1 (misfit 4.6397e-02)
+    t 0: M 4.9894e-03, mis 2.1811e-02; t 0.0001: M 4.9892e-03, mis 2.1812e-02; t 0.001: M 4.9878e-03, mis 2.1825e-02; t 0.01: M 5.0548e-03, mis 2.1955e-02; t 0.05: M 5.8881e-03, mis 2.2550e-02; t 0.1: M 7.1127e-03, mis 2.3341e-02; t 0.25: M 1.0192e-02, mis 2.6024e-02; t 0.5: M 1.2071e-02, mis 3.1525e-02; t 0.75: M 9.5479e-03, mis 3.8316e-02; t 1: M 3.7307e-03, mis 4.6397e-02; t 1.5: M 3.1718e-02, mis 6.6424e-02; t 2: M 8.1327e-02, mis 9.1609e-02; t 3: M 2.4022e-01, mis 1.5745e-01
+[seg fit -> a001] 6 s; t=0: scan M/M_desc 7.161025e+00 vs state 7.161025e+00, misfit 0.000000e+00 vs 0.000000e+00; t=1: scan M/M_desc 3.730698e-03 vs state 3.730698e-03, misfit 4.639660e-02 vs 4.639660e-02;
+    min M/M_desc 3.7307e-03 at t 1 (misfit 4.6397e-02)
+    t 0: M 7.1610e+00, mis 0.0000e+00; t 0.0001: M 7.1603e+00, mis 4.6397e-10; t 0.001: M 7.1539e+00, mis 4.6397e-08; t 0.01: M 7.0894e+00, mis 4.6397e-06; t 0.05: M 6.8032e+00, mis 1.1599e-04; t 0.1: M 6.4454e+00, mis 4.6397e-04; t 0.25: M 5.3724e+00, mis 2.8998e-03; t 0.5: M 3.5840e+00, mis 1.1599e-02; t 0.75: M 1.7939e+00, mis 2.6098e-02; t 1: M 3.7307e-03, mis 4.6397e-02; t 1.5: M 3.6060e+00, mis 1.0439e-01
+saved ../out/fxLS.npz; total 308 s
