@@ -2,6 +2,11 @@
 
 One entry per commit, newest first.
 
+## 2026-10-30: line scans from the net-current-only state; a/80 grid check of alpha 0.001 (branch fixed-boundary)
+- J_I (u = 0, I fixed; M = 21.7 M_DESC, not an equilibrium) -> alpha 0.05 / 0.005 / 0.001 states (`diagnostics/fxLS2.npz`, `runs/fxLS2.log`): M falls almost linearly (~21.7 (1 - t)) to a sharp minimum at each state (t = 1), then rises steeply (~12 M_DESC at t = 1.5). The three rays coincide until t ~ 0.9, so the states differ from each other far less than from J_I. Each state is the optimal scaling of its own free current along this ray.
+- Grid check, no solve (`runs/fxG80a001.log`), mean M / M_DESC: the alpha 0.001 checkpoint is 0.0037 / 0.0016 / 0.0015 at a/40 / a/60 / a/80, and alpha 0.005 is 0.0050 / 0.0045 / 0.0044. So a/60 is converged to ~6% at alpha 0.001 and a/40 is not. The alpha 0.001 interior max is 0.0044 x DESC's, entirely at rho 0.845 (3/5 region).
+- `figures/meanforce_fixed/line_scan_force.png`: three panels (from J = 0, from J_I, chords between states).
+
 ## 2026-10-30: exact line scans of force and misfit in current space (branch fixed-boundary)
 - `scripts/meanforce/line_scan_fixed.py`: on the fixed geometry, F along a straight segment in (u, I) is exactly quadratic in t (J linear, B affine, p a fixed linear projection), so two field evaluations give M(t) and the misfit for all t. Endpoints are checked against FixedAnchor.state; they agree to all printed digits.
 - `constraints_drift_fixed.py`: fixed a missing `scripts/` sys.path entry (optimize_fb).
