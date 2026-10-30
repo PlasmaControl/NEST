@@ -90,6 +90,11 @@ def main():
                          "cap (radius --test-delta), report step, predicted/actual decrease, residual, Ritz "
                          "extremes, then exit")
     ap.add_argument("--test-delta", type=float, default=1.6e-2)
+    ap.add_argument("--anatomy", type=int, default=None,
+                    help="with the subproblem test's model at the --start state: one Lanczos run to this many "
+                         "iterations, then every tolerance / radius from it (scripts/meanforce/subproblem_anatomy.py)")
+    ap.add_argument("--anatomy-deltas", type=float, nargs="+", default=[3.0, 30.0, 1e4],
+                    help="radii as multiples of |L^-1 grad| (force metric)")
     ap.add_argument("--test-model", choices=("gn", "hvp", "beta"), default="gn",
                     help="gn: base GN rows; hvp: exact Hessian of the merit; beta: the production beta-model rows (--beta)")
     ap.add_argument("--precond", choices=("hj", "force"), default="force",
@@ -404,7 +409,7 @@ def main():
         phase("linear constraints", t1)
     mk_metric = (lambda LL: LC.metric(LL)) if LC is not None else pw.Metric
     met = mk_metric(L)
-    if lean and not a.subproblem_test:
+    if lean and not (a.subproblem_test or a.anatomy):
         del L  # the metric object holds the only reference (released before each rebuild)
     phase("metric (H_J by slices, Cholesky)", t1)
 
@@ -532,7 +537,7 @@ def main():
         + f"; metric {a.precond}" + (f" (rebuild: Lanczos cap or rent-or-buy; outer if psi' changed > x{a.outer_rebuild_factor:g})"
                                      if a.precond == "force" else "")
         + f"; LS multiplier {'on' if solver.mult_ls else 'off'}; Lanczos stop {a.lanczos_stop}")
-    if a.subproblem_test:
+    if a.subproblem_test or a.anatomy:
         W.eps = a.alphas[0] * M_desc
         s, f, phi, c = solver.evaluate(z)
         if a.test_model == "beta":
@@ -552,8 +557,22 @@ def main():
             log(f"[subproblem test] force metric: |L^-1 grad| = {D_f:.3e}; test Delta {tdelta:.3e} (force-metric units)")
         log(f"[subproblem test] model {a.test_model}, Delta {tdelta:.2e}, f {f:.6e}, M/eps {float(s['M']) / W.eps:.4f}, "
             f"nu {W.nu.tolist()}, rho {W.rho}")
+        if a.anatomy:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import subproblem_anatomy as SA
+
+            def ev(d):
+                s_n, f_n, phi_n, c_n = solver.evaluate(z + d)
+                return float(f_n), float(s_n["M"]) / W.eps, float(phi_n)
+            SA.run(Hv, grad, f0, met, a.anatomy, a.anatomy_deltas, ev, (float(f), float(s["M"]) / W.eps, float(phi)),
+                   log, out_path=a.out + "_anatomy.npz")
+            if a.mirror:
+                import shutil
+                shutil.copy(a.out + "_anatomy.npz", a.mirror)
+            log("anatomy done")
+            return
         out = []
-        for cap in a.subproblem_test:
+        for cap in a.subproblem_test or []:
             t1 = time.time()
             y, m_step, hit, k, share, gn, mu = mff.lanczos_tr_step_H(Hv, grad, f0, met, tdelta, a.cg_tol, cap)
             tl = time.time() - t1

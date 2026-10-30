@@ -1,0 +1,141 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+DESCInput(NCSX_fb_L16M16N12.h5: NFP=3, (L,M,N)=(16, 16, 12), current prescribed, a=0.3226 m, R0=1.441 m, <beta>=0.0409, field=MixedCoilSet)
+basis 48/32/18, collocation resolution (96, 72, 45) (49, 145, 46); DESC <|F|>_vol / norm 8.7788e-04
+[setup] load + fits + reference: 41.1 s; mem {'in use GB': 0.000888064, 'peak GB': 0.447579904, 'host maxrss GB': 5.247852}
+    locate: planes 44/355, 0 inside, 5 s
+    locate: planes 88/355, 969,583 inside, 12 s
+    locate: planes 132/355, 1,946,756 inside, 17 s
+    locate: planes 176/355, 1,946,756 inside, 19 s
+    locate: planes 220/355, 2,928,319 inside, 24 s
+    locate: planes 264/355, 2,928,319 inside, 25 s
+    locate: planes 308/355, 3,901,742 inside, 27 s
+    locate: planes 352/355, 4,879,235 inside, 30 s
+    locate: 10,182,702 inside, 33 s
+[setup] annulus + locate + ForceResidual: 72.0 s; mem {'in use GB': 0.026202112, 'peak GB': 11.635977472, 'host maxrss GB': 7.677376}
+sizes: {'n_u': 41206, 'n_p': 20011, 'points': 326830, 'annulus': 'CylindricalGrid(r [0.9949, 1.8172] n 242, z [-0.6627, 0.6627] n 389, N_phi 709, NFP 3: 66.74M nodes)', 'annulus nodes': 66743842}
+[setup] Fields: 51.1 s; mem {'in use GB': 6.632794624, 'peak GB': 36.403309568, 'host maxrss GB': 17.436056}
+    G = P^T P: slice 1/49, 4 s
+    G = P^T P: slice 8/49, 9 s
+    G = P^T P: slice 16/49, 15 s
+    G = P^T P: slice 24/49, 21 s
+    G = P^T P: slice 32/49, 27 s
+    G = P^T P: slice 40/49, 33 s
+    G = P^T P: slice 48/49, 39 s
+    G = P^T P: slice 49/49, 40 s
+  G = P^T P Gram (20011 x 20011) by radial slices in 40 s
+[setup] pressure Gram: 40.2 s; mem {'in use GB': 9.857258496, 'peak GB': 36.403309568, 'host maxrss GB': 17.436056}
+  pressure space: 20011 columns, Cholesky; cond(G) ~ 1.65e+06 (diag ratio^2; cond(P) ~ 1.28e+03)
+start: M/M_desc 7.1615, rms|F| 1.696e-02, Galerkin 7.3e-17
+[setup] start state (first compile): 8.5 s; mem {'in use GB': 9.924669184, 'peak GB': 36.403309568, 'host maxrss GB': 17.436056}
+    H_J: slice 1/49, 4 s
+    H_J: slice 8/49, 22 s
+    H_J: slice 16/49, 43 s
+    H_J: slice 24/49, 65 s
+    H_J: slice 32/49, 86 s
+    H_J: slice 40/49, 108 s
+    H_J: slice 48/49, 129 s
+    H_J: slice 49/49, 132 s
+  H_J Gram (41206 x 41206) by radial slices (lean) in 132 s
+[setup] metric (H_J by slices, Cholesky): 137.9 s; mem {'in use GB': 23.510985472, 'peak GB': 50.677937664, 'host maxrss GB': 25.403364}
+start from /work/snapC.npz: nu [0.007025085430218636, 0.0, 0.0], rho 10.0
+products: J v 0.127 s, J^T w 0.372 s
+[setup] products: 0.0 s; mem {'in use GB': 23.541410816, 'peak GB': 50.677937664, 'host maxrss GB': 26.054084}
+[model] beta (beta 0.5); metric force (rebuild: Lanczos cap or rent-or-buy; outer if psi' changed > x2); LS multiplier on; Lanczos stop tr
+    H_F(local, lean): slice 1/49, 7 s
+    H_F(local, lean): slice 8/49, 46 s
+    H_F(local, lean): slice 16/49, 91 s
+    H_F(local, lean): slice 24/49, 136 s
+    H_F(local, lean): slice 32/49, 182 s
+    H_F(local, lean): slice 40/49, 227 s
+    H_F(local, lean): slice 48/49, 272 s
+    H_F(local, lean): slice 49/49, 277 s
+  H_F(local) Gram (41206 x 41206, lean) in 284 s
+  metric: trace H_J 3.268e-04, trace H_F(local) 2.248e+08 (lean build)
+[metric] force metric built in 288 s; mem {'in use GB': 37.291373824, 'peak GB': 70.099999744, 'host maxrss GB': 28.529072}
+[subproblem test] force metric: |L^-1 grad| = 2.946e-01; test Delta 1.600e-02 (force-metric units)
+[subproblem test] model beta, Delta 1.60e-02, f 1.930302e+00, M/eps 1.6133, nu [0.007025085430218636, 0.0, 0.0], rho 10.0
+[anatomy] |L^-1 grad| 2.9463e-01, f0 9.950717e+00; radii 8.839e-01, 8.839e+00, 2.946e+03; K 3000
+  [anatomy] Lanczos 100: Ritz [2.956e-04, 7.532e+05] (kappa 2.55e+09); 53 s; Delta 3|g|: res 1.2e-02 dec/f0 1.887e-04 hit 1; Delta 30|g|: res 1.1e-01 dec/f0 7.383e-04 hit 0; Delta 10000|g|: res 1.1e-01 dec/f0 7.383e-04 hit 0
+  [anatomy] Lanczos 200: Ritz [7.438e-06, 7.532e+05] (kappa 1.01e+11); 106 s; Delta 3|g|: res 3.1e-05 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 4.9e-03 dec/f0 1.698e-03 hit 1; Delta 10000|g|: res 2.1e-01 dec/f0 2.467e-02 hit 0
+  [anatomy] Lanczos 300: Ritz [5.295e-06, 7.532e+05] (kappa 1.42e+11); 158 s; Delta 3|g|: res 3.2e-08 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 4.8e-04 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 9.5e-02 dec/f0 3.415e-02 hit 0
+  [anatomy] Lanczos 400: Ritz [3.699e-06, 7.532e+05] (kappa 2.04e+11); 211 s; Delta 3|g|: res 1.8e-11 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 3.7e-05 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 9.0e-02 dec/f0 4.552e-02 hit 0
+  [anatomy] Lanczos 500: Ritz [2.752e-06, 7.532e+05] (kappa 2.74e+11); 264 s; Delta 3|g|: res 6.5e-15 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 2.7e-06 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 6.8e-02 dec/f0 5.565e-02 hit 0
+  [anatomy] Lanczos 600: Ritz [2.061e-06, 7.532e+05] (kappa 3.65e+11); 316 s; Delta 3|g|: res 4.0e-18 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 1.8e-07 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 6.4e-02 dec/f0 6.609e-02 hit 0
+  [anatomy] Lanczos 700: Ritz [1.835e-06, 7.532e+05] (kappa 4.11e+11); 369 s; Delta 3|g|: res 7.0e-18 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 1.2e-08 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 4.8e-02 dec/f0 7.040e-02 hit 0
+  [anatomy] Lanczos 800: Ritz [1.596e-06, 7.532e+05] (kappa 4.72e+11); 422 s; Delta 3|g|: res 8.2e-18 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 8.7e-10 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 5.2e-02 dec/f0 7.522e-02 hit 0
+  [anatomy] Lanczos 900: Ritz [1.367e-06, 7.532e+05] (kappa 5.51e+11); 475 s; Delta 3|g|: res 1.0e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 3.5e-11 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 2.5e-02 dec/f0 8.007e-02 hit 0
+  [anatomy] Lanczos 1000: Ritz [1.289e-06, 7.532e+05] (kappa 5.84e+11); 528 s; Delta 3|g|: res 1.9e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 2.5e-12 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 3.8e-02 dec/f0 8.173e-02 hit 0
+  [anatomy] Lanczos 1100: Ritz [1.185e-06, 7.532e+05] (kappa 6.36e+11); 580 s; Delta 3|g|: res 1.2e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 1.7e-13 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 3.0e-02 dec/f0 8.374e-02 hit 0
+  [anatomy] Lanczos 1200: Ritz [9.822e-07, 7.532e+05] (kappa 7.67e+11); 633 s; Delta 3|g|: res 3.8e-18 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 2.2e-15 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 1.0e-02 dec/f0 8.707e-02 hit 0
+  [anatomy] Lanczos 1300: Ritz [5.465e-07, 7.532e+05] (kappa 1.38e+12); 686 s; Delta 3|g|: res 3.7e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 2.8e-17 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 7.2e-03 dec/f0 9.318e-02 hit 0
+  [anatomy] Lanczos 1400: Ritz [5.216e-07, 7.532e+05] (kappa 1.44e+12); 739 s; Delta 3|g|: res 1.7e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 1.7e-17 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 5.3e-03 dec/f0 9.363e-02 hit 0
+  [anatomy] Lanczos 1500: Ritz [3.811e-07, 7.532e+05] (kappa 1.98e+12); 792 s; Delta 3|g|: res 4.2e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 7.3e-17 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 2.0e-03 dec/f0 9.524e-02 hit 0
+  [anatomy] Lanczos 1600: Ritz [3.139e-07, 7.532e+05] (kappa 2.40e+12); 845 s; Delta 3|g|: res 2.1e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 2.1e-17 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 1.7e-03 dec/f0 9.573e-02 hit 0
+  [anatomy] Lanczos 1700: Ritz [7.667e-08, 7.532e+05] (kappa 9.82e+12); 899 s; Delta 3|g|: res 6.3e-19 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 1.7e-18 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 2.1e-03 dec/f0 9.734e-02 hit 0
+  [anatomy] Lanczos 1800: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 952 s; Delta 3|g|: res 1.7e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 1.7e-17 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 5.0e-05 dec/f0 9.909e-02 hit 0
+  [anatomy] Lanczos 1900: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 1005 s; Delta 3|g|: res 5.2e-18 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 5.5e-18 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 2.9e-11 dec/f0 9.909e-02 hit 0
+  [anatomy] Lanczos 2000: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 1059 s; Delta 3|g|: res 2.9e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 2.9e-17 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 3.2e-17 dec/f0 9.909e-02 hit 0
+  [anatomy] Lanczos 2100: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 1112 s; Delta 3|g|: res 4.1e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 4.1e-17 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 4.1e-17 dec/f0 9.909e-02 hit 0
+  [anatomy] Lanczos 2200: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 1166 s; Delta 3|g|: res 2.0e-16 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 2.0e-16 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 2.0e-16 dec/f0 9.909e-02 hit 0
+  [anatomy] Lanczos 2300: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 1220 s; Delta 3|g|: res 6.0e-16 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 6.1e-16 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 6.1e-16 dec/f0 9.909e-02 hit 0
+  [anatomy] Lanczos 2400: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 1274 s; Delta 3|g|: res 1.1e-16 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 1.1e-16 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 1.1e-16 dec/f0 9.909e-02 hit 0
+  [anatomy] Lanczos 2500: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 1329 s; Delta 3|g|: res 9.6e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 9.6e-17 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 9.7e-17 dec/f0 9.909e-02 hit 0
+  [anatomy] Lanczos 2600: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 1383 s; Delta 3|g|: res 8.3e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 8.4e-17 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 8.4e-17 dec/f0 9.909e-02 hit 0
+  [anatomy] Lanczos 2700: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 1438 s; Delta 3|g|: res 1.1e-16 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 1.1e-16 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 1.1e-16 dec/f0 9.909e-02 hit 0
+  [anatomy] Lanczos 2800: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 1493 s; Delta 3|g|: res 1.4e-16 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 1.4e-16 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 1.4e-16 dec/f0 9.909e-02 hit 0
+  [anatomy] Lanczos 2900: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 1548 s; Delta 3|g|: res 6.2e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 6.2e-17 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 6.2e-17 dec/f0 9.909e-02 hit 0
+  [anatomy] Lanczos 3000: Ritz [3.498e-08, 7.532e+05] (kappa 2.15e+13); 1604 s; Delta 3|g|: res 2.8e-17 dec/f0 1.934e-04 hit 1; Delta 30|g|: res 2.9e-17 dec/f0 1.701e-03 hit 1; Delta 10000|g|: res 2.9e-17 dec/f0 9.909e-02 hit 0
+[anatomy] Ritz spectrum at K = 3000: theta [3.498e-08, 7.532e+05], kappa 2.153e+13 (so cond of the preconditioned Jacobian ~4.64e+06); Ritz values per band (theta/theta_max): <1e-6: 1707, 1e-6..1e-5: 1229, 1e-5..1e-4: 32, 1e-4..1e-3: 15, 1e-3..1e-2: 9, 1e-2..1e-1: 5, 1e-1..1: 3
+[anatomy] gradient |g_i|^2 share per band: <1e-6: 8.352e-04, 1e-6..1e-5: 1.238e-03, 1e-5..1e-4: 1.455e-03, 1e-4..1e-3: 1.313e-02, 1e-3..1e-2: 4.247e-02, 1e-2..1e-1: 2.017e-01, 1e-1..1: 7.391e-01
+[anatomy] Delta 3 |g| = 8.839e-01: converged (K = 3000) res 2.85e-17, model dec/f0 1.9337e-04, |y| 8.839e-01, hit True, mu 2.201e-03
+    tol 1e-01: k   29 |y| 1.449e-02 hit 0 pred/f0 1.0187e-05 act/f0 1.1883e-05 ratio 1.167 shortfall 9.47e-01 cos 0.2062 |y-y*|/|y*| 0.997 M/eps 1.6133->1.6133 phi 0.04542->0.04542
+      step norm^2 share by band: <1e-6 4.65e-01, 1e-6..1e-5 5.31e-01, 1e-5..1e-4 3.90e-03, 1e-4..1e-3 1.38e-04 | model-decrease share: <1e-6 5.66e-01, 1e-6..1e-5 4.23e-01, 1e-5..1e-4 -7.40e-03, 1e-4..1e-3 4.43e-03, 1e-3..1e-2 1.10e-02, 1e-2..1e-1 2.68e-03, 1e-1..1 7.90e-04
+    tol 3e-02: k   89 |y| 8.839e-01 hit 1 pred/f0 1.7879e-04 act/f0 1.8978e-04 ratio 1.061 shortfall 7.54e-02 cos 0.9841 |y-y*|/|y*| 0.178 M/eps 1.6133->1.6130 phi 0.04542->0.04543
+      step norm^2 share by band: <1e-6 1.00e+00, 1e-6..1e-5 1.53e-04 | model-decrease share: <1e-6 9.72e-01, 1e-6..1e-5 2.49e-02, 1e-5..1e-4 9.27e-04, 1e-4..1e-3 9.71e-04, 1e-3..1e-2 6.25e-04, 1e-2..1e-1 1.52e-04
+    tol 1e-02: k  102 |y| 8.839e-01 hit 1 pred/f0 1.8950e-04 act/f0 1.9731e-04 ratio 1.041 shortfall 2.01e-02 cos 0.9930 |y-y*|/|y*| 0.118 M/eps 1.6133->1.6130 phi 0.04542->0.04543
+      step norm^2 share by band: <1e-6 1.00e+00, 1e-6..1e-5 1.47e-04 | model-decrease share: <1e-6 9.70e-01, 1e-6..1e-5 2.64e-02, 1e-5..1e-4 1.44e-03, 1e-4..1e-3 9.16e-04, 1e-3..1e-2 5.90e-04, 1e-2..1e-1 1.44e-04
+    tol 3e-03: k  124 |y| 8.839e-01 hit 1 pred/f0 1.9306e-04 act/f0 1.9829e-04 ratio 1.027 shortfall 1.60e-03 cos 0.9994 |y-y*|/|y*| 0.035 M/eps 1.6133->1.6130 phi 0.04542->0.04543
+      step norm^2 share by band: <1e-6 1.00e+00, 1e-6..1e-5 1.45e-04 | model-decrease share: <1e-6 9.70e-01, 1e-6..1e-5 2.65e-02, 1e-5..1e-4 1.41e-03, 1e-4..1e-3 8.99e-04, 1e-3..1e-2 5.79e-04, 1e-2..1e-1 1.41e-04
+    tol 1e-03: k  142 |y| 8.839e-01 hit 1 pred/f0 1.9332e-04 act/f0 1.9830e-04 ratio 1.026 shortfall 2.63e-04 cos 0.9999 |y-y*|/|y*| 0.016 M/eps 1.6133->1.6130 phi 0.04542->0.04543
+      step norm^2 share by band: <1e-6 1.00e+00, 1e-6..1e-5 1.46e-04 | model-decrease share: <1e-6 9.70e-01, 1e-6..1e-5 2.66e-02, 1e-5..1e-4 1.41e-03, 1e-4..1e-3 8.98e-04, 1e-3..1e-2 5.78e-04, 1e-2..1e-1 1.41e-04
+    tol 1e-04: k  182 |y| 8.839e-01 hit 1 pred/f0 1.9337e-04 act/f0 1.9826e-04 ratio 1.025 shortfall 2.35e-06 cos 1.0000 |y-y*|/|y*| 0.002 M/eps 1.6133->1.6130 phi 0.04542->0.04543
+      step norm^2 share by band: <1e-6 1.00e+00, 1e-6..1e-5 1.46e-04 | model-decrease share: <1e-6 9.70e-01, 1e-6..1e-5 2.66e-02, 1e-5..1e-4 1.41e-03, 1e-4..1e-3 8.98e-04, 1e-3..1e-2 5.78e-04, 1e-2..1e-1 1.41e-04
+    tol 1e-05: k  215 |y| 8.839e-01 hit 1 pred/f0 1.9337e-04 act/f0 1.9826e-04 ratio 1.025 shortfall 3.55e-08 cos 1.0000 |y-y*|/|y*| 0.000 M/eps 1.6133->1.6130 phi 0.04542->0.04543
+      step norm^2 share by band: <1e-6 1.00e+00, 1e-6..1e-5 1.46e-04 | model-decrease share: <1e-6 9.70e-01, 1e-6..1e-5 2.66e-02, 1e-5..1e-4 1.41e-03, 1e-4..1e-3 8.98e-04, 1e-3..1e-2 5.78e-04, 1e-2..1e-1 1.41e-04
+    tol 1e-06: k  250 |y| 8.839e-01 hit 1 pred/f0 1.9337e-04 act/f0 1.9826e-04 ratio 1.025 shortfall 3.85e-09 cos 1.0000 |y-y*|/|y*| 0.000 M/eps 1.6133->1.6130 phi 0.04542->0.04543
+      step norm^2 share by band: <1e-6 1.00e+00, 1e-6..1e-5 1.46e-04 | model-decrease share: <1e-6 9.70e-01, 1e-6..1e-5 2.66e-02, 1e-5..1e-4 1.41e-03, 1e-4..1e-3 8.98e-04, 1e-3..1e-2 5.78e-04, 1e-2..1e-1 1.41e-04
+[anatomy] Delta 30 |g| = 8.839e+00: converged (K = 3000) res 2.86e-17, model dec/f0 1.7007e-03, |y| 8.839e+00, hit True, mu 2.099e-04
+    tol 1e-01: k   29 |y| 1.449e-02 hit 0 pred/f0 1.0187e-05 act/f0 1.1883e-05 ratio 1.167 shortfall 9.94e-01 cos 0.1716 |y-y*|/|y*| 1.000 M/eps 1.6133->1.6133 phi 0.04542->0.04542
+      step norm^2 share by band: <1e-6 4.65e-01, 1e-6..1e-5 5.31e-01, 1e-5..1e-4 3.90e-03, 1e-4..1e-3 1.38e-04 | model-decrease share: <1e-6 5.66e-01, 1e-6..1e-5 4.23e-01, 1e-5..1e-4 -7.40e-03, 1e-4..1e-3 4.43e-03, 1e-3..1e-2 1.10e-02, 1e-2..1e-1 2.68e-03, 1e-1..1 7.90e-04
+    tol 3e-02: k  136 |y| 8.839e+00 hit 1 pred/f0 1.6150e-03 act/f0 1.4552e-03 ratio 0.901 shortfall 5.04e-02 cos 0.9926 |y-y*|/|y*| 0.122 M/eps 1.6133->1.6109 phi 0.04542->0.04552
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 9.97e-01, 1e-6..1e-5 2.39e-03, 1e-5..1e-4 1.69e-04, 1e-4..1e-3 1.08e-04
+    tol 1e-02: k  171 |y| 8.839e+00 hit 1 pred/f0 1.6885e-03 act/f0 1.5793e-03 ratio 0.935 shortfall 7.19e-03 cos 0.9984 |y-y*|/|y*| 0.056 M/eps 1.6133->1.6107 phi 0.04542->0.04553
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 9.97e-01, 1e-6..1e-5 2.96e-03, 1e-5..1e-4 1.61e-04, 1e-4..1e-3 1.03e-04
+    tol 3e-03: k  212 |y| 8.839e+00 hit 1 pred/f0 1.6996e-03 act/f0 1.6082e-03 ratio 0.946 shortfall 6.50e-04 cos 0.9997 |y-y*|/|y*| 0.023 M/eps 1.6133->1.6107 phi 0.04542->0.04553
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 9.97e-01, 1e-6..1e-5 3.01e-03, 1e-5..1e-4 1.60e-04, 1e-4..1e-3 1.02e-04
+    tol 1e-03: k  255 |y| 8.839e+00 hit 1 pred/f0 1.7005e-03 act/f0 1.6117e-03 ratio 0.948 shortfall 1.35e-04 cos 0.9999 |y-y*|/|y*| 0.013 M/eps 1.6133->1.6106 phi 0.04542->0.04553
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 9.97e-01, 1e-6..1e-5 3.02e-03, 1e-5..1e-4 1.60e-04, 1e-4..1e-3 1.02e-04
+    tol 1e-04: k  360 |y| 8.839e+00 hit 1 pred/f0 1.7007e-03 act/f0 1.6196e-03 ratio 0.952 shortfall 1.20e-06 cos 1.0000 |y-y*|/|y*| 0.001 M/eps 1.6133->1.6106 phi 0.04542->0.04553
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 9.97e-01, 1e-6..1e-5 3.02e-03, 1e-5..1e-4 1.60e-04, 1e-4..1e-3 1.02e-04
+    tol 1e-05: k  460 |y| 8.839e+00 hit 1 pred/f0 1.7007e-03 act/f0 1.6199e-03 ratio 0.952 shortfall 1.01e-08 cos 1.0000 |y-y*|/|y*| 0.000 M/eps 1.6133->1.6106 phi 0.04542->0.04553
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 9.97e-01, 1e-6..1e-5 3.02e-03, 1e-5..1e-4 1.60e-04, 1e-4..1e-3 1.02e-04
+    tol 1e-06: k  553 |y| 8.839e+00 hit 1 pred/f0 1.7007e-03 act/f0 1.6199e-03 ratio 0.952 shortfall -1.30e-08 cos 1.0000 |y-y*|/|y*| 0.000 M/eps 1.6133->1.6106 phi 0.04542->0.04553
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 9.97e-01, 1e-6..1e-5 3.02e-03, 1e-5..1e-4 1.60e-04, 1e-4..1e-3 1.02e-04
+[anatomy] Delta 10000 |g| = 2.946e+03: converged (K = 3000) res 2.87e-17, model dec/f0 9.9093e-02, |y| 2.249e+03, hit False, mu 0.000e+00
+    tol 1e-01: k   29 |y| 1.449e-02 hit 0 pred/f0 1.0187e-05 act/f0 1.1883e-05 ratio 1.167 shortfall 1.00e+00 cos 0.0763 |y-y*|/|y*| 1.000 M/eps 1.6133->1.6133 phi 0.04542->0.04542
+      step norm^2 share by band: <1e-6 4.65e-01, 1e-6..1e-5 5.31e-01, 1e-5..1e-4 3.90e-03, 1e-4..1e-3 1.38e-04 | model-decrease share: <1e-6 5.66e-01, 1e-6..1e-5 4.23e-01, 1e-5..1e-4 -7.40e-03, 1e-4..1e-3 4.43e-03, 1e-3..1e-2 1.10e-02, 1e-2..1e-1 2.68e-03, 1e-1..1 7.90e-04
+    tol 3e-02: k 1456 |y| 1.503e+03 hit 0 pred/f0 9.5168e-02 act/f0 -6.0545e+01 ratio -636.188 shortfall 3.96e-02 cos 0.7780 |y-y*|/|y*| 0.638 M/eps 1.6133->11.9933 phi 0.04542->0.04870
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 1.00e+00
+    tol 1e-02: k 1469 |y| 1.507e+03 hit 0 pred/f0 9.5230e-02 act/f0 -6.0755e+01 ratio -637.979 shortfall 3.90e-02 cos 0.7792 |y-y*|/|y*| 0.636 M/eps 1.6133->12.0124 phi 0.04542->0.04865
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 1.00e+00
+    tol 3e-03: k 1680 |y| 1.779e+03 hit 0 pred/f0 9.7338e-02 act/f0 -3.3880e+01 ratio -348.060 shortfall 1.77e-02 cos 0.9504 |y-y*|/|y*| 0.349 M/eps 1.6133->9.2335 phi 0.04542->0.04799
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 1.00e+00
+    tol 1e-03: k 1777 |y| 2.249e+03 hit 0 pred/f0 9.9093e-02 act/f0 -4.2021e+01 ratio -424.057 shortfall 6.32e-07 cos 1.0000 |y-y*|/|y*| 0.000 M/eps 1.6133->10.1647 phi 0.04542->0.04815
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 1.00e+00
+    tol 1e-04: k 1796 |y| 2.249e+03 hit 0 pred/f0 9.9093e-02 act/f0 -4.2022e+01 ratio -424.063 shortfall 4.69e-09 cos 1.0000 |y-y*|/|y*| 0.000 M/eps 1.6133->10.1648 phi 0.04542->0.04815
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 1.00e+00
+    tol 1e-05: k 1812 |y| 2.249e+03 hit 0 pred/f0 9.9093e-02 act/f0 -4.2022e+01 ratio -424.064 shortfall 6.13e-10 cos 1.0000 |y-y*|/|y*| 0.000 M/eps 1.6133->10.1648 phi 0.04542->0.04815
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 1.00e+00
+    tol 1e-06: k 1828 |y| 2.249e+03 hit 0 pred/f0 9.9093e-02 act/f0 -4.2022e+01 ratio -424.064 shortfall -5.93e-10 cos 1.0000 |y-y*|/|y*| 0.000 M/eps 1.6133->10.1648 phi 0.04542->0.04815
+      step norm^2 share by band: <1e-6 1.00e+00 | model-decrease share: <1e-6 1.00e+00
+anatomy done
