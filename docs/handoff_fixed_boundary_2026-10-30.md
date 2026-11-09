@@ -221,7 +221,7 @@ macOS has no `timeout`. Run long local commands with `background: true`.
   - deflation also needs a decrease-based stop, because the relative tolerance becomes stricter.
 - **Test 2 (stiff-mode origin):** only the CPU smoke test ran (8/8/6, alpha 0.7, from J_fit).
   - Local model (no J0 x dB): spectrum [0.50, 0.998]. Full model: κ ≈ 1.1e4.
-  - Top modes: R_nl/R_loc 14–20. Bottom modes: local and nonlocal parts cancel.
+  - Top 3 modes: R_nl/R_loc 19.97 / 13.91 / 6.07. Bottom modes: local and nonlocal parts cancel.
   - The snapC H200 run was declined and has **not been run**:
     `--stiff-modes 600 300 16 --test-model beta`, ~15 min.
 

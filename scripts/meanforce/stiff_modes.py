@@ -14,7 +14,7 @@ for d = L^-T y and dJ = J(d):
   theta_chk = (R_tot^2 + R_g^2 + R_a^2) / (R_loc^2 + R_g^2 + R_a^2)   (beta = 1 Rayleigh check)
   rho_c  = w |dJ|^2 - weighted mean radius of the mode.
 Smoke test (CPU, 8/8/6, a/20, from J_fit at alpha 0.7): local spectrum [0.50, 0.998]; full
-[2.7e-2, 2.9e2]; top modes R_nl/R_loc 14-20, bottom modes R_nl ~ R_loc (cancelling).
+[2.7e-2, 2.9e2]; top 3 modes R_nl/R_loc 19.97, 13.91, 6.07; bottom modes R_nl ~ R_loc (cancelling).
 """
 import time
 
