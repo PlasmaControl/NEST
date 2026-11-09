@@ -93,6 +93,9 @@ def main():
     ap.add_argument("--anatomy", type=int, default=None,
                     help="with the subproblem test's model at the --start state: one Lanczos run to this many "
                          "iterations, then every tolerance / radius from it (scripts/meanforce/subproblem_anatomy.py)")
+    ap.add_argument("--stiff-modes", type=int, nargs=3, default=None, metavar=("K_FULL", "K_LOC", "NVEC"),
+                    help="test 2 at the --start state: Lanczos on the full and the local (no J0 x dB) step model in "
+                         "the same metric, and the anatomy of the top/bottom NVEC Ritz vectors (scripts/meanforce/stiff_modes.py)")
     ap.add_argument("--anatomy-deltas", type=float, nargs="+", default=[3.0, 30.0, 1e4],
                     help="radii as multiples of |L^-1 grad| (force metric)")
     ap.add_argument("--test-model", choices=("gn", "hvp", "beta"), default="gn",
@@ -409,7 +412,7 @@ def main():
         phase("linear constraints", t1)
     mk_metric = (lambda LL: LC.metric(LL)) if LC is not None else pw.Metric
     met = mk_metric(L)
-    if lean and not (a.subproblem_test or a.anatomy):
+    if lean and not (a.subproblem_test or a.anatomy or a.stiff_modes):
         del L  # the metric object holds the only reference (released before each rebuild)
     phase("metric (H_J by slices, Cholesky)", t1)
 
@@ -537,7 +540,7 @@ def main():
         + f"; metric {a.precond}" + (f" (rebuild: Lanczos cap or rent-or-buy; outer if psi' changed > x{a.outer_rebuild_factor:g})"
                                      if a.precond == "force" else "")
         + f"; LS multiplier {'on' if solver.mult_ls else 'off'}; Lanczos stop {a.lanczos_stop}")
-    if a.subproblem_test or a.anatomy:
+    if a.subproblem_test or a.anatomy or a.stiff_modes:
         W.eps = a.alphas[0] * M_desc
         s, f, phi, c = solver.evaluate(z)
         if a.test_model == "beta":
@@ -557,6 +560,16 @@ def main():
             log(f"[subproblem test] force metric: |L^-1 grad| = {D_f:.3e}; test Delta {tdelta:.3e} (force-metric units)")
         log(f"[subproblem test] model {a.test_model}, Delta {tdelta:.2e}, f {f:.6e}, M/eps {float(s['M']) / W.eps:.4f}, "
             f"nu {W.nu.tolist()}, rho {W.rho}")
+        if a.stiff_modes:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import stiff_modes as SM
+
+            SM.run(rows, A, met, s, *a.stiff_modes, log, out_path=a.out + "_stiff.npz")
+            if a.mirror:
+                import shutil
+                shutil.copy(a.out + "_stiff.npz", a.mirror)
+            log("stiff modes done")
+            return
         if a.anatomy:
             sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
             import subproblem_anatomy as SA
