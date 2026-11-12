@@ -110,3 +110,12 @@ above: `A60_cont.log` (+ `.json`), `A48_cont.log`, `Q2b.log`, `pushthrough_v3.lo
 | `bd_m2_poincare_*.npz` | Poincaré puncture points (`_p_` files carry p along each line) |
 | `bd_b21.json` | b21 and force of the release-test snapshots |
 | `bd_dist.txt` | distances and direction cosines between the β states |
+
+## Later additions (2026-11-12)
+
+- `resolution/`: resolution rungs R0 (32/32/6) and R1 (40/40/6), the α → 0.05 follow-up and the grid-convergence
+  test, with their own `README.md`.
+- `compare/`: β = 0 vs β = 1 field-line traces (`cmp_*.npz`; punctures, ι per line, field-line averages), resonant
+  spectra, and the energy, helicity and flux results (`eh_R0.json`, `eh_R1.json`).
+
+See `docs/handoff_ripple_landscape_2026-11-12.md` for the overview.

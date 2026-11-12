@@ -2,6 +2,19 @@
 
 One entry per commit, newest first.
 
+## 2026-11-12: resolution rungs, R1 grid convergence, beta=0 vs beta=1 characterization, energy and helicity; hand-off (branch ripple-landscape)
+- Hand-off for the next agent: `docs/handoff_ripple_landscape_2026-11-12.md` (questions, chronology, confidence table, next experiments, run recipes, standards).
+- Resolution rungs (`job_res.sh`; `results/ripple_landscape/resolution/`). Fresh multipliers, <= 400 steps. R0 32/32/6 a/60: shielded 0.1235, beta 1 0.215 M_DESC. R1 40/40/6 a/80: every state meets alpha 0.1 (0.100).
+- R1 push toward alpha 0.05 and grid convergence (`job_res2.sh`, `job_res3.sh`), on the reference grid a/120 with 120 radii: gap beta1 - shielded 0.0154 / 0.0155 / 0.0185 for solve grids (a/80, 55 radii) / (a/80, 98 radii) / (a/100, 98 radii), against 0.081 at R0. Radial collocation does not matter; the field grid lowers both floors by about 0.01.
+- beta=0 vs beta=1 (R1f): `scripts/meanforce/state_tables.py` (GPU flux-grid tables) and `compare_states.py` (field-line tracing, iota, field-line averages vs rho_eff). Figures in `figures/ripple_landscape/compare/`.
+  - About 70% of the island's extra force is at q=3 (rho 0.86-0.94); q=3 stays shielded (b31 3.9e-7 vs 5.8e-7; vacuum 1.64e-4).
+  - The beta=1 state has a global iota shift of up to 1.6e-2 and a helical core displacement of about 0.006.
+  - The parallel force |b.grad p| is the larger part of NEST's residual in both states.
+- Energy and helicity (`scripts/meanforce/energy_helicity.py`, `job_eh.sh`; `results/ripple_landscape/compare/eh_R*.json`):
+  - beta1 - shielded: dW_B = -126.5 J (-6.6e-5 of 1.927 MJ), dW_th (least-squares p) = +161 J, dK/K = -3.1e-3.
+  - B.n at the LCFS is 1-6e-4, so K is gauge-ambiguous at about that level.
+- `mf_fixed.py`: `--b21-phase-state` is now embedded with `--start-LMN`.
+
 ## 2026-11-12: (2,1) ripple landscape: band-max runs, noise-aware trust region, b21 pin and beta scan (branch ripple-landscape)
 - Report: `docs/ripple_landscape_report.md` (self-contained; figures in `figures/ripple_landscape/`). Data: `results/ripple_landscape/{states,runs,diagnostics}` with a manifest `README.md`; DESC inputs in `desc_input/tokamak_boundary_perturbed/` (bp2 ripple family, L24/L32/L48, xi/a 1e-4..3e-3); Modal job scripts in `scripts/modal_fixed/ripple/`.
 - Case: candidate-C DSHAPE tokamak (hollow p, dp/ds = 0 at q = 2), boundary (2,1) ripple xi/a = 1e-3, fixed boundary, option A (B_ext = B_DESC - B_ann[J_fit]), 32/32/6, a/60, N_phi 25. All forces below are volume-mean |F| / M_DESC.

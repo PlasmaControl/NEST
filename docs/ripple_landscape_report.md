@@ -607,3 +607,22 @@ A time-budget stop saves `<out>_budget.npz`, not `<out>_a0.1.npz`.
 - DESC inputs: `desc_input/tokamak_boundary_perturbed/` (generation scripts, the bp2 ripple family at L24/L32/L48).
 
 The test suite was not re-run for these changes; the new code paths are opt-in flags.
+
+---
+
+## Addendum (later on 2026-11-12): resolution, characterization, energy
+
+The resolution test proposed in Section 11 was run. Full numbers are in `results/ripple_landscape/resolution/README.md`;
+the overview is `docs/handoff_ripple_landscape_2026-11-12.md`. In brief (M / M_DESC):
+
+- **Second rung.** At 40/40/6 (field grid a/80) both the shielded and the β = 1 states reach the α = 0.1 bound. Pushed
+  toward α = 0.05 and evaluated on a common a/120, 120-radius grid, the island–shielding gap is 0.015–0.019. That is
+  about 0.2 × the 32/32/6 gap (0.081), and it is unchanged by refining the field grid (a/100) or the radial
+  collocation (98 radii). With two rungs, this supports model C (the gap closing with resolution) but does not
+  establish it.
+- **Where the island costs force.** About 70% of the island state's extra force sits around q = 3 (ρ 0.86–0.94), not
+  at q = 2. q = 3 stays shielded in both states. The island state also shifts ι(s) globally (up to ±1.6e-2) and
+  displaces the core helically. Figures: `figures/ripple_landscape/compare/`.
+- **Energy.** Island states have lower magnetic energy (−126 J of 1.93 MJ at 40/40/6). Their thermal energy, from
+  NEST's least-squares pressure, is higher, and their force error is higher. Helicity changes by a fraction of 3e-3,
+  which is at the level of the gauge ambiguity set by B·n ≠ 0 on the boundary.
