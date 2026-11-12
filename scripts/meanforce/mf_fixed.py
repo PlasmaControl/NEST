@@ -593,7 +593,11 @@ def main():
         aff = []
         if a.pin_b21 is not None:
             ph_src = a.b21_phase_state or a.start
-            bph = bmk(np.load(ph_src)["u"])
+            u_ph = np.load(ph_src)["u"]
+            if a.start_LMN and u_ph.size != A.n_u:  # phase state from the --start basis: embed it like the start
+                lo_ph = fit_cache.fit(BoundaryPotential, inp0, L=a.start_LMN[0], M=a.start_LMN[1], N=a.start_LMN[2])
+                u_ph = mff.embed_truncate(lo_ph, cur0, u_ph)[0]
+            bph = bmk(u_ph)
             ph0 = float(np.angle(bph))
             cph, sph = float(np.cos(ph0)), float(np.sin(ph0))
             tgt = a.pin_b21 * a.b21_vac
