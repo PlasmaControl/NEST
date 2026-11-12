@@ -57,3 +57,30 @@ from it.
 - `runs/`: per-step logs of every run and evaluation.
 - `diagnostics/`: island, Poincaré, pressure and λ21 diagnostics (`R0_diag.json`, `R1_diag.json`, Poincaré npz) and
   the evaluation JSONs.
+
+## R1 grid-convergence test (job 39c8d0a0, A100-80GB, 2.13 h; `job_res3.sh`)
+
+This test reran the α → 0.05 continuation of the R1 shielded and β = 1 states. Both started from the same R1 α = 0.1
+end states and ran 80 inner steps each. Neither met 0.05. Two grid variants were used:
+
+- R1c: field grid a/80, 98 radii.
+- R1f: field grid a/100 (h L / a = 0.40), 98 radii.
+
+All end states were then evaluated on one reference grid, a/120 with 120 radii. Values are M / M_DESC.
+
+| variant | shielded, solve grid | β = 1, solve grid | gap, solve grid | shielded, reference | β = 1, reference | gap, reference |
+|---|---|---|---|---|---|---|
+| R1b (a/80, 55 radii) | 0.0706 (step 56) | 0.0938 (step 56) | 0.0232 | 0.0755 | 0.0909 (177 steps) | 0.0154 |
+| R1c (a/80, 98 radii) | 0.0711 | 0.0932 | 0.0221 | 0.0745 | 0.0900 | 0.0155 |
+| R1f (a/100, 98 radii) | 0.0616 | 0.0815 | 0.0199 | 0.0637 | 0.0822 | 0.0185 |
+
+- **Radial collocation:** going from 55 to 98 radii changes nothing beyond about 1%.
+- **Field grid:** a/100 finds lower states for both shielded and β = 1, about −0.010 on the reference grid. At α ≈ 0.05
+  force levels the floor is therefore set by the field grid.
+- **The gap is stable:** it is about 0.015–0.019 on the reference grid across all three variants, about 0.2 × R0's
+  0.081. It does not shrink as the grids are refined.
+- **Effort caveat:** at step 80, β = 1 was still falling faster than shielded (−0.0035 against −0.001 over steps
+  25 → 80). The gap could close somewhat with more steps.
+- **Comparison caveat:** R0's gap is from α = 0.1 runs (R0 cannot get below 0.12), R1's from the α → 0.05 push.
+- **Non-monotone evaluations:** single-state evaluations on different grids do not move monotonically. For R1b_S:
+  a/80 (55 radii) 0.0705, a/100 (55 radii) 0.0831, a/120 (120 radii) 0.0755.
