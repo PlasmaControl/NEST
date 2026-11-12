@@ -1,0 +1,8 @@
+=== L24N5: --base tokamak_island_C_L24M24.h5 --N 5 --amps 1e-4 3e-4 1e-3 3e-3 ===
+=== L24N5 exit 0 Mon Nov  9 23:01:33 UTC 2026 ===
+=== L24N5flip: --base tokamak_island_C_L24M24.h5 --N 5 --amps 1e-3 --helicity flip ===
+=== L24N5flip exit 0 Mon Nov  9 23:04:16 UTC 2026 ===
+=== L32N5: --base tokamak_island_C_L32M32.h5 --N 5 --amps 1e-4 3e-4 1e-3 3e-3 ===
+=== L32N5 exit 0 Mon Nov  9 23:44:53 UTC 2026 ===
+=== L32N4: --base tokamak_island_C_L32M32.h5 --N 4 --amps 1e-4 3e-4 1e-3 3e-3 ===
+=== L32N4 exit 0 Tue Nov 10 00:13:14 UTC 2026 ===

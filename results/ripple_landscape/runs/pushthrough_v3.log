@@ -1,0 +1,588 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+/work/src/desc/__init__.py:102: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  from pynvml import (
+DESCInput(ripple_L32N4_x1e-3.h5: NFP=1, (L,M,N)=(32, 32, 4), current prescribed, a=1.198 m, R0=3.509 m, <beta>=0.0214, field=None)
+basis 32/32/6, collocation resolution (192, 96, 15) (97, 193, 16); DESC <|F|>_vol / norm 4.9995e-07
+[setup] load + fits + reference: 68.1 s; mem {'in use GB': 0.000256512, 'peak GB': 0.539257088, 'host maxrss GB': 6.215768}
+    locate: planes 1/13, 0 inside, 2 s
+    locate: planes 2/13, 0 inside, 2 s
+    locate: planes 3/13, 0 inside, 3 s
+    locate: planes 4/13, 0 inside, 3 s
+    locate: planes 5/13, 0 inside, 3 s
+    locate: planes 6/13, 0 inside, 3 s
+    locate: planes 7/13, 0 inside, 3 s
+    locate: planes 8/13, 0 inside, 3 s
+    locate: planes 9/13, 0 inside, 3 s
+    locate: planes 10/13, 0 inside, 3 s
+    locate: planes 11/13, 0 inside, 3 s
+    locate: planes 12/13, 0 inside, 3 s
+    locate: planes 13/13, 0 inside, 3 s
+    locate: 403,926 inside, 5 s
+[setup] annulus + locate + ForceResidual: 12.1 s; mem {'in use GB': 0.024027648, 'peak GB': 8.258958592, 'host maxrss GB': 6.950736}
+sizes: {'n_u': 7726, 'n_p': 3655, 'points': 299536, 'annulus': 'CylindricalGrid(r [2.5550, 4.6771] n 168, z [-1.5638, 1.5638] n 247, N_phi 25, NFP 1: 1.04M nodes)', 'annulus nodes': 1037400}
+[setup] Fields: 8.9 s; mem {'in use GB': 1.068176384, 'peak GB': 8.258958592, 'host maxrss GB': 7.605196}
+    G = P^T P: slice 1/97, 3 s
+    G = P^T P: slice 8/97, 5 s
+    G = P^T P: slice 16/97, 8 s
+    G = P^T P: slice 24/97, 11 s
+    G = P^T P: slice 32/97, 14 s
+    G = P^T P: slice 40/97, 17 s
+    G = P^T P: slice 48/97, 20 s
+    G = P^T P: slice 56/97, 23 s
+    G = P^T P: slice 64/97, 26 s
+    G = P^T P: slice 72/97, 29 s
+    G = P^T P: slice 80/97, 32 s
+    G = P^T P: slice 88/97, 35 s
+    G = P^T P: slice 96/97, 38 s
+    G = P^T P: slice 97/97, 38 s
+  G = P^T P Gram (3655 x 3655) by radial slices in 39 s
+[setup] pressure Gram: 38.6 s; mem {'in use GB': 1.187928576, 'peak GB': 8.258958592, 'host maxrss GB': 7.605196}
+[bext] desc-fit: {'kind': 'desc-fit', 'rms |B_ext| / rms |B_DESC|': 0.9992736305997725, 'start rms |B - B_DESC| / rms |B_DESC|': 2.4926120291896418e-17}
+[setup] B_ext (desc-fit): 33.6 s; mem {'in use GB': 1.218899456, 'peak GB': 8.258958592, 'host maxrss GB': 7.605196}
+  pressure space: 3655 columns, Cholesky; cond(G) ~ 2.22e+05 (diag ratio^2; cond(P) ~ 4.71e+02)
+[p-norm] band 0.5675 <= rho <= 0.7075: 27792 points on 9 radii; the 'edge' terms are the mean outside the band
+[p-norm] composite second term = the WHOLE-volume mean (--mean-whole)
+[p-norm] DESC on the same points, p 16: interior p-norm 1.1934e-06, interior max 1.8239e-06, interior mean 5.0225e-07, edge mean 5.4865e-07 (/ norm); band 0.5675-0.7075: 27792 of 299536 points, volume 0.187
+[p-norm] edge bound: mean over the points outside the band <= 1 x DESC's mean there 5.4865e-07, composite q = 16
+start: M/M_desc 5.0283, rms|F| 7.837e-06, Galerkin 1.1e-16
+[setup] start state (first compile): 7.3 s; mem {'in use GB': 1.285119488, 'peak GB': 8.258958592, 'host maxrss GB': 8.011684}
+    H_J: slice 1/97, 3 s
+    H_J: slice 8/97, 5 s
+    H_J: slice 16/97, 7 s
+    H_J: slice 24/97, 9 s
+    H_J: slice 32/97, 11 s
+    H_J: slice 40/97, 14 s
+    H_J: slice 48/97, 16 s
+    H_J: slice 56/97, 18 s
+    H_J: slice 64/97, 20 s
+    H_J: slice 72/97, 22 s
+    H_J: slice 80/97, 25 s
+    H_J: slice 88/97, 27 s
+    H_J: slice 96/97, 29 s
+    H_J: slice 97/97, 29 s
+  H_J Gram (7726 x 7726) by radial slices (lean) in 29 s
+[setup] metric (H_J by slices, Cholesky): 30.0 s; mem {'in use GB': 1.76622208, 'peak GB': 8.258958592, 'host maxrss GB': 9.09596}
+start from /work/stall.npz: nu [13.938339908640485, 0.0, 0.0], rho 100.0
+[p-norm] reference state: /work/ref.npz
+[p-norm] reference = start state, p 16: band p-norm 3.7367e-07, band max 5.8743e-07 at rho 0.6275, band mean 5.1199e-08, outside mean 6.3669e-08, volume mean 6.3669e-08 (/ norm)
+[p-norm] eps = 0.1 x start band p-norm = 3.7367e-08; outside mean <= 1 x start outside mean; multiplier nu [13.938339908640485, 0.0, 0.0], rho 100.0
+products: J v 0.008 s, J^T w 0.013 s
+[setup] products: 0.0 s; mem {'in use GB': 1.834294016, 'peak GB': 8.258958592, 'host maxrss GB': 9.271256}
+[solver] geodesic acceleration None; radius-by-delta True; f-noise auto; share stop off
+[model] beta (beta 0.5); metric force (rebuild: Lanczos cap or rent-or-buy; outer if psi' changed > x2); LS multiplier off; Lanczos stop tr
+[p-norm] p 16: eps = alpha x start band p-norm 3.7367e-07
+alpha 0.1: eps 3.7367e-08
+    H_F(local, lean): slice 1/97, 3 s
+    H_F(local, lean): slice 8/97, 13 s
+    H_F(local, lean): slice 16/97, 23 s
+    H_F(local, lean): slice 24/97, 32 s
+    H_F(local, lean): slice 32/97, 42 s
+    H_F(local, lean): slice 40/97, 53 s
+    H_F(local, lean): slice 48/97, 62 s
+    H_F(local, lean): slice 56/97, 72 s
+    H_F(local, lean): slice 64/97, 82 s
+    H_F(local, lean): slice 72/97, 91 s
+    H_F(local, lean): slice 80/97, 102 s
+    H_F(local, lean): slice 88/97, 112 s
+    H_F(local, lean): slice 96/97, 122 s
+    H_F(local, lean): slice 97/97, 123 s
+  H_F(local) Gram (7726 x 7726, lean) in 124 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 1.115e+10 (lean build)
+[metric] force metric built in 125 s; mem {'in use GB': 1.902368256, 'peak GB': 8.258958592, 'host maxrss GB': 10.435716}
+  [metric] refreshed at outer 0; Delta None -> 7.175e-01 (|L^-1 grad|)
+    [noise] merit at 6 points 1e-10 away (metric): spread 1.635e-07, sigma_f 4.926e-08 (2.0e-08 of f)
+      [beta] lanczos 23 (TR stop; theta [5.91e+00, 1.85e+08], hit False) t 9.3s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1042, mean/M_desc 0.1406
+    it   0 f 2.502032e+00 -> 2.502030e+00 ratio +1.38 |y| 6.28e-04 Delta 7.17e-01 |g| 7.2e-01 GN 0.000 M/eps 1.1242 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 10.0s
+      [beta] lanczos 24 (TR stop; theta [3.66e+00, 1.85e+08], hit False) t 0.9s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0944 at rho 0.6735, outside mean/ref 1.1042, mean/M_desc 0.1406
+    it   1 f 2.502030e+00 -> 2.502029e+00 ratio +1.45 |y| 6.71e-04 Delta 7.17e-01 |g| 5.5e-01 GN 0.000 M/eps 1.1242 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 143 (TR stop; theta [7.34e-05, 1.85e+08], hit True) t 50.8s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1042, mean/M_desc 0.1406
+    it   2 f 2.502029e+00 -> 2.501736e+00 ratio +1.04 |y| 7.17e-01 Delta 1.43e+00 |g| 2.0e-01 GN 0.000 hit M/eps 1.1242 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 50.8s
+      [beta] lanczos 30 (TR stop; theta [1.59e+00, 1.85e+08], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1042, mean/M_desc 0.1406
+    it   3 f 2.501736e+00 -> 2.501734e+00 ratio +1.33 |y| 1.20e-03 Delta 1.43e+00 |g| 3.8e-01 GN 0.000 M/eps 1.1242 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 22 (TR stop; theta [9.54e+00, 1.85e+08], hit False) t 0.5s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1042, mean/M_desc 0.1406
+    it   4 f 2.501734e+00 -> 2.501734e+00 ratio +1.36 |y| 2.03e-04 Delta 1.43e+00 |g| 4.2e-01 GN 0.000 M/eps 1.1242 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 26 (TR stop; theta [2.64e+00, 1.85e+08], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1042, mean/M_desc 0.1406
+    it   5 f 2.501734e+00 -> 2.501733e+00 ratio +1.67 |y| 5.13e-04 Delta 1.43e+00 |g| 3.3e-01 GN 0.000 M/eps 1.1242 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 13 (TR stop; theta [2.47e+02, 1.85e+08], hit False) t 0.3s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1042, mean/M_desc 0.1406
+    it   6 f 2.501733e+00 -> 2.501733e+00 ratio +2.41 |y| 1.15e-05 Delta 1.43e+00 |g| 3.7e-01 GN 0.000 M/eps 1.1242 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.3s
+      [beta] lanczos 144 (TR stop; theta [1.75e-05, 1.85e+08], hit True) t 5.1s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1042, mean/M_desc 0.1406
+    it   7 f 2.501733e+00 -> 2.501163e+00 ratio +1.01 |y| 1.43e+00 Delta 2.87e+00 |g| 2.2e-01 GN 0.000 hit M/eps 1.1241 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 5.2s
+      [beta] lanczos 206 (TR stop; theta [2.00e-06, 1.85e+08], hit True) t 33.3s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1041, mean/M_desc 0.1406
+    it   8 f 2.501163e+00 -> 2.500010e+00 ratio +1.00 |y| 2.87e+00 Delta 5.74e+00 |g| 1.2e-01 GN 0.002 hit M/eps 1.1241 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 33.3s
+      [beta] lanczos 13 (TR stop; theta [1.99e+02, 1.85e+08], hit False) t 0.3s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1041, mean/M_desc 0.1406
+    it   9 f 2.500010e+00 -> 2.500010e+00 ratio +0.60 |y| 1.44e-05 Delta 5.74e+00 |g| 5.4e-01 GN 0.000 M/eps 1.1241 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 33 (TR stop; theta [1.04e+00, 1.85e+08], hit False) t 0.8s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1041, mean/M_desc 0.1406
+    it  10 f 2.500010e+00 -> 2.500009e+00 ratio +1.42 |y| 1.15e-03 Delta 5.74e+00 |g| 2.3e-01 GN 0.000 M/eps 1.1241 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 246 (TR stop; theta [1.33e-06, 1.85e+08], hit True) t 26.4s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1040, mean/M_desc 0.1406
+    it  11 f 2.500009e+00 -> 2.497722e+00 ratio +1.00 |y| 5.74e+00 Delta 1.15e+01 |g| 1.1e-01 GN 0.000 hit M/eps 1.1240 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 26.4s
+      [beta] lanczos 7 (TR stop; theta [2.10e+04, 1.85e+08], hit False) t 0.2s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1040, mean/M_desc 0.1406
+    it  12 f 2.497722e+00 -> 2.497722e+00 ratio +1.24 |y| 1.96e-06 Delta 1.15e+01 |g| 2.1e+00 GN 0.000 M/eps 1.1240 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 20 (TR stop; theta [1.13e+01, 1.85e+08], hit False) t 0.5s
+      [p-norm] p 16: M_p/ref 0.1031, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1040, mean/M_desc 0.1406
+    it  13 f 2.497722e+00 -> 2.497721e+00 ratio +1.42 |y| 2.94e-04 Delta 1.15e+01 |g| 7.8e-01 GN 0.000 M/eps 1.1240 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.5s
+      [beta] lanczos 293 (TR stop; theta [8.91e-07, 1.85e+08], hit True) t 32.3s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1039, mean/M_desc 0.1406
+    it  14 f 2.497721e+00 -> 2.493179e+00 ratio +1.01 |y| 1.15e+01 Delta 2.30e+01 |g| 1.7e-01 GN 0.000 hit M/eps 1.1238 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 32.3s
+    H_F(local, lean): slice 1/97, 1 s
+    H_F(local, lean): slice 8/97, 12 s
+    H_F(local, lean): slice 16/97, 24 s
+    H_F(local, lean): slice 24/97, 36 s
+    H_F(local, lean): slice 32/97, 47 s
+    H_F(local, lean): slice 40/97, 59 s
+    H_F(local, lean): slice 48/97, 71 s
+    H_F(local, lean): slice 56/97, 84 s
+    H_F(local, lean): slice 64/97, 96 s
+    H_F(local, lean): slice 72/97, 107 s
+    H_F(local, lean): slice 80/97, 119 s
+    H_F(local, lean): slice 88/97, 131 s
+    H_F(local, lean): slice 96/97, 142 s
+    H_F(local, lean): slice 97/97, 144 s
+  H_F(local) Gram (7726 x 7726, lean) in 144 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 1.111e+10 (lean build)
+      [metric] rebuilt in the inner loop (extra Lanczos time 131 s since the rebuild >= one rebuild (125 s)); Delta 2.296e+01 -> 8.395e+00 (|L^-1 g| 6.780e+00 -> 2.479e+00)
+      [beta] lanczos 10 (TR stop; theta [2.32e+03, 2.72e+07], hit False) t 0.2s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1039, mean/M_desc 0.1406
+    it  15 f 2.493179e+00 -> 2.493178e+00 ratio +1.56 |y| 1.35e-05 Delta 8.40e+00 |g| 2.5e+00 GN 0.000 M/eps 1.1238 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 144.3s
+      [beta] lanczos 20 (TR stop; theta [1.12e+01, 2.72e+07], hit False) t 0.5s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1039, mean/M_desc 0.1406
+    it  16 f 2.493178e+00 -> 2.493175e+00 ratio +1.36 |y| 5.33e-04 Delta 8.40e+00 |g| 1.0e+00 GN 0.000 M/eps 1.1238 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.5s
+      [beta] lanczos 32 (TR stop; theta [1.35e+00, 2.71e+07], hit False) t 0.8s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1039, mean/M_desc 0.1406
+    it  17 f 2.493175e+00 -> 2.493171e+00 ratio +1.31 |y| 2.10e-03 Delta 8.40e+00 |g| 4.4e-01 GN 0.000 M/eps 1.1238 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 37 (TR stop; theta [5.48e-01, 2.71e+07], hit False) t 0.9s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1039, mean/M_desc 0.1406
+    it  18 f 2.493171e+00 -> 2.493168e+00 ratio +1.39 |y| 2.35e-03 Delta 8.40e+00 |g| 2.3e-01 GN 0.000 M/eps 1.1238 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 294 (TR stop; theta [1.63e-06, 2.71e+07], hit True) t 13.6s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1037, mean/M_desc 0.1406
+    it  19 f 2.493168e+00 -> 2.489866e+00 ratio +1.01 |y| 8.40e+00 Delta 1.68e+01 |g| 1.3e-01 GN 0.002 hit M/eps 1.1237 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 13.6s
+      [beta] lanczos 13 (TR stop; theta [3.82e+02, 2.71e+07], hit False) t 0.3s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1037, mean/M_desc 0.1406
+    it  20 f 2.489866e+00 -> 2.489866e+00 ratio +0.87 |y| 2.55e-05 Delta 1.68e+01 |g| 1.4e+00 GN 0.000 M/eps 1.1237 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 30 (TR stop; theta [2.12e+00, 2.71e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1037, mean/M_desc 0.1406
+    it  21 f 2.489866e+00 -> 2.489861e+00 ratio +1.41 |y| 1.65e-03 Delta 1.68e+01 |g| 4.9e-01 GN 0.000 M/eps 1.1237 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 356 (TR stop; theta [7.53e-07, 2.71e+07], hit True) t 42.9s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1035, mean/M_desc 0.1405
+    it  22 f 2.489861e+00 -> 2.483307e+00 ratio +1.01 |y| 1.68e+01 Delta 3.36e+01 |g| 1.9e-01 GN 0.005 hit M/eps 1.1235 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 43.0s
+      [beta] lanczos 10 (TR stop; theta [2.30e+03, 2.71e+07], hit False) t 0.2s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1035, mean/M_desc 0.1405
+    it  23 f 2.483307e+00 -> 2.483301e+00 ratio +1.36 |y| 2.86e-05 Delta 3.36e+01 |g| 4.7e+00 GN 0.000 M/eps 1.1235 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.3s
+      [beta] lanczos 20 (TR stop; theta [1.36e+01, 2.71e+07], hit False) t 0.5s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1035, mean/M_desc 0.1405
+    it  24 f 2.483301e+00 -> 2.483294e+00 ratio +1.26 |y| 8.06e-04 Delta 3.36e+01 |g| 2.0e+00 GN 0.000 M/eps 1.1235 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.5s
+      [beta] lanczos 30 (TR stop; theta [1.80e+00, 2.71e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1035, mean/M_desc 0.1405
+    it  25 f 2.483294e+00 -> 2.483284e+00 ratio +1.42 |y| 2.68e-03 Delta 3.36e+01 |g| 8.3e-01 GN 0.000 M/eps 1.1235 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 39 (TR stop; theta [6.13e-01, 2.71e+07], hit False) t 1.0s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1035, mean/M_desc 0.1405
+    it  26 f 2.483284e+00 -> 2.483278e+00 ratio +1.34 |y| 3.45e-03 Delta 3.36e+01 |g| 2.7e-01 GN 0.000 M/eps 1.1235 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 26 (TR stop; theta [3.98e+00, 2.71e+07], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1035, mean/M_desc 0.1405
+    it  27 f 2.483278e+00 -> 2.483277e+00 ratio +1.54 |y| 5.12e-04 Delta 3.36e+01 |g| 3.0e-01 GN 0.000 M/eps 1.1235 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 395 (TR stop; theta [6.99e-07, 2.71e+07], hit True) t 36.0s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0944 at rho 0.6735, outside mean/ref 1.1030, mean/M_desc 0.1405
+    it  28 f 2.483277e+00 -> 2.470630e+00 ratio +1.00 |y| 3.36e+01 Delta 6.72e+01 |g| 2.1e-01 GN 0.005 hit M/eps 1.1230 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 36.0s
+      [beta] lanczos 8 (TR stop; theta [9.24e+03, 2.71e+07], hit False) t 0.2s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0944 at rho 0.6735, outside mean/ref 1.1030, mean/M_desc 0.1405
+    it  29 f 2.470630e+00 -> 2.470549e+00 ratio +1.40 |y| 6.87e-05 Delta 6.72e+01 |g| 2.0e+01 GN 0.000 M/eps 1.1230 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 13 (TR stop; theta [5.63e+02, 2.71e+07], hit False) t 0.3s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0944 at rho 0.6735, outside mean/ref 1.1030, mean/M_desc 0.1405
+    it  30 f 2.470549e+00 -> 2.470525e+00 ratio +1.33 |y| 1.68e-04 Delta 6.72e+01 |g| 8.3e+00 GN 0.000 M/eps 1.1230 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.3s
+      [beta] lanczos 25 (TR stop; theta [7.78e+00, 2.71e+07], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1030, mean/M_desc 0.1405
+    it  31 f 2.470525e+00 -> 2.470439e+00 ratio +1.25 |y| 4.03e-03 Delta 6.72e+01 |g| 3.1e+00 GN 0.000 M/eps 1.1230 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 30 (TR stop; theta [1.53e+00, 2.71e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1031, mean/M_desc 0.1405
+    it  32 f 2.470439e+00 -> 2.470379e+00 ratio +1.34 |y| 7.39e-03 Delta 6.72e+01 |g| 1.8e+00 GN 0.000 M/eps 1.1230 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 33 (TR stop; theta [1.14e+00, 2.71e+07], hit False) t 0.8s
+      [p-norm] p 16: M_p/ref 0.1030, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1031, mean/M_desc 0.1405
+    it  33 f 2.470379e+00 -> 2.470361e+00 ratio +1.43 |y| 4.29e-03 Delta 6.72e+01 |g| 9.0e-01 GN 0.000 M/eps 1.1230 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 33 (TR stop; theta [9.34e-01, 2.71e+07], hit False) t 0.8s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1031, mean/M_desc 0.1405
+    it  34 f 2.470361e+00 -> 2.470354e+00 ratio +1.58 |y| 2.80e-03 Delta 6.72e+01 |g| 5.6e-01 GN 0.000 M/eps 1.1230 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 40 (TR stop; theta [2.87e-01, 2.71e+07], hit False) t 1.0s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1031, mean/M_desc 0.1405
+    it  35 f 2.470354e+00 -> 2.470347e+00 ratio +1.50 |y| 5.25e-03 Delta 6.72e+01 |g| 3.5e-01 GN 0.000 M/eps 1.1230 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 400 (TR stop; theta [1.69e-06, 2.71e+07], hit True) t 23.4s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0946 at rho 0.6735, outside mean/ref 1.1023, mean/M_desc 0.1404
+    it  36 f 2.470347e+00 -> 2.450884e+00 ratio +0.88 |y| 6.72e+01 Delta 1.34e+02 |g| 2.2e-01 GN 0.002 hit M/eps 1.1222 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 23.4s
+    H_F(local, lean): slice 1/97, 1 s
+    H_F(local, lean): slice 8/97, 13 s
+    H_F(local, lean): slice 16/97, 24 s
+    H_F(local, lean): slice 24/97, 36 s
+    H_F(local, lean): slice 32/97, 47 s
+    H_F(local, lean): slice 40/97, 58 s
+    H_F(local, lean): slice 48/97, 70 s
+    H_F(local, lean): slice 56/97, 81 s
+    H_F(local, lean): slice 64/97, 93 s
+    H_F(local, lean): slice 72/97, 106 s
+    H_F(local, lean): slice 80/97, 117 s
+    H_F(local, lean): slice 88/97, 129 s
+    H_F(local, lean): slice 96/97, 140 s
+    H_F(local, lean): slice 97/97, 142 s
+  H_F(local) Gram (7726 x 7726, lean) in 142 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 1.064e+10 (lean build)
+      [metric] rebuilt in the inner loop (Lanczos hit the cap (400)); Delta 1.343e+02 -> 9.323e+00 (|L^-1 g| 3.768e+01 -> 2.615e+00)
+      [beta] lanczos 40 (TR stop; theta [1.05e+00, 1.14e+07], hit False) t 1.0s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1023, mean/M_desc 0.1404
+    it  37 f 2.450884e+00 -> 2.447222e+00 ratio +1.20 |y| 5.05e-02 Delta 9.32e+00 |g| 2.6e+00 GN 0.000 M/eps 1.1221 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 143.2s
+      [beta] lanczos 23 (TR stop; theta [8.03e+00, 1.14e+07], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1023, mean/M_desc 0.1404
+    it  38 f 2.447222e+00 -> 2.446991e+00 ratio +1.41 |y| 4.79e-03 Delta 9.32e+00 |g| 5.6e+00 GN 0.000 M/eps 1.1221 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 26 (TR stop; theta [3.79e+00, 1.13e+07], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1023, mean/M_desc 0.1404
+    it  39 f 2.446991e+00 -> 2.446848e+00 ratio +1.59 |y| 6.20e-03 Delta 9.32e+00 |g| 4.4e+00 GN 0.000 M/eps 1.1221 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 35 (TR stop; theta [1.08e+00, 1.13e+07], hit False) t 0.9s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1023, mean/M_desc 0.1404
+    it  40 f 2.446848e+00 -> 2.446709e+00 ratio +1.52 |y| 1.16e-02 Delta 9.32e+00 |g| 1.8e+00 GN 0.000 M/eps 1.1221 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 28 (TR stop; theta [3.99e+00, 1.13e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1023, mean/M_desc 0.1404
+    it  41 f 2.446709e+00 -> 2.446669e+00 ratio +1.69 |y| 2.94e-03 Delta 9.32e+00 |g| 1.5e+00 GN 0.000 M/eps 1.1221 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 39 (TR stop; theta [4.34e-01, 1.13e+07], hit False) t 1.0s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1023, mean/M_desc 0.1404
+    it  42 f 2.446669e+00 -> 2.446610e+00 ratio +1.53 |y| 1.16e-02 Delta 9.32e+00 |g| 9.3e-01 GN 0.000 M/eps 1.1221 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 28 (TR stop; theta [4.13e+00, 1.13e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1023, mean/M_desc 0.1404
+    it  43 f 2.446610e+00 -> 2.446594e+00 ratio +1.71 |y| 1.87e-03 Delta 9.32e+00 |g| 9.2e-01 GN 0.000 M/eps 1.1221 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 169 (TR stop; theta [3.63e-04, 1.13e+07], hit False) t 5.7s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1020, mean/M_desc 0.1403
+    it  44 f 2.446594e+00 -> 2.445080e+00 ratio +1.30 |y| 2.43e+00 Delta 9.32e+00 |g| 4.9e-01 GN 0.000 M/eps 1.1220 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 5.8s
+      [beta] lanczos 30 (TR stop; theta [2.64e+00, 1.13e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1020, mean/M_desc 0.1403
+    it  45 f 2.445080e+00 -> 2.445025e+00 ratio +1.47 |y| 4.94e-03 Delta 9.32e+00 |g| 1.2e+00 GN 0.000 M/eps 1.1220 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 400 (TR stop; theta [4.92e-06, 1.13e+07], hit True) t 21.2s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1019, mean/M_desc 0.1403
+    it  46 f 2.445025e+00 -> 2.441396e+00 ratio +1.04 |y| 9.32e+00 Delta 1.86e+01 |g| 2.7e-01 GN 0.001 hit M/eps 1.1219 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 21.2s
+    H_F(local, lean): slice 1/97, 1 s
+    H_F(local, lean): slice 8/97, 12 s
+    H_F(local, lean): slice 16/97, 24 s
+    H_F(local, lean): slice 24/97, 37 s
+    H_F(local, lean): slice 32/97, 48 s
+    H_F(local, lean): slice 40/97, 60 s
+    H_F(local, lean): slice 48/97, 72 s
+    H_F(local, lean): slice 56/97, 86 s
+    H_F(local, lean): slice 64/97, 97 s
+    H_F(local, lean): slice 72/97, 109 s
+    H_F(local, lean): slice 80/97, 121 s
+    H_F(local, lean): slice 88/97, 133 s
+    H_F(local, lean): slice 96/97, 146 s
+    H_F(local, lean): slice 97/97, 147 s
+  H_F(local) Gram (7726 x 7726, lean) in 148 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 1.088e+10 (lean build)
+      [metric] rebuilt in the inner loop (Lanczos hit the cap (400)); Delta 1.865e+01 -> 6.289e+01 (|L^-1 g| 7.130e-01 -> 2.405e+00)
+      [beta] lanczos 22 (TR stop; theta [6.50e+00, 3.88e+07], hit False) t 0.5s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1019, mean/M_desc 0.1403
+    it  47 f 2.441396e+00 -> 2.441377e+00 ratio +1.44 |y| 1.94e-03 Delta 6.29e+01 |g| 2.4e+00 GN 0.000 M/eps 1.1219 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 148.3s
+      [beta] lanczos 30 (TR stop; theta [2.12e+00, 3.88e+07], hit False) t 0.8s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1019, mean/M_desc 0.1403
+    it  48 f 2.441377e+00 -> 2.441351e+00 ratio +1.60 |y| 3.72e-03 Delta 6.29e+01 |g| 1.0e+00 GN 0.000 M/eps 1.1219 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 29 (TR stop; theta [2.53e+00, 3.88e+07], hit False) t 0.8s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1019, mean/M_desc 0.1403
+    it  49 f 2.441351e+00 -> 2.441340e+00 ratio +1.64 |y| 2.17e-03 Delta 6.29e+01 |g| 1.1e+00 GN 0.000 M/eps 1.1219 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 26 (TR stop; theta [2.91e+00, 3.88e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1019, mean/M_desc 0.1403
+    it  50 f 2.441340e+00 -> 2.441333e+00 ratio +1.71 |y| 1.49e-03 Delta 6.29e+01 |g| 8.8e-01 GN 0.000 M/eps 1.1219 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 28 (TR stop; theta [2.29e+00, 3.88e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1019, mean/M_desc 0.1403
+    it  51 f 2.441333e+00 -> 2.441328e+00 ratio +1.64 |y| 1.52e-03 Delta 6.29e+01 |g| 7.2e-01 GN 0.000 M/eps 1.1219 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 33 (TR stop; theta [8.80e-01, 3.88e+07], hit False) t 1.0s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1019, mean/M_desc 0.1403
+    it  52 f 2.441328e+00 -> 2.441322e+00 ratio +1.64 |y| 2.72e-03 Delta 6.29e+01 |g| 5.6e-01 GN 0.000 M/eps 1.1219 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 26 (TR stop; theta [5.61e+00, 3.88e+07], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1019, mean/M_desc 0.1403
+    it  53 f 2.441322e+00 -> 2.441321e+00 ratio +1.21 |y| 4.93e-04 Delta 6.29e+01 |g| 5.4e-01 GN 0.000 M/eps 1.1219 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 37 (TR stop; theta [3.63e-01, 3.88e+07], hit False) t 0.9s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1019, mean/M_desc 0.1403
+    it  54 f 2.441321e+00 -> 2.441316e+00 ratio +1.55 |y| 4.03e-03 Delta 6.29e+01 |g| 3.4e-01 GN 0.000 M/eps 1.1219 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 28 (TR stop; theta [3.92e+00, 3.88e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1019, mean/M_desc 0.1403
+    it  55 f 2.441316e+00 -> 2.441315e+00 ratio +1.84 |y| 4.82e-04 Delta 6.29e+01 |g| 3.0e-01 GN 0.000 M/eps 1.1219 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 400 (TR stop; theta [2.02e-06, 3.88e+07], hit True) t 23.0s
+      [p-norm] p 16: M_p/ref 0.1029, max/ref 0.0943 at rho 0.6735, outside mean/ref 1.1010, mean/M_desc 0.1402
+    it  56 f 2.441315e+00 -> 2.423082e+00 ratio +0.94 |y| 6.29e+01 Delta 1.26e+02 |g| 2.4e-01 GN 0.002 hit M/eps 1.1212 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 23.0s
+    H_F(local, lean): slice 1/97, 2 s
+    H_F(local, lean): slice 8/97, 13 s
+    H_F(local, lean): slice 16/97, 25 s
+    H_F(local, lean): slice 24/97, 38 s
+    H_F(local, lean): slice 32/97, 50 s
+    H_F(local, lean): slice 40/97, 62 s
+    H_F(local, lean): slice 48/97, 76 s
+    H_F(local, lean): slice 56/97, 88 s
+    H_F(local, lean): slice 64/97, 100 s
+    H_F(local, lean): slice 72/97, 112 s
+    H_F(local, lean): slice 80/97, 124 s
+    H_F(local, lean): slice 88/97, 136 s
+    H_F(local, lean): slice 96/97, 148 s
+    H_F(local, lean): slice 97/97, 150 s
+  H_F(local) Gram (7726 x 7726, lean) in 150 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 1.052e+10 (lean build)
+      [metric] rebuilt in the inner loop (Lanczos hit the cap (400)); Delta 1.258e+02 -> 5.633e+00 (|L^-1 g| 5.817e+01 -> 2.605e+00)
+      [beta] lanczos 40 (TR stop; theta [1.09e+00, 1.38e+07], hit False) t 1.0s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1011, mean/M_desc 0.1402
+    it  57 f 2.423082e+00 -> 2.420344e+00 ratio +1.22 |y| 4.04e-02 Delta 5.63e+00 |g| 2.6e+00 GN 0.000 M/eps 1.1211 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 151.0s
+      [beta] lanczos 26 (TR stop; theta [6.28e+00, 1.38e+07], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1011, mean/M_desc 0.1402
+    it  58 f 2.420344e+00 -> 2.420145e+00 ratio +1.42 |y| 5.16e-03 Delta 5.63e+00 |g| 3.8e+00 GN 0.000 M/eps 1.1211 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 28 (TR stop; theta [2.82e+00, 1.38e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1011, mean/M_desc 0.1402
+    it  59 f 2.420145e+00 -> 2.420031e+00 ratio +1.63 |y| 6.34e-03 Delta 5.63e+00 |g| 2.5e+00 GN 0.000 M/eps 1.1211 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 57 (TR stop; theta [5.68e-02, 1.38e+07], hit False) t 1.5s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.1012, mean/M_desc 0.1402
+    it  60 f 2.420031e+00 -> 2.419783e+00 ratio +1.33 |y| 6.81e-02 Delta 5.63e+00 |g| 9.3e-01 GN 0.000 M/eps 1.1210 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.5s
+      [beta] lanczos 40 (TR stop; theta [5.87e-01, 1.38e+07], hit False) t 1.0s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.1011, mean/M_desc 0.1402
+    it  61 f 2.419783e+00 -> 2.419736e+00 ratio +1.53 |y| 8.16e-03 Delta 5.63e+00 |g| 7.5e-01 GN 0.000 M/eps 1.1210 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 377 (TR stop; theta [4.51e-05, 1.38e+07], hit True) t 19.3s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.1010, mean/M_desc 0.1402
+    it  62 f 2.419736e+00 -> 2.417019e+00 ratio +1.15 |y| 5.63e+00 Delta 1.13e+01 |g| 4.0e-01 GN 0.000 hit M/eps 1.1209 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 19.3s
+      [beta] lanczos 23 (TR stop; theta [8.72e+00, 1.38e+07], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1010, mean/M_desc 0.1402
+    it  63 f 2.417019e+00 -> 2.416975e+00 ratio +1.25 |y| 2.64e-03 Delta 1.13e+01 |g| 3.6e+00 GN 0.000 M/eps 1.1209 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 45 (TR stop; theta [5.47e-01, 1.38e+07], hit False) t 1.1s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1010, mean/M_desc 0.1402
+    it  64 f 2.416975e+00 -> 2.416919e+00 ratio +1.37 |y| 9.22e-03 Delta 1.13e+01 |g| 4.0e-01 GN 0.000 M/eps 1.1209 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.2s
+      [beta] lanczos 400 (TR stop; theta [2.99e-06, 1.38e+07], hit True) t 21.2s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  65 f 2.416919e+00 -> 2.412794e+00 ratio +1.03 |y| 1.13e+01 Delta 2.25e+01 |g| 1.8e-01 GN 0.001 hit M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 21.3s
+    H_F(local, lean): slice 1/97, 1 s
+    H_F(local, lean): slice 8/97, 12 s
+    H_F(local, lean): slice 16/97, 24 s
+    H_F(local, lean): slice 24/97, 36 s
+    H_F(local, lean): slice 32/97, 48 s
+    H_F(local, lean): slice 40/97, 60 s
+    H_F(local, lean): slice 48/97, 72 s
+    H_F(local, lean): slice 56/97, 84 s
+    H_F(local, lean): slice 64/97, 99 s
+    H_F(local, lean): slice 72/97, 111 s
+    H_F(local, lean): slice 80/97, 123 s
+    H_F(local, lean): slice 88/97, 135 s
+    H_F(local, lean): slice 96/97, 147 s
+    H_F(local, lean): slice 97/97, 148 s
+  H_F(local) Gram (7726 x 7726, lean) in 148 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 1.052e+10 (lean build)
+      [metric] rebuilt in the inner loop (Lanczos hit the cap (400)); Delta 2.253e+01 -> 8.471e+01 (|L^-1 g| 6.094e-01 -> 2.291e+00)
+      [beta] lanczos 23 (TR stop; theta [5.89e+00, 4.94e+07], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  66 f 2.412794e+00 -> 2.412777e+00 ratio +1.53 |y| 1.80e-03 Delta 8.47e+01 |g| 2.3e+00 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 149.2s
+      [beta] lanczos 13 (TR stop; theta [3.97e+02, 4.94e+07], hit False) t 0.3s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  67 f 2.412777e+00 -> 2.412776e+00 ratio +1.41 |y| 4.32e-05 Delta 8.47e+01 |g| 2.0e+00 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.3s
+      [beta] lanczos 25 (TR stop; theta [3.62e+00, 4.94e+07], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  68 f 2.412776e+00 -> 2.412762e+00 ratio +1.61 |y| 2.13e-03 Delta 8.47e+01 |g| 1.1e+00 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 26 (TR stop; theta [3.37e+00, 4.94e+07], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  69 f 2.412762e+00 -> 2.412753e+00 ratio +1.64 |y| 1.72e-03 Delta 8.47e+01 |g| 1.3e+00 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 26 (TR stop; theta [3.72e+00, 4.94e+07], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  70 f 2.412753e+00 -> 2.412748e+00 ratio +1.54 |y| 1.29e-03 Delta 8.47e+01 |g| 1.1e+00 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 24 (TR stop; theta [5.30e+00, 4.94e+07], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  71 f 2.412748e+00 -> 2.412745e+00 ratio +1.28 |y| 8.33e-04 Delta 8.47e+01 |g| 8.2e-01 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 28 (TR stop; theta [2.44e+00, 4.94e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  72 f 2.412745e+00 -> 2.412741e+00 ratio +1.69 |y| 1.40e-03 Delta 8.47e+01 |g| 6.8e-01 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 28 (TR stop; theta [2.64e+00, 4.94e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  73 f 2.412741e+00 -> 2.412738e+00 ratio +1.52 |y| 1.05e-03 Delta 8.47e+01 |g| 6.2e-01 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 27 (TR stop; theta [3.61e+00, 4.94e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  74 f 2.412738e+00 -> 2.412736e+00 ratio +1.62 |y| 7.14e-04 Delta 8.47e+01 |g| 6.2e-01 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 31 (TR stop; theta [1.02e+00, 4.94e+07], hit False) t 0.8s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  75 f 2.412736e+00 -> 2.412733e+00 ratio +1.59 |y| 1.77e-03 Delta 8.47e+01 |g| 4.5e-01 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 20 (TR stop; theta [2.33e+01, 4.94e+07], hit False) t 0.5s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  76 f 2.412733e+00 -> 2.412733e+00 ratio +1.49 |y| 1.13e-04 Delta 8.47e+01 |g| 5.0e-01 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.5s
+      [beta] lanczos 40 (TR stop; theta [2.46e-01, 4.94e+07], hit False) t 1.0s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  77 f 2.412733e+00 -> 2.412729e+00 ratio +1.47 |y| 4.71e-03 Delta 8.47e+01 |g| 3.0e-01 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.1s
+      [beta] lanczos 28 (TR stop; theta [3.13e+00, 4.94e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  78 f 2.412729e+00 -> 2.412728e+00 ratio +1.60 |y| 4.61e-04 Delta 8.47e+01 |g| 2.9e-01 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 28 (TR stop; theta [2.44e+00, 4.94e+07], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0942 at rho 0.6735, outside mean/ref 1.1009, mean/M_desc 0.1402
+    it  79 f 2.412728e+00 -> 2.412728e+00 ratio +1.27 |y| 4.77e-04 Delta 8.47e+01 |g| 2.1e-01 GN 0.000 M/eps 1.1208 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 400 (TR stop; theta [1.11e-06, 4.94e+07], hit True) t 21.3s
+      [p-norm] p 16: M_p/ref 0.1028, max/ref 0.0944 at rho 0.6735, outside mean/ref 1.0998, mean/M_desc 0.1401
+    it  80 f 2.412728e+00 -> 2.392165e+00 ratio +0.78 |y| 8.47e+01 Delta 1.69e+02 |g| 2.4e-01 GN 0.003 hit M/eps 1.1200 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 21.3s
+    H_F(local, lean): slice 1/97, 1 s
+    H_F(local, lean): slice 8/97, 12 s
+    H_F(local, lean): slice 16/97, 24 s
+    H_F(local, lean): slice 24/97, 36 s
+    H_F(local, lean): slice 32/97, 48 s
+    H_F(local, lean): slice 40/97, 60 s
+    H_F(local, lean): slice 48/97, 72 s
+    H_F(local, lean): slice 56/97, 84 s
+    H_F(local, lean): slice 64/97, 96 s
+    H_F(local, lean): slice 72/97, 108 s
+    H_F(local, lean): slice 80/97, 120 s
+    H_F(local, lean): slice 88/97, 135 s
+    H_F(local, lean): slice 96/97, 147 s
+    H_F(local, lean): slice 97/97, 149 s
+  H_F(local) Gram (7726 x 7726, lean) in 149 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 1.043e+10 (lean build)
+      [metric] rebuilt in the inner loop (Lanczos hit the cap (400)); Delta 1.694e+02 -> 5.838e+00 (|L^-1 g| 7.526e+01 -> 2.593e+00)
+      [beta] lanczos 42 (TR stop; theta [9.84e-01, 9.57e+06], hit False) t 1.1s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0939 at rho 0.6735, outside mean/ref 1.0998, mean/M_desc 0.1401
+    it  81 f 2.392165e+00 -> 2.385642e+00 ratio +1.20 |y| 6.49e-02 Delta 5.84e+00 |g| 2.6e+00 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 150.3s
+      [beta] lanczos 26 (TR stop; theta [6.44e+00, 9.52e+06], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0939 at rho 0.6735, outside mean/ref 1.0998, mean/M_desc 0.1401
+    it  82 f 2.385642e+00 -> 2.385228e+00 ratio +1.40 |y| 7.01e-03 Delta 5.84e+00 |g| 5.4e+00 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 28 (TR stop; theta [2.78e+00, 9.49e+06], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0939 at rho 0.6735, outside mean/ref 1.0998, mean/M_desc 0.1401
+    it  83 f 2.385228e+00 -> 2.385004e+00 ratio +1.59 |y| 8.93e-03 Delta 5.84e+00 |g| 3.6e+00 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 33 (TR stop; theta [1.20e+00, 9.48e+06], hit False) t 0.8s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0940 at rho 0.6735, outside mean/ref 1.0998, mean/M_desc 0.1401
+    it  84 f 2.385004e+00 -> 2.384844e+00 ratio +1.55 |y| 1.17e-02 Delta 5.84e+00 |g| 1.9e+00 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 31 (TR stop; theta [1.65e+00, 9.48e+06], hit False) t 0.8s
+      [p-norm] p 16: M_p/ref 0.1027, max/ref 0.0939 at rho 0.6735, outside mean/ref 1.0998, mean/M_desc 0.1401
+    it  85 f 2.384844e+00 -> 2.384779e+00 ratio +1.70 |y| 5.62e-03 Delta 5.84e+00 |g| 1.4e+00 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 42 (TR stop; theta [2.49e-01, 9.48e+06], hit False) t 1.1s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0939 at rho 0.6735, outside mean/ref 1.0999, mean/M_desc 0.1401
+    it  86 f 2.384779e+00 -> 2.384697e+00 ratio +1.46 |y| 1.89e-02 Delta 5.84e+00 |g| 1.2e+00 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.1s
+      [beta] lanczos 95 (TR stop; theta [2.88e-03, 9.48e+06], hit False) t 2.8s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0940 at rho 0.6735, outside mean/ref 1.0999, mean/M_desc 0.1401
+    it  87 f 2.384697e+00 -> 2.383864e+00 ratio +1.30 |y| 6.44e-01 Delta 5.84e+00 |g| 8.1e-01 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 2.8s
+      [beta] lanczos 39 (TR stop; theta [7.40e-01, 9.48e+06], hit False) t 1.0s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0940 at rho 0.6735, outside mean/ref 1.0999, mean/M_desc 0.1401
+    it  88 f 2.383864e+00 -> 2.383819e+00 ratio +1.42 |y| 7.84e-03 Delta 5.84e+00 |g| 7.3e-01 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 55 (TR stop; theta [4.21e-02, 9.48e+06], hit False) t 1.4s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0940 at rho 0.6735, outside mean/ref 1.0999, mean/M_desc 0.1401
+    it  89 f 2.383819e+00 -> 2.383764e+00 ratio +1.37 |y| 3.90e-02 Delta 5.84e+00 |g| 5.3e-01 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.5s
+      [beta] lanczos 28 (TR stop; theta [4.22e+00, 9.49e+06], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0940 at rho 0.6735, outside mean/ref 1.0999, mean/M_desc 0.1401
+    it  90 f 2.383764e+00 -> 2.383756e+00 ratio +1.72 |y| 1.33e-03 Delta 5.84e+00 |g| 5.4e-01 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 39 (TR stop; theta [4.85e-01, 9.49e+06], hit False) t 1.0s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0940 at rho 0.6735, outside mean/ref 1.0999, mean/M_desc 0.1401
+    it  91 f 2.383756e+00 -> 2.383746e+00 ratio +1.55 |y| 4.33e-03 Delta 5.84e+00 |g| 4.3e-01 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 28 (TR stop; theta [4.59e+00, 9.49e+06], hit False) t 0.7s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0940 at rho 0.6735, outside mean/ref 1.0999, mean/M_desc 0.1401
+    it  92 f 2.383746e+00 -> 2.383742e+00 ratio +1.66 |y| 8.15e-04 Delta 5.84e+00 |g| 4.0e-01 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 26 (TR stop; theta [4.94e+00, 9.49e+06], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0940 at rho 0.6735, outside mean/ref 1.0999, mean/M_desc 0.1401
+    it  93 f 2.383742e+00 -> 2.383740e+00 ratio +1.85 |y| 6.68e-04 Delta 5.84e+00 |g| 3.5e-01 GN 0.000 M/eps 1.1197 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 346 (TR stop; theta [2.51e-05, 9.49e+06], hit True) t 16.7s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0998, mean/M_desc 0.1401
+    it  94 f 2.383740e+00 -> 2.381358e+00 ratio +1.11 |y| 5.84e+00 Delta 1.17e+01 |g| 3.1e-01 GN 0.000 hit M/eps 1.1196 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 16.8s
+      [beta] lanczos 23 (TR stop; theta [7.60e+00, 9.48e+06], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0998, mean/M_desc 0.1401
+    it  95 f 2.381358e+00 -> 2.381336e+00 ratio +1.29 |y| 2.04e-03 Delta 1.17e+01 |g| 2.9e+00 GN 0.000 M/eps 1.1196 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 46 (TR stop; theta [4.32e-01, 9.48e+06], hit False) t 1.2s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0998, mean/M_desc 0.1401
+    it  96 f 2.381336e+00 -> 2.381302e+00 ratio +1.37 |y| 8.05e-03 Delta 1.17e+01 |g| 3.3e-01 GN 0.000 M/eps 1.1196 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.2s
+      [beta] lanczos 400 (TR stop; theta [1.70e-06, 9.48e+06], hit True) t 21.1s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0996, mean/M_desc 0.1400
+    it  97 f 2.381302e+00 -> 2.377232e+00 ratio +1.02 |y| 1.17e+01 Delta 2.34e+01 |g| 9.6e-02 GN 0.002 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 21.2s
+    H_F(local, lean): slice 1/97, 2 s
+    H_F(local, lean): slice 8/97, 12 s
+    H_F(local, lean): slice 16/97, 25 s
+    H_F(local, lean): slice 24/97, 37 s
+    H_F(local, lean): slice 32/97, 49 s
+    H_F(local, lean): slice 40/97, 61 s
+    H_F(local, lean): slice 48/97, 73 s
+    H_F(local, lean): slice 56/97, 85 s
+    H_F(local, lean): slice 64/97, 97 s
+    H_F(local, lean): slice 72/97, 109 s
+    H_F(local, lean): slice 80/97, 121 s
+    H_F(local, lean): slice 88/97, 134 s
+    H_F(local, lean): slice 96/97, 145 s
+    H_F(local, lean): slice 97/97, 147 s
+  H_F(local) Gram (7726 x 7726, lean) in 147 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 1.044e+10 (lean build)
+      [metric] rebuilt in the inner loop (Lanczos hit the cap (400)); Delta 2.335e+01 -> 2.932e+01 (|L^-1 g| 5.512e-01 -> 6.922e-01)
+      [beta] lanczos 33 (TR stop; theta [1.76e+00, 2.05e+08], hit False) t 0.8s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it  98 f 2.377232e+00 -> 2.377214e+00 ratio +1.50 |y| 3.16e-03 Delta 2.93e+01 |g| 6.9e-01 GN 0.000 M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 148.0s
+      [beta] lanczos 9 (TR stop; theta [5.94e+03, 2.05e+08], hit False) t 0.2s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it  99 f 2.377214e+00 -> 2.377214e+00 ratio +0.42 |y| 4.80e-06 Delta 2.93e+01 |g| 2.0e+00 GN 0.000 M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 20 (TR stop; theta [1.45e+01, 2.05e+08], hit False) t 0.5s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 100 f 2.377214e+00 -> 2.377211e+00 ratio +1.68 |y| 4.38e-04 Delta 2.93e+01 |g| 1.4e+00 GN 0.000 M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.5s
+      [beta] lanczos 24 (TR stop; theta [5.39e+00, 2.05e+08], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 101 f 2.377211e+00 -> 2.377208e+00 ratio +1.49 |y| 8.83e-04 Delta 2.93e+01 |g| 9.7e-01 GN 0.000 M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 12 (TR stop; theta [3.91e+02, 2.05e+08], hit False) t 0.3s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 102 f 2.377208e+00 -> 2.377208e+00 ratio +1.84 |y| 2.11e-05 Delta 2.93e+01 |g| 1.3e+00 GN 0.000 M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.3s
+      [beta] lanczos 25 (TR stop; theta [3.59e+00, 2.05e+08], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 103 f 2.377208e+00 -> 2.377204e+00 ratio +1.57 |y| 1.05e-03 Delta 2.93e+01 |g| 7.1e-01 GN 0.000 M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 9 (TR stop; theta [4.54e+03, 2.05e+08], hit False) t 0.2s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 104 f 2.377204e+00 -> 2.377204e+00 ratio +1.27 |y| 2.56e-06 Delta 2.93e+01 |g| 1.0e+00 GN 0.000 M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.3s
+      [beta] lanczos 25 (TR stop; theta [3.52e+00, 2.05e+08], hit False) t 0.6s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 105 f 2.377204e+00 -> 2.377202e+00 ratio +1.71 |y| 8.85e-04 Delta 2.93e+01 |g| 6.4e-01 GN 0.000 M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 20 (TR stop; theta [2.13e+01, 2.05e+08], hit False) t 0.5s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 106 f 2.377202e+00 -> 2.377201e+00 ratio +1.40 |y| 1.67e-04 Delta 2.93e+01 |g| 7.0e-01 GN 0.000 M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.5s
+      [beta] lanczos 39 (TR stop; theta [4.78e-01, 2.05e+08], hit False) t 1.0s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 107 f 2.377201e+00 -> 2.377196e+00 ratio +1.56 |y| 3.34e-03 Delta 2.93e+01 |g| 2.8e-01 GN 0.000 M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 9 (TR stop; theta [5.41e+03, 2.05e+08], hit False) t 0.2s
+    it 108 f 2.377196e+00 -> 2.377196e+00 ratio -0.98 |y| 1.49e-06 Delta 3.71e-07 |g| 6.7e-01 GN 0.000 M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.3s
+      [beta] lanczos 6 (TR stop; theta [3.13e+04, 2.05e+08], hit True) t 0.1s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 109 f 2.377196e+00 -> 2.377196e+00 ratio +0.78 |y| 3.71e-07 Delta 7.43e-07 |g| 6.7e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 9 (TR stop; theta [4.97e+03, 2.05e+08], hit True) t 0.2s
+    it 110 f 2.377196e+00 -> 2.377196e+00 ratio -0.16 |y| 7.43e-07 Delta 1.86e-07 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.3s
+      [beta] lanczos 5 (TR stop; theta [3.18e+04, 2.05e+08], hit True) t 0.1s
+    it 111 f 2.377196e+00 -> 2.377196e+00 ratio -0.85 |y| 1.86e-07 Delta 4.64e-08 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 4 (TR stop; theta [1.15e+05, 2.05e+08], hit True) t 0.1s
+    it 112 f 2.377196e+00 -> 2.377196e+00 ratio -1.94 |y| 4.64e-08 Delta 1.16e-08 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+    stall detector fired: running diagnostics
+      [beta] lanczos 3 (TR stop; theta [1.70e+05, 2.05e+08], hit True) t 0.1s
+    it 113 f 2.377196e+00 -> 2.377196e+00 ratio -0.38 |y| 1.16e-08 Delta 2.90e-09 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 3 (TR stop; theta [1.70e+05, 2.05e+08], hit True) t 0.1s
+    it 114 f 2.377196e+00 -> 2.377196e+00 ratio -0.77 |y| 2.90e-09 Delta 7.25e-10 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 2 (TR stop; theta [2.63e+06, 2.05e+08], hit True) t 0.1s
+    it 115 f 2.377196e+00 -> 2.377196e+00 ratio -2.49 |y| 7.25e-10 Delta 1.81e-10 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+    stall detector fired: running diagnostics
+      [beta] lanczos 2 (TR stop; theta [2.63e+06, 2.05e+08], hit True) t 0.1s
+    it 116 f 2.377196e+00 -> 2.377196e+00 ratio -0.06 |y| 1.81e-10 Delta 4.53e-11 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 1 (TR stop; theta [2.02e+08, 2.02e+08], hit True) t 0.0s
+    it 117 f 2.377196e+00 -> 2.377196e+00 ratio -1.36 |y| 4.53e-11 Delta 1.13e-11 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 1 (TR stop; theta [2.02e+08, 2.02e+08], hit True) t 0.0s
+    it 118 f 2.377196e+00 -> 2.377196e+00 ratio -1.20 |y| 1.13e-11 Delta 2.83e-12 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+    stall detector fired: running diagnostics
+      [beta] lanczos 1 (TR stop; theta [2.02e+08, 2.02e+08], hit True) t 0.0s
+    it 119 f 2.377196e+00 -> 2.377196e+00 ratio +0.02 |y| 2.83e-12 Delta 7.08e-13 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 1 (TR stop; theta [2.02e+08, 2.02e+08], hit True) t 0.0s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 120 f 2.377196e+00 -> 2.377196e+00 ratio +0.64 |y| 7.08e-13 Delta 7.08e-13 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 1 (TR stop; theta [2.02e+08, 2.02e+08], hit True) t 0.0s
+    it 121 f 2.377196e+00 -> 2.377196e+00 ratio -1.53 |y| 7.08e-13 Delta 1.77e-13 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 1 (TR stop; theta [2.02e+08, 2.02e+08], hit True) t 0.0s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 122 f 2.377196e+00 -> 2.377196e+00 ratio +0.58 |y| 1.77e-13 Delta 1.77e-13 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 1 (TR stop; theta [2.02e+08, 2.02e+08], hit True) t 0.0s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 123 f 2.377196e+00 -> 2.377196e+00 ratio +0.34 |y| 1.77e-13 Delta 1.77e-13 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 1 (TR stop; theta [2.02e+08, 2.02e+08], hit True) t 0.0s
+      [p-norm] p 16: M_p/ref 0.1026, max/ref 0.0941 at rho 0.6735, outside mean/ref 1.0997, mean/M_desc 0.1400
+    it 124 f 2.377196e+00 -> 2.377196e+00 ratio +2.25 |y| 1.77e-13 Delta 3.54e-13 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 1 (TR stop; theta [2.02e+08, 2.02e+08], hit True) t 0.0s
+    it 125 f 2.377196e+00 -> 2.377196e+00 ratio -0.37 |y| 3.54e-13 Delta 8.86e-14 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 1 (TR stop; theta [2.02e+08, 2.02e+08], hit True) t 0.0s
+    it 126 f 2.377196e+00 -> 2.377196e+00 ratio +0.00 |y| 8.86e-14 Delta 2.21e-14 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 1 (TR stop; theta [2.02e+08, 2.02e+08], hit True) t 0.0s
+    it 127 f 2.377196e+00 -> 2.377196e+00 ratio -0.59 |y| 2.21e-14 Delta 5.53e-15 |g| 3.2e-01 GN 0.000 hit M/eps 1.1194 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+  outer  0 rho 1.0e+02: M/eps 1.1194 phi 7.689125e-05 nu_F 1.394e+01 -> 2.588e+01 galerkin 1.8e-16 (128 inner, radius)
+alpha 0.1 done in 1649 s: |J - J_fit|/rms 1.2401e-02, M/M_desc 0.1119
+alpha 0.1 not met: stopping the sweep
+saved /work/out/PTA.json; total 1885 s; mem {'in use GB': 1.997192192, 'peak GB': 8.258958592, 'host maxrss GB': 16.10534}

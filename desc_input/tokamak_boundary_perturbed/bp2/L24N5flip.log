@@ -1,0 +1,163 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+/work/src/desc/__init__.py:102: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  from pynvml import (
+[     1.0 s] base tokamak_island_C_L24M24.h5: L 24 M 24 N 0, NFP 1, Psi 1.0
+[     5.5 s] resonance |iota| = 1/2: rho 0.63751, iota -0.500000, d iota/d rho 0.23396; ripple helicity cos(2 theta - 1 zeta) (flip)
+[     6.1 s] resolution -> L 24 M 24 N 5 (grid 48/48/10)
+[    10.6 s] minor radius a = 1.198366 m
+[    13.8 s] ripple fit onto boundary basis (M 24, N 5): max error 1.14e-05 per unit xi
+[    13.8 s] WARNING: the boundary basis does not represent the ripple exactly (raise the surface M)
+[    13.8 s] largest dRb modes (m, n): [((-1, -1), 0.5820219932886728), ((3, 1), 0.5388825826858344), ((-3, -1), 0.5355708550286995), ((1, 1), 0.49243144442586173), ((2, 1), 0.09080766401106659), ((4, 1), -0.07764731069880956)]
+[    13.8 s] largest dZb modes (m, n): [((-1, 1), 0.48061285745095134), ((-3, 1), -0.4488168894681199), ((3, -1), 0.4345176400815081), ((1, -1), -0.4027216720986761), ((4, -1), 0.057596274407814584), ((-6, 1), -0.05118960671518507)]
+[    65.9 s] amp 0: force 2.285e-06, geometric n!=0 max 0.00e+00, lambda_mk peak {'rho': 0.81, '|lambda_mk|': 1.0617715705240368e-11, '|lambda_mk| / |lambda_00|': 5.43144312827831e-17}
+[    65.9 s] === amp xi/a = 0.001 (xi = 1.198e-03 m) ===
+Building objective: force
+Precomputing transforms
+Timer: Precomputing transforms = 1.46 sec
+ObjectiveFunction deriv_mode : batched
+ObjectiveFunction jac_chunk_size: 13014
+Timer: Objective build = 2.58 sec
+Building objective: lcfs R
+Building objective: lcfs Z
+Building objective: fixed Psi
+Building objective: fixed pressure
+Building objective: fixed current
+Building objective: fixed sheet current
+Building objective: self_consistency R
+Building objective: self_consistency Z
+Building objective: lambda gauge
+Building objective: axis R self consistency
+Building objective: axis Z self consistency
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 1.15 sec
+Perturbing Rb_lmn, Zb_lmn
+Factorizing linear constraints
+Timer: linear constraint factorize = 5.28 sec
+Computing df
+Timer: df computation = 5.58 sec
+Factoring df
+Timer: df/dx factorization = 2.52 sec
+Computing d^2f
+Timer: d^2f computation = 1.82 sec
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 2.18 ms
+||dx||/||x|| =  6.522e-03
+Timer: Total perturbation = 26.5 sec
+Building objective: force
+Precomputing transforms
+Timer: Precomputing transforms = 300 ms
+ObjectiveFunction deriv_mode : batched
+ObjectiveFunction jac_chunk_size: 13014
+Timer: Objective build = 445 ms
+Building objective: lcfs R
+Building objective: lcfs Z
+Building objective: fixed Psi
+Building objective: fixed pressure
+Building objective: fixed current
+Building objective: fixed sheet current
+Building objective: self_consistency R
+Building objective: self_consistency Z
+Building objective: lambda gauge
+Building objective: axis R self consistency
+Building objective: axis Z self consistency
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 190 ms
+Timer: LinearConstraintProjection build = 827 ms
+Number of parameters: 4817
+Number of objectives: 26250
+Timer: Initializing the optimization = 1.46 sec
+
+Starting optimization
+Using method: lsq-exact
+Solver options:
+------------------------------------------------------------
+Maximum Function Evaluations       : 1501
+Maximum Allowed Total Δx Norm      : inf
+Scaled Termination                 : True
+Trust Region Method                : qr
+Initial Trust Radius               : 3.776e+02
+Maximum Trust Radius               : inf
+Minimum Trust Radius               : 2.220e-16
+Trust Radius Increase Ratio        : 2.000e+00
+Trust Radius Decrease Ratio        : 2.500e-01
+Trust Radius Increase Threshold    : 7.500e-01
+Trust Radius Decrease Threshold    : 2.500e-01
+------------------------------------------------------------ 
+
+   Iteration     Total nfev        Cost      Cost reduction    Step norm     Optimality   
+       0              1          7.611e-04                                    1.955e-02   
+       1              2          3.082e-06      7.580e-04      1.538e-02      1.185e-03   
+       2              3          6.325e-07      2.449e-06      2.032e-02      2.840e-04   
+       3              4          4.418e-07      1.907e-07      1.455e-02      3.703e-04   
+       4              6          7.027e-08      3.715e-07      1.128e-02      5.748e-05   
+       5              8          5.730e-09      6.454e-08      6.149e-03      3.154e-05   
+       6             10          3.344e-10      5.396e-09      2.553e-03      6.957e-06   
+       7             12          9.035e-11      2.440e-10      1.163e-03      5.335e-06   
+       8             13          4.288e-11      4.747e-11      1.090e-03      3.091e-06   
+       9             15          3.510e-12      3.937e-11      3.130e-04      3.434e-07   
+      10             17          3.010e-12      4.993e-13      1.456e-04      1.468e-07   
+      11             19          2.952e-12      5.844e-14      7.552e-05      2.497e-08   
+      12             21          2.949e-12      2.650e-15      3.642e-05      9.513e-09   
+      13             23          2.949e-12      3.699e-16      1.833e-05      2.126e-09   
+      14             25          2.949e-12      5.720e-17      9.143e-06      5.639e-10   
+Optimization terminated successfully.
+`ftol` condition satisfied. (ftol=1.00e-04)
+         Current function value: 2.949e-12
+         Total delta_x: 3.063e-02
+         Iterations: 14
+         Function evaluations: 25
+         Jacobian evaluations: 15
+Timer: Solution time = 18.5 sec
+Timer: Avg time per step = 1.24 sec
+==============================================================================================================
+                                                                 Start  -->   End
+Total (sum of squares):                                      7.611e-04  -->   2.949e-12, 
+Maximum absolute Force error:                                8.167e+03  -->   2.374e+00 (N)
+Minimum absolute Force error:                                8.450e-03  -->   5.259e-07 (N)
+Average absolute Force error:                                9.219e+02  -->   4.618e-02 (N)
+Maximum absolute Force error:                                3.335e-03  -->   9.696e-07 (normalized)
+Minimum absolute Force error:                                3.451e-09  -->   2.148e-13 (normalized)
+Average absolute Force error:                                3.765e-04  -->   1.886e-08 (normalized)
+R boundary error:                                            0.000e+00  -->   1.086e-19 (m)
+Z boundary error:                                            0.000e+00  -->   7.036e-21 (m)
+Fixed Psi error:                                             0.000e+00  -->   0.000e+00 (Wb)
+Fixed pressure profile error:                                0.000e+00  -->   0.000e+00 (Pa)
+Fixed current profile error:                                 0.000e+00  -->   0.000e+00 (A)
+Fixed sheet current error:                                   0.000e+00  -->   0.000e+00 (~)
+==============================================================================================================
+
+[   158.6 s] amp 0.001: force 2.433e-06 (x2 grid 2.728e-06); resonance {'rho': 0.6375037369400386, 'iota': -0.4999999999999999, 'd iota/d rho': 0.233958773948155, "shear rho iota'/iota": -0.2982991853637172}; at resonance {'rho': 0.6375037369400386, '|lambda_mk|': 1.3429937016592224, '|lambda_mk| / |lambda_00|': 6.116128698714011e-06, '<|F|>_s / <|grad B^2/2mu0|>_s': 2.249996697097883e-06}; geometric r_2n/r00 at rho 0.6375 ['1.51e-01', '1.14e-03', '4.56e-06', '2.89e-07', '2.66e-08', '7.18e-08']; force peak {'rho': 0.99, '<|F|>_s / <|grad B^2/2mu0|>_s': 8.021135443107134e-06}; lambda_mk peak {'rho': 0.8200000000000001, '|lambda_mk|': 75.31647150501108, '|lambda_mk| / |lambda_00|': 0.00039435256171085095}; 93 s
+[   158.6 s] done

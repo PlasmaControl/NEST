@@ -1,0 +1,1177 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+/work/src/desc/__init__.py:102: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  from pynvml import (
+DESCInput(ripple_L32N4_x1e-3.h5: NFP=1, (L,M,N)=(32, 32, 4), current prescribed, a=1.198 m, R0=3.509 m, <beta>=0.0214, field=None)
+basis 32/32/6, collocation resolution (96, 96, 15) (49, 193, 16); DESC <|F|>_vol / norm 4.9995e-07
+[setup] load + fits + reference: 55.4 s; mem {'in use GB': 0.000256512, 'peak GB': 0.309485824, 'host maxrss GB': 5.54004}
+    locate: planes 1/13, 0 inside, 2 s
+    locate: planes 2/13, 0 inside, 2 s
+    locate: planes 3/13, 0 inside, 2 s
+    locate: planes 4/13, 0 inside, 2 s
+    locate: planes 5/13, 0 inside, 2 s
+    locate: planes 6/13, 0 inside, 2 s
+    locate: planes 7/13, 0 inside, 3 s
+    locate: planes 8/13, 0 inside, 3 s
+    locate: planes 9/13, 0 inside, 3 s
+    locate: planes 10/13, 0 inside, 3 s
+    locate: planes 11/13, 0 inside, 3 s
+    locate: planes 12/13, 0 inside, 3 s
+    locate: planes 13/13, 0 inside, 3 s
+    locate: 403,926 inside, 4 s
+[setup] annulus + locate + ForceResidual: 10.6 s; mem {'in use GB': 0.012463104, 'peak GB': 8.258958592, 'host maxrss GB': 6.034036}
+sizes: {'n_u': 7726, 'n_p': 3655, 'points': 151312, 'annulus': 'CylindricalGrid(r [2.5550, 4.6771] n 168, z [-1.5638, 1.5638] n 247, N_phi 25, NFP 1: 1.04M nodes)', 'annulus nodes': 1037400}
+[setup] Fields: 7.3 s; mem {'in use GB': 0.77889664, 'peak GB': 8.258958592, 'host maxrss GB': 6.693968}
+    G = P^T P: slice 1/49, 2 s
+    G = P^T P: slice 8/49, 5 s
+    G = P^T P: slice 16/49, 8 s
+    G = P^T P: slice 24/49, 11 s
+    G = P^T P: slice 32/49, 15 s
+    G = P^T P: slice 40/49, 17 s
+    G = P^T P: slice 48/49, 21 s
+    G = P^T P: slice 49/49, 21 s
+  G = P^T P Gram (3655 x 3655) by radial slices in 21 s
+[setup] pressure Gram: 21.0 s; mem {'in use GB': 0.893782016, 'peak GB': 8.258958592, 'host maxrss GB': 6.693968}
+[bext] desc-fit: {'kind': 'desc-fit', 'rms |B_ext| / rms |B_DESC|': 0.9992736301646051, 'start rms |B - B_DESC| / rms |B_DESC|': 2.4687813487225764e-17}
+[setup] B_ext (desc-fit): 22.0 s; mem {'in use GB': 0.904740096, 'peak GB': 8.258958592, 'host maxrss GB': 6.693968}
+  pressure space: 3655 columns, Cholesky; cond(G) ~ 2.22e+05 (diag ratio^2; cond(P) ~ 4.71e+02)
+start: M/M_desc 6.8629, rms|F| 7.837e-06, Galerkin 4.7e-17
+[setup] start state (first compile): 1.4 s; mem {'in use GB': 0.93532032, 'peak GB': 8.258958592, 'host maxrss GB': 6.974224}
+[b21] resonance rho 0.63751 between collocation shells 0.6256 / 0.6560 (6176 points, half-period symmetric grid)
+[setup] b21 functional: 4.3 s; mem {'in use GB': 0.932088064, 'peak GB': 8.258958592, 'host maxrss GB': 8.368564}
+    H_J: slice 1/49, 2 s
+    H_J: slice 8/49, 4 s
+    H_J: slice 16/49, 6 s
+    H_J: slice 24/49, 7 s
+    H_J: slice 32/49, 9 s
+    H_J: slice 40/49, 11 s
+    H_J: slice 48/49, 13 s
+    H_J: slice 49/49, 14 s
+  H_J Gram (7726 x 7726) by radial slices (lean) in 14 s
+/opt/conda/lib/python3.11/site-packages/jax/_src/compiler.py:799: UserWarning: Error reading persistent compilation cache entry for 'jit_b': error: Error -5 while decompressing data: incomplete or truncated stream
+  warnings.warn(
+[b21 pin] island phase +90.0 deg from /work/sall.npz (|b| 3.334e-04); target Re(b e^-i phase) = 0.02 x 3.778e-04 = 7.5560e-06
+[constraints] affine row b21_proj in 17 s: value at u_ref 0.0000e+00, target 7.5560e-06
+[constraints] 0 pinned m = 0 coefficients of a (enclosed current I(rho, zeta))
+[setup] linear constraints: 41.7 s; mem {'in use GB': 1.411859712, 'peak GB': 8.258958592, 'host maxrss GB': 13.50968}
+[setup] metric (H_J by slices, Cholesky): 42.3 s; mem {'in use GB': 1.411995904, 'peak GB': 8.258958592, 'host maxrss GB': 13.50968}
+start from /work/start.npz: nu [0.00045492998841474395, 0.0, 0.0], rho 100.0
+[constraints] start before restore: b21_proj -4.733e-06, b21_proj - target -1.229e-05; M/M_desc 0.12435, |J - J_fit|/rms 0.01206
+[constraints] start after restore: b21_proj 7.556e-06, b21_proj - target -5.167e-20; M/M_desc 4.35498, |J - J_fit|/rms 0.01206
+products: J v 0.007 s, J^T w 0.012 s
+[setup] products: 0.0 s; mem {'in use GB': 1.450714624, 'peak GB': 8.258958592, 'host maxrss GB': 13.50968}
+[solver] geodesic acceleration None; radius-by-delta True; f-noise auto; share stop off
+[model] beta (beta 0.5); metric force (rebuild: Lanczos cap or rent-or-buy; outer if psi' changed > x2); LS multiplier on; Lanczos stop tr
+alpha 0.1: eps 4.9995e-08
+  [multiplier] least-squares nu_F 0.000e+00 (was 4.549e-04) at the start of the bound
+    H_F(local, lean): slice 1/49, 2 s
+    H_F(local, lean): slice 8/49, 8 s
+    H_F(local, lean): slice 16/49, 14 s
+    H_F(local, lean): slice 24/49, 21 s
+    H_F(local, lean): slice 32/49, 28 s
+    H_F(local, lean): slice 40/49, 34 s
+    H_F(local, lean): slice 48/49, 41 s
+    H_F(local, lean): slice 49/49, 42 s
+  H_F(local) Gram (7726 x 7726, lean) in 43 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 1.208e+11 (lean build)
+[metric] force metric built in 43 s; mem {'in use GB': 1.45625984, 'peak GB': 8.258958592, 'host maxrss GB': 13.50968}
+  [metric] refreshed at outer 0; Delta None -> 4.254e+02 (|L^-1 grad|)
+    [noise] merit at 6 points 1e-10 away (metric): spread 1.260e-05, sigma_f 4.469e-06 (4.9e-11 of f)
+      [beta] lanczos 51 (TR stop; theta [1.55e-01, 1.80e+07], hit False) t 17.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 9.06e-20
+    it   0 f 9.052433e+04 -> 9.999700e+03 ratio +1.33 |y| 3.29e+02 Delta 4.25e+02 |g| 4.3e+02 GN 0.327 M/eps 15.1419 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 17.8s
+      [beta] lanczos 69 (TR stop; theta [8.54e-03, 1.71e+07], hit False) t 7.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target -7.62e-21
+    it   1 f 9.999700e+03 -> 1.158564e+03 ratio +1.32 |y| 1.32e+02 Delta 4.25e+02 |g| 1.4e+02 GN 0.313 M/eps 5.8137 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 7.9s
+      [beta] lanczos 48 (TR stop; theta [1.50e-01, 1.59e+07], hit False) t 1.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target -2.12e-20
+    it   2 f 1.158564e+03 -> 1.707083e+02 ratio +1.31 |y| 3.86e+01 Delta 4.25e+02 |g| 9.7e+01 GN 0.269 M/eps 2.8477 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.2s
+      [beta] lanczos 34 (TR stop; theta [5.57e-01, 1.51e+07], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target -1.91e-19
+    it   3 f 1.707083e+02 -> 4.810866e+01 ratio +1.31 |y| 1.42e+01 Delta 4.25e+02 |g| 2.3e+02 GN 0.178 M/eps 1.9809 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 65 (TR stop; theta [1.15e-02, 1.85e+07], hit False) t 1.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target -1.57e-19
+    it   4 f 4.810866e+01 -> 2.510646e+01 ratio +1.31 |y| 2.27e+01 Delta 4.25e+02 |g| 6.0e+01 GN 0.090 M/eps 1.7086 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.7s
+      [beta] lanczos 49 (TR stop; theta [6.93e-02, 2.07e+07], hit False) t 1.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.28e-19
+    it   5 f 2.510646e+01 -> 2.156905e+01 ratio +1.39 |y| 6.03e+00 Delta 4.25e+02 |g| 4.8e+01 GN 0.021 M/eps 1.6568 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.3s
+      [beta] lanczos 166 (TR stop; theta [2.85e-04, 2.29e+07], hit False) t 37.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target -2.12e-20
+    it   6 f 2.156905e+01 -> 1.157623e+01 ratio +1.39 |y| 2.01e+02 Delta 4.25e+02 |g| 1.6e+01 GN 0.066 M/eps 1.4812 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 37.1s
+      [beta] lanczos 32 (TR stop; theta [3.97e-01, 1.80e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.01e-19
+    it   7 f 1.157623e+01 -> 1.114826e+01 ratio +1.28 |y| 1.18e+00 Delta 4.25e+02 |g| 6.1e+01 GN 0.005 M/eps 1.4722 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 145 (TR stop; theta [2.31e-04, 1.85e+07], hit False) t 3.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.48e-19
+    it   8 f 1.114826e+01 -> 8.179644e+00 ratio +1.43 |y| 1.22e+02 Delta 4.25e+02 |g| 1.2e+01 GN 0.030 M/eps 1.4045 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 3.8s
+      [beta] lanczos 217 (TR stop; theta [1.83e-04, 1.63e+07], hit False) t 25.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.13e-19
+    it   9 f 8.179644e+00 -> 7.191995e+00 ratio +1.51 |y| 6.92e+01 Delta 4.25e+02 |g| 2.8e+00 GN 0.011 M/eps 1.3793 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 25.7s
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 7 s
+    H_F(local, lean): slice 16/49, 14 s
+    H_F(local, lean): slice 24/49, 21 s
+    H_F(local, lean): slice 32/49, 28 s
+    H_F(local, lean): slice 40/49, 35 s
+    H_F(local, lean): slice 48/49, 43 s
+    H_F(local, lean): slice 49/49, 44 s
+  H_F(local) Gram (7726 x 7726, lean) in 44 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 3.414e+10 (lean build)
+      [metric] rebuilt in the inner loop (extra Lanczos time 50 s since the rebuild >= one rebuild (43 s)); Delta 4.254e+02 -> 3.153e+02 (|L^-1 g| 4.707e+00 -> 3.489e+00)
+      [beta] lanczos 129 (TR stop; theta [2.11e-04, 2.53e+07], hit False) t 3.5s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.41e-19
+    it  10 f 7.191995e+00 -> 6.845904e+00 ratio +1.58 |y| 3.35e+01 Delta 3.15e+02 |g| 3.5e+00 GN 0.004 M/eps 1.3700 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 47.7s
+      [beta] lanczos 37 (TR stop; theta [5.49e-01, 2.50e+07], hit False) t 0.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 3.62e-19
+    it  11 f 6.845904e+00 -> 6.776084e+00 ratio +1.60 |y| 3.79e-01 Delta 3.15e+02 |g| 1.1e+01 GN 0.001 M/eps 1.3681 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 42 (TR stop; theta [3.13e-01, 2.53e+07], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 3.14e-19
+    it  12 f 6.776084e+00 -> 6.742540e+00 ratio +1.71 |y| 2.93e-01 Delta 3.15e+02 |g| 5.9e+00 GN 0.000 M/eps 1.3672 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 290 (TR stop; theta [1.17e-05, 2.56e+07], hit False) t 35.0s
+    it  13 f 6.742540e+00 -> 8.257017e+00 ratio -2.91 |y| 2.88e+02 Delta 7.20e+01 |g| 2.2e+00 GN 0.010 M/eps 1.3672 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 35.0s
+      [beta] lanczos 229 (TR stop; theta [1.70e-05, 2.56e+07], hit True) t 6.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.43e-19
+    it  14 f 6.742540e+00 -> 6.483242e+00 ratio +1.08 |y| 7.20e+01 Delta 1.44e+02 |g| 2.2e+00 GN 0.008 hit M/eps 1.3601 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 7.0s
+      [beta] lanczos 8 (TR stop; theta [1.62e+03, 2.50e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 4.67e-19
+    it  15 f 6.483242e+00 -> 6.478589e+00 ratio +1.19 |y| 1.03e-03 Delta 1.44e+02 |g| 1.2e+02 GN 0.000 M/eps 1.3600 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 30 (TR stop; theta [9.07e-01, 2.50e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.94e-19
+    it  16 f 6.478589e+00 -> 6.461338e+00 ratio +1.31 |y| 1.60e-01 Delta 1.44e+02 |g| 2.3e+01 GN 0.000 M/eps 1.3595 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 36 (TR stop; theta [4.87e-01, 2.52e+07], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 3.52e-19
+    it  17 f 6.461338e+00 -> 6.452413e+00 ratio +1.67 |y| 1.40e-01 Delta 1.44e+02 |g| 5.0e+00 GN 0.000 M/eps 1.3592 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 82 (TR stop; theta [2.60e-03, 2.54e+07], hit False) t 2.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.67e-19
+    it  18 f 6.452413e+00 -> 6.438602e+00 ratio +1.43 |y| 2.20e+00 Delta 1.44e+02 |g| 2.7e+00 GN 0.000 M/eps 1.3588 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 2.0s
+      [beta] lanczos 267 (TR stop; theta [8.04e-06, 2.53e+07], hit True) t 8.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 5.58e-19
+    it  19 f 6.438602e+00 -> 6.167099e+00 ratio +0.82 |y| 1.44e+02 Delta 2.88e+02 |g| 1.4e+00 GN 0.010 hit M/eps 1.3512 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.2s
+      [beta] lanczos 8 (TR stop; theta [2.11e+03, 2.44e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 3.75e-19
+    it  20 f 6.167099e+00 -> 6.124675e+00 ratio +1.19 |y| 2.95e-03 Delta 2.88e+02 |g| 3.6e+02 GN 0.001 M/eps 1.3500 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 19 (TR stop; theta [1.31e+01, 2.46e+07], hit False) t 0.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 4.73e-19
+    it  21 f 6.124675e+00 -> 6.111222e+00 ratio +1.19 |y| 3.35e-02 Delta 2.88e+02 |g| 6.8e+01 GN 0.000 M/eps 1.3496 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 32 (TR stop; theta [8.85e-01, 2.47e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 3.85e-19
+    it  22 f 6.111222e+00 -> 6.073954e+00 ratio +1.17 |y| 2.58e-01 Delta 2.88e+02 |g| 1.3e+01 GN 0.001 M/eps 1.3485 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 50 (TR stop; theta [1.16e-01, 2.47e+07], hit False) t 1.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 4.13e-19
+    it  23 f 6.073954e+00 -> 6.066809e+00 ratio +1.39 |y| 1.88e-01 Delta 2.88e+02 |g| 1.8e+00 GN 0.000 M/eps 1.3483 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.1s
+      [beta] lanczos 306 (TR stop; theta [5.29e-06, 2.50e+07], hit True) t 15.1s
+    it  24 f 6.066809e+00 -> 7.030092e+00 ratio -2.38 |y| 2.88e+02 Delta 7.20e+01 |g| 1.4e+00 GN 0.009 hit M/eps 1.3483 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 15.2s
+      [beta] lanczos 251 (TR stop; theta [6.81e-06, 2.50e+07], hit True) t 7.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 6.80e-19
+    it  25 f 6.066809e+00 -> 5.920999e+00 ratio +1.02 |y| 7.20e+01 Delta 1.44e+02 |g| 1.4e+00 GN 0.007 hit M/eps 1.3441 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 7.6s
+      [beta] lanczos 7 (TR stop; theta [2.86e+03, 2.46e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 6.56e-19
+    it  26 f 5.920999e+00 -> 5.918750e+00 ratio +1.19 |y| 5.94e-04 Delta 1.44e+02 |g| 9.0e+01 GN 0.000 M/eps 1.3441 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 27 (TR stop; theta [1.43e+00, 2.47e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 5.41e-19
+    it  27 f 5.918750e+00 -> 5.914302e+00 ratio +1.20 |y| 6.61e-02 Delta 1.44e+02 |g| 1.8e+01 GN 0.000 M/eps 1.3439 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 33 (TR stop; theta [6.41e-01, 2.46e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 5.04e-19
+    it  28 f 5.914302e+00 -> 5.911865e+00 ratio +1.37 |y| 6.95e-02 Delta 1.44e+02 |g| 3.4e+00 GN 0.000 M/eps 1.3439 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 335 (TR stop; theta [4.32e-06, 2.47e+07], hit True) t 22.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 4.90e-19
+    it  29 f 5.911865e+00 -> 5.779914e+00 ratio +0.57 |y| 1.44e+02 Delta 1.44e+02 |g| 5.2e-01 GN 0.009 hit M/eps 1.3400 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 22.0s
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 7 s
+    H_F(local, lean): slice 16/49, 13 s
+    H_F(local, lean): slice 24/49, 20 s
+    H_F(local, lean): slice 32/49, 27 s
+    H_F(local, lean): slice 40/49, 34 s
+    H_F(local, lean): slice 48/49, 41 s
+    H_F(local, lean): slice 49/49, 42 s
+  H_F(local) Gram (7726 x 7726, lean) in 42 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.940e+10 (lean build)
+      [metric] rebuilt in the inner loop (extra Lanczos time 53 s since the rebuild >= one rebuild (44 s)); Delta 1.439e+02 -> 3.400e+00 (|L^-1 g| 4.283e+02 -> 3.400e+00)
+      [beta] lanczos 48 (TR stop; theta [1.79e-01, 6.89e+06], hit False) t 1.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 5.72e-19
+    it  30 f 5.779914e+00 -> 5.666380e+00 ratio +1.14 |y| 3.79e-01 Delta 3.40e+00 |g| 3.4e+00 GN 0.002 M/eps 1.3366 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 43.3s
+      [beta] lanczos 14 (TR stop; theta [1.15e+02, 6.96e+06], hit False) t 0.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 4.43e-19
+    it  31 f 5.666380e+00 -> 5.665286e+00 ratio +1.20 |y| 3.76e-03 Delta 3.40e+00 |g| 1.5e+01 GN 0.000 M/eps 1.3366 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.3s
+      [beta] lanczos 32 (TR stop; theta [7.87e-01, 6.94e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 4.84e-19
+    it  32 f 5.665286e+00 -> 5.661806e+00 ratio +1.30 |y| 7.94e-02 Delta 3.40e+00 |g| 4.4e+00 GN 0.000 M/eps 1.3365 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 33 (TR stop; theta [5.58e-01, 6.97e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 6.80e-19
+    it  33 f 5.661806e+00 -> 5.660810e+00 ratio +1.51 |y| 4.68e-02 Delta 3.40e+00 |g| 2.2e+00 GN 0.000 M/eps 1.3365 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 46 (TR stop; theta [7.50e-02, 6.99e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 5.51e-19
+    it  34 f 5.660810e+00 -> 5.660096e+00 ratio +1.49 |y| 8.70e-02 Delta 3.40e+00 |g| 1.3e+00 GN 0.000 M/eps 1.3365 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.1s
+      [beta] lanczos 34 (TR stop; theta [5.23e-01, 7.00e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 5.95e-19
+    it  35 f 5.660096e+00 -> 5.659808e+00 ratio +1.68 |y| 2.48e-02 Delta 3.40e+00 |g| 8.7e-01 GN 0.000 M/eps 1.3364 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 140 (TR stop; theta [9.59e-05, 7.02e+06], hit True) t 3.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 5.75e-19
+    it  36 f 5.659808e+00 -> 5.653382e+00 ratio +1.07 |y| 3.40e+00 Delta 6.80e+00 |g| 3.0e-01 GN 0.000 hit M/eps 1.3363 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 3.7s
+  [multiplier] update 3.363e+01 clipped to 9.182e-04 (LS 2.295e-04)
+  outer  0 rho 1.0e+02: M/eps 1.3363 phi 1.056212e-04 nu_F 0.000e+00 -> 9.182e-04 galerkin 3.7e-17 (37 inner, stationary)
+  [metric] kept at the outer update (psi' 3.400e+01 -> 3.363e+01, < x2)
+    [noise] merit at 6 points 1e-10 away (metric): spread 1.478e-07, sigma_f 5.667e-08 (1.0e-08 of f)
+      [beta] lanczos 165 (TR stop; theta [1.69e-05, 7.00e+06], hit True) t 4.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 4.67e-19
+    it   0 f 5.653691e+00 -> 5.642595e+00 ratio +1.03 |y| 6.80e+00 Delta 1.36e+01 |g| 2.3e-01 GN 0.002 hit M/eps 1.3359 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 4.4s
+      [beta] lanczos 222 (TR stop; theta [3.05e-06, 6.99e+06], hit True) t 6.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 6.09e-19
+    it   1 f 5.642595e+00 -> 5.621654e+00 ratio +1.01 |y| 1.36e+01 Delta 2.72e+01 |g| 8.4e-02 GN 0.008 hit M/eps 1.3353 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 6.7s
+      [beta] lanczos 212 (TR stop; theta [2.83e-06, 6.97e+06], hit True) t 6.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 6.97e-19
+    it   2 f 5.621654e+00 -> 5.581629e+00 ratio +1.01 |y| 2.72e+01 Delta 5.44e+01 |g| 9.9e-02 GN 0.009 hit M/eps 1.3341 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 6.1s
+      [beta] lanczos 37 (TR stop; theta [5.87e-01, 6.95e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 9.04e-19
+    it   3 f 5.581629e+00 -> 5.581243e+00 ratio +1.34 |y| 2.48e-02 Delta 5.44e+01 |g| 7.1e-01 GN 0.000 M/eps 1.3341 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 211 (TR stop; theta [2.65e-06, 6.95e+06], hit True) t 6.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.07e-18
+    it   4 f 5.581243e+00 -> 5.508221e+00 ratio +0.98 |y| 5.44e+01 Delta 1.09e+02 |g| 4.0e-01 GN 0.009 hit M/eps 1.3319 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 6.4s
+      [beta] lanczos 33 (TR stop; theta [8.69e-01, 6.89e+06], hit False) t 0.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 8.43e-19
+    it   5 f 5.508221e+00 -> 5.505227e+00 ratio +1.15 |y| 5.30e-02 Delta 1.09e+02 |g| 3.0e+00 GN 0.000 M/eps 1.3318 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 31 (TR stop; theta [6.78e-01, 6.90e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 9.21e-19
+    it   6 f 5.505227e+00 -> 5.504954e+00 ratio +1.38 |y| 2.14e-02 Delta 1.09e+02 |g| 1.9e+00 GN 0.000 M/eps 1.3318 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 45 (TR stop; theta [8.83e-02, 6.93e+06], hit False) t 1.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 9.78e-19
+    it   7 f 5.504954e+00 -> 5.504758e+00 ratio +1.49 |y| 4.20e-02 Delta 1.09e+02 |g| 6.8e-01 GN 0.000 M/eps 1.3318 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.2s
+      [beta] lanczos 34 (TR stop; theta [5.29e-01, 6.94e+06], hit False) t 0.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.13e-18
+    it   8 f 5.504758e+00 -> 5.504679e+00 ratio +1.69 |y| 1.29e-02 Delta 1.09e+02 |g| 5.7e-01 GN 0.000 M/eps 1.3318 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 283 (TR stop; theta [1.99e-06, 6.96e+06], hit True) t 9.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.23e-18
+    it   9 f 5.504679e+00 -> 5.413527e+00 ratio +0.67 |y| 1.09e+02 Delta 1.09e+02 |g| 1.5e-01 GN 0.010 hit M/eps 1.3290 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 9.5s
+      [beta] lanczos 35 (TR stop; theta [8.13e-01, 6.83e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.22e-18
+    it  10 f 5.413527e+00 -> 5.368625e+00 ratio +1.13 |y| 2.06e-01 Delta 1.09e+02 |g| 6.9e+00 GN 0.001 M/eps 1.3277 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 28 (TR stop; theta [1.13e+00, 6.85e+06], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.26e-18
+    it  11 f 5.368625e+00 -> 5.366861e+00 ratio +1.26 |y| 3.99e-02 Delta 1.09e+02 |g| 8.6e+00 GN 0.000 M/eps 1.3276 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 32 (TR stop; theta [5.82e-01, 6.84e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.28e-18
+    it  12 f 5.366861e+00 -> 5.366073e+00 ratio +1.30 |y| 4.15e-02 Delta 1.09e+02 |g| 3.5e+00 GN 0.000 M/eps 1.3276 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 41 (TR stop; theta [1.45e-01, 6.85e+06], hit False) t 0.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.10e-18
+    it  13 f 5.366073e+00 -> 5.365591e+00 ratio +1.36 |y| 6.34e-02 Delta 1.09e+02 |g| 1.6e+00 GN 0.000 M/eps 1.3276 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 31 (TR stop; theta [7.59e-01, 6.83e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 9.85e-19
+    it  14 f 5.365591e+00 -> 5.365518e+00 ratio +1.21 |y| 1.18e-02 Delta 1.09e+02 |g| 1.2e+00 GN 0.000 M/eps 1.3276 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 240 (TR stop; theta [1.44e-06, 6.87e+06], hit True) t 7.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.26e-18
+    it  15 f 5.365518e+00 -> 5.286052e+00 ratio +0.64 |y| 1.09e+02 Delta 1.09e+02 |g| 5.6e-01 GN 0.012 hit M/eps 1.3251 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 7.1s
+      [beta] lanczos 31 (TR stop; theta [9.53e-01, 6.74e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.42e-18
+    it  16 f 5.286052e+00 -> 5.242721e+00 ratio +1.14 |y| 1.84e-01 Delta 1.09e+02 |g| 1.0e+01 GN 0.001 M/eps 1.3238 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 29 (TR stop; theta [9.14e-01, 6.76e+06], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.32e-18
+    it  17 f 5.242721e+00 -> 5.240154e+00 ratio +1.23 |y| 5.63e-02 Delta 1.09e+02 |g| 8.8e+00 GN 0.000 M/eps 1.3237 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 33 (TR stop; theta [5.33e-01, 6.79e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.17e-18
+    it  18 f 5.240154e+00 -> 5.239325e+00 ratio +1.31 |y| 4.47e-02 Delta 1.09e+02 |g| 3.0e+00 GN 0.000 M/eps 1.3237 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 36 (TR stop; theta [2.40e-01, 6.81e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.23e-18
+    it  19 f 5.239325e+00 -> 5.238902e+00 ratio +1.44 |y| 4.68e-02 Delta 1.09e+02 |g| 2.0e+00 GN 0.000 M/eps 1.3237 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 43 (TR stop; theta [8.19e-02, 6.86e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.30e-18
+    it  20 f 5.238902e+00 -> 5.238632e+00 ratio +1.35 |y| 6.60e-02 Delta 1.09e+02 |g| 1.3e+00 GN 0.000 M/eps 1.3237 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 263 (TR stop; theta [1.23e-06, 6.91e+06], hit True) t 8.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.15e-18
+    it  21 f 5.238632e+00 -> 5.163555e+00 ratio +0.65 |y| 1.09e+02 Delta 1.09e+02 |g| 5.1e-01 GN 0.012 hit M/eps 1.3213 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.0s
+      [beta] lanczos 31 (TR stop; theta [9.81e-01, 6.68e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.22e-18
+    it  22 f 5.163555e+00 -> 5.124465e+00 ratio +1.14 |y| 1.78e-01 Delta 1.09e+02 |g| 1.4e+01 GN 0.001 M/eps 1.3201 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 29 (TR stop; theta [8.65e-01, 6.72e+06], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.15e-18
+    it  23 f 5.124465e+00 -> 5.122055e+00 ratio +1.22 |y| 5.67e-02 Delta 1.09e+02 |g| 8.0e+00 GN 0.000 M/eps 1.3201 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 33 (TR stop; theta [5.13e-01, 6.75e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.32e-18
+    it  24 f 5.122055e+00 -> 5.121343e+00 ratio +1.29 |y| 4.27e-02 Delta 1.09e+02 |g| 3.0e+00 GN 0.000 M/eps 1.3200 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 43 (TR stop; theta [1.07e-01, 6.78e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.20e-18
+    it  25 f 5.121343e+00 -> 5.120814e+00 ratio +1.31 |y| 8.01e-02 Delta 1.09e+02 |g| 1.8e+00 GN 0.000 M/eps 1.3200 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 29 (TR stop; theta [9.40e-01, 6.79e+06], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.24e-18
+    it  26 f 5.120814e+00 -> 5.120760e+00 ratio +1.14 |y| 9.45e-03 Delta 1.09e+02 |g| 1.4e+00 GN 0.000 M/eps 1.3200 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 295 (TR stop; theta [1.34e-06, 6.79e+06], hit True) t 9.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.23e-18
+    it  27 f 5.120760e+00 -> 5.057630e+00 ratio +0.58 |y| 1.09e+02 Delta 1.09e+02 |g| 4.0e-01 GN 0.010 hit M/eps 1.3180 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 9.8s
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 8 s
+    H_F(local, lean): slice 16/49, 15 s
+    H_F(local, lean): slice 24/49, 22 s
+    H_F(local, lean): slice 32/49, 29 s
+    H_F(local, lean): slice 40/49, 36 s
+    H_F(local, lean): slice 48/49, 42 s
+    H_F(local, lean): slice 49/49, 43 s
+  H_F(local) Gram (7726 x 7726, lean) in 43 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.715e+10 (lean build)
+      [metric] rebuilt in the inner loop (extra Lanczos time 49 s since the rebuild >= one rebuild (42 s)); Delta 1.088e+02 -> 1.939e+01 (|L^-1 g| 1.784e+01 -> 3.180e+00)
+      [beta] lanczos 42 (TR stop; theta [4.39e-01, 8.96e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.30e-18
+    it  28 f 5.057630e+00 -> 5.010393e+00 ratio +1.14 |y| 2.17e-01 Delta 1.94e+01 |g| 3.2e+00 GN 0.001 M/eps 1.3165 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 44.5s
+      [beta] lanczos 15 (TR stop; theta [8.68e+01, 9.01e+06], hit False) t 0.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.18e-18
+    it  29 f 5.010393e+00 -> 5.009784e+00 ratio +1.20 |y| 2.42e-03 Delta 1.94e+01 |g| 1.1e+01 GN 0.000 M/eps 1.3165 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 32 (TR stop; theta [8.00e-01, 8.99e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.10e-18
+    it  30 f 5.009784e+00 -> 5.008451e+00 ratio +1.27 |y| 4.96e-02 Delta 1.94e+01 |g| 3.2e+00 GN 0.000 M/eps 1.3165 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 34 (TR stop; theta [4.63e-01, 9.02e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.17e-18
+    it  31 f 5.008451e+00 -> 5.008099e+00 ratio +1.39 |y| 3.14e-02 Delta 1.94e+01 |g| 1.3e+00 GN 0.000 M/eps 1.3165 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 44 (TR stop; theta [9.06e-02, 9.08e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.36e-18
+    it  32 f 5.008099e+00 -> 5.007829e+00 ratio +1.32 |y| 6.26e-02 Delta 1.94e+01 |g| 1.1e+00 GN 0.000 M/eps 1.3165 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 32 (TR stop; theta [6.38e-01, 9.10e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.24e-18
+    it  33 f 5.007829e+00 -> 5.007790e+00 ratio +1.23 |y| 9.24e-03 Delta 1.94e+01 |g| 8.2e-01 GN 0.000 M/eps 1.3165 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 213 (TR stop; theta [1.01e-05, 9.14e+06], hit True) t 6.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.26e-18
+    it  34 f 5.007790e+00 -> 4.987248e+00 ratio +1.02 |y| 1.94e+01 Delta 3.88e+01 |g| 4.3e-01 GN 0.001 hit M/eps 1.3158 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 6.1s
+      [beta] lanczos 31 (TR stop; theta [9.46e-01, 9.09e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.27e-18
+    it  35 f 4.987248e+00 -> 4.987012e+00 ratio +1.21 |y| 1.85e-02 Delta 3.88e+01 |g| 1.7e+00 GN 0.000 M/eps 1.3158 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 214 (TR stop; theta [6.17e-06, 9.17e+06], hit True) t 6.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.23e-18
+    it  36 f 4.987012e+00 -> 4.950256e+00 ratio +1.00 |y| 3.88e+01 Delta 7.76e+01 |g| 7.2e-01 GN 0.002 hit M/eps 1.3146 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 6.3s
+      [beta] lanczos 30 (TR stop; theta [1.10e+00, 9.05e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.27e-18
+    it  37 f 4.950256e+00 -> 4.949223e+00 ratio +1.16 |y| 3.06e-02 Delta 7.76e+01 |g| 3.6e+00 GN 0.000 M/eps 1.3146 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 31 (TR stop; theta [8.23e-01, 9.06e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.22e-18
+    it  38 f 4.949223e+00 -> 4.949100e+00 ratio +1.22 |y| 1.42e-02 Delta 7.76e+01 |g| 1.7e+00 GN 0.000 M/eps 1.3146 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 295 (TR stop; theta [1.57e-06, 9.07e+06], hit True) t 9.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.14e-18
+    it  39 f 4.949100e+00 -> 4.890559e+00 ratio +0.75 |y| 7.76e+01 Delta 1.55e+02 |g| 3.5e-01 GN 0.008 hit M/eps 1.3127 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 9.7s
+  [multiplier] update 3.127e+01 clipped to 3.144e-06 (LS 7.860e-07)
+  outer  1 rho 1.0e+02: M/eps 1.3127 phi 1.508381e-04 nu_F 9.182e-04 -> 3.144e-06 galerkin 3.2e-17 (40 inner, budget)
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 6 s
+    H_F(local, lean): slice 16/49, 14 s
+    H_F(local, lean): slice 24/49, 20 s
+    H_F(local, lean): slice 32/49, 27 s
+    H_F(local, lean): slice 40/49, 33 s
+    H_F(local, lean): slice 48/49, 39 s
+    H_F(local, lean): slice 49/49, 40 s
+  H_F(local) Gram (7726 x 7726, lean) in 40 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.650e+11 (lean build)
+[metric] force metric built in 40 s; mem {'in use GB': 1.502947072, 'peak GB': 8.258958592, 'host maxrss GB': 13.54056}
+  [metric] refreshed at outer 2; Delta 155.14096164978974 -> 9.888e+00 (|L^-1 grad|)
+    [noise] merit at 6 points 1e-10 away (metric): spread 7.035e-07, sigma_f 2.639e-07 (5.4e-09 of f)
+      [beta] lanczos 37 (TR stop; theta [7.82e-01, 6.81e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.06e-18
+    it   0 f 4.890136e+01 -> 4.872572e+01 ratio +1.15 |y| 4.83e-01 Delta 9.89e+00 |g| 9.9e+00 GN 0.000 M/eps 1.3122 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 32 (TR stop; theta [7.93e-01, 6.84e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.17e-18
+    it   1 f 4.872572e+01 -> 4.871694e+01 ratio +1.28 |y| 1.16e-01 Delta 9.89e+00 |g| 1.2e+01 GN 0.000 M/eps 1.3121 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 33 (TR stop; theta [3.59e-01, 6.87e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.26e-18
+    it   2 f 4.871694e+01 -> 4.871385e+01 ratio +1.34 |y| 1.07e-01 Delta 9.89e+00 |g| 6.6e+00 GN 0.000 M/eps 1.3121 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 74 (TR stop; theta [3.37e-03, 6.94e+06], hit False) t 1.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.31e-18
+    it   3 f 4.871385e+01 -> 4.868848e+01 ratio +1.14 |y| 3.42e+00 Delta 9.89e+00 |g| 3.2e+00 GN 0.000 M/eps 1.3121 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.7s
+      [beta] lanczos 143 (TR stop; theta [4.67e-05, 6.91e+06], hit True) t 3.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.20e-18
+    it   4 f 4.868848e+01 -> 4.865014e+01 ratio +1.04 |y| 9.89e+00 Delta 1.98e+01 |g| 8.6e-01 GN 0.000 hit M/eps 1.3119 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 3.7s
+      [beta] lanczos 149 (TR stop; theta [9.89e-06, 6.92e+06], hit True) t 3.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.26e-18
+    it   5 f 4.865014e+01 -> 4.858708e+01 ratio +1.02 |y| 1.98e+01 Delta 3.96e+01 |g| 1.1e+00 GN 0.001 hit M/eps 1.3117 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 3.9s
+      [beta] lanczos 158 (TR stop; theta [2.76e-06, 6.94e+06], hit True) t 4.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.27e-18
+    it   6 f 4.858708e+01 -> 4.846458e+01 ratio +1.01 |y| 3.96e+01 Delta 7.91e+01 |g| 1.0e+00 GN 0.004 hit M/eps 1.3113 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 4.3s
+      [beta] lanczos 177 (TR stop; theta [1.20e-06, 6.96e+06], hit True) t 5.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.37e-18
+    it   7 f 4.846458e+01 -> 4.822509e+01 ratio +1.00 |y| 7.91e+01 Delta 1.58e+02 |g| 6.4e-01 GN 0.010 hit M/eps 1.3106 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 5.2s
+      [beta] lanczos 35 (TR stop; theta [6.91e-01, 6.96e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.45e-18
+    it   8 f 4.822509e+01 -> 4.822362e+01 ratio +1.19 |y| 4.28e-02 Delta 1.58e+02 |g| 2.1e+00 GN 0.000 M/eps 1.3106 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 212 (TR stop; theta [1.25e-06, 7.00e+06], hit True) t 6.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.46e-18
+    it   9 f 4.822362e+01 -> 4.777385e+01 ratio +0.97 |y| 1.58e+02 Delta 3.16e+02 |g| 1.3e+00 GN 0.009 hit M/eps 1.3091 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 6.5s
+      [beta] lanczos 32 (TR stop; theta [9.34e-01, 6.83e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.49e-18
+    it  10 f 4.777385e+01 -> 4.775641e+01 ratio +1.14 |y| 1.21e-01 Delta 3.16e+02 |g| 8.2e+00 GN 0.000 M/eps 1.3091 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 31 (TR stop; theta [8.18e-01, 6.86e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.44e-18
+    it  11 f 4.775641e+01 -> 4.775517e+01 ratio +1.25 |y| 4.14e-02 Delta 3.16e+02 |g| 5.3e+00 GN 0.000 M/eps 1.3090 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 265 (TR stop; theta [1.18e-06, 6.97e+06], hit True) t 8.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.44e-18
+    it  12 f 4.775517e+01 -> 4.713502e+01 ratio +0.71 |y| 3.16e+02 Delta 3.16e+02 |g| 1.7e+00 GN 0.009 hit M/eps 1.3070 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.4s
+      [beta] lanczos 31 (TR stop; theta [9.50e-01, 6.71e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.49e-18
+    it  13 f 4.713502e+01 -> 4.689145e+01 ratio +1.14 |y| 4.51e-01 Delta 3.16e+02 |g| 3.6e+01 GN 0.001 M/eps 1.3062 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 29 (TR stop; theta [1.00e+00, 6.76e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.43e-18
+    it  14 f 4.689145e+01 -> 4.687704e+01 ratio +1.22 |y| 1.26e-01 Delta 3.16e+02 |g| 2.1e+01 GN 0.000 M/eps 1.3062 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 43 (TR stop; theta [1.09e-01, 6.81e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.28e-18
+    it  15 f 4.687704e+01 -> 4.686716e+01 ratio +1.28 |y| 3.20e-01 Delta 3.16e+02 |g| 7.1e+00 GN 0.000 M/eps 1.3062 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 30 (TR stop; theta [9.59e-01, 6.81e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.40e-18
+    it  16 f 4.686716e+01 -> 4.686622e+01 ratio +1.22 |y| 3.80e-02 Delta 3.16e+02 |g| 6.0e+00 GN 0.000 M/eps 1.3062 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 106 (TR stop; theta [7.79e-04, 6.84e+06], hit False) t 2.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.34e-18
+    it  17 f 4.686622e+01 -> 4.682781e+01 ratio +0.91 |y| 9.73e+00 Delta 3.16e+02 |g| 2.3e+00 GN 0.000 M/eps 1.3060 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 2.6s
+      [beta] lanczos 267 (TR stop; theta [1.52e-06, 6.83e+06], hit True) t 8.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.43e-18
+    it  18 f 4.682781e+01 -> 4.636067e+01 ratio +0.55 |y| 3.16e+02 Delta 3.16e+02 |g| 1.3e+00 GN 0.007 hit M/eps 1.3045 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.8s
+      [beta] lanczos 33 (TR stop; theta [9.05e-01, 6.70e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.57e-18
+    it  19 f 4.636067e+01 -> 4.602806e+01 ratio +1.14 |y| 6.00e-01 Delta 3.16e+02 |g| 2.3e+01 GN 0.001 M/eps 1.3034 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 30 (TR stop; theta [7.43e-01, 6.72e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.62e-18
+    it  20 f 4.602806e+01 -> 4.600938e+01 ratio +1.25 |y| 1.75e-01 Delta 3.16e+02 |g| 2.2e+01 GN 0.000 M/eps 1.3033 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 33 (TR stop; theta [4.18e-01, 6.77e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.51e-18
+    it  21 f 4.600938e+01 -> 4.600420e+01 ratio +1.28 |y| 1.31e-01 Delta 3.16e+02 |g| 8.9e+00 GN 0.000 M/eps 1.3033 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 73 (TR stop; theta [3.01e-03, 6.76e+06], hit False) t 1.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.50e-18
+    it  22 f 4.600420e+01 -> 4.596558e+01 ratio +1.14 |y| 4.44e+00 Delta 3.16e+02 |g| 5.0e+00 GN 0.000 M/eps 1.3032 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.9s
+      [beta] lanczos 371 (TR stop; theta [8.13e-07, 6.76e+06], hit True) t 28.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.45e-18
+    it  23 f 4.596558e+01 -> 4.541709e+01 ratio +0.64 |y| 3.16e+02 Delta 3.16e+02 |g| 4.0e-01 GN 0.012 hit M/eps 1.3014 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 28.3s
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 7 s
+    H_F(local, lean): slice 16/49, 14 s
+    H_F(local, lean): slice 24/49, 21 s
+    H_F(local, lean): slice 32/49, 29 s
+    H_F(local, lean): slice 40/49, 38 s
+    H_F(local, lean): slice 48/49, 46 s
+    H_F(local, lean): slice 49/49, 47 s
+  H_F(local) Gram (7726 x 7726, lean) in 47 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.534e+11 (lean build)
+      [metric] rebuilt in the inner loop (extra Lanczos time 62 s since the rebuild >= one rebuild (40 s)); Delta 3.164e+02 -> 5.961e+01 (|L^-1 g| 5.059e+01 -> 9.530e+00)
+      [beta] lanczos 37 (TR stop; theta [7.59e-01, 6.04e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.42e-18
+    it  24 f 4.541709e+01 -> 4.511550e+01 ratio +1.13 |y| 5.70e-01 Delta 5.96e+01 |g| 9.5e+00 GN 0.001 M/eps 1.3004 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 47.9s
+      [beta] lanczos 32 (TR stop; theta [7.23e-01, 6.13e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.38e-18
+    it  25 f 4.511550e+01 -> 4.510172e+01 ratio +1.29 |y| 1.42e-01 Delta 5.96e+01 |g| 1.1e+01 GN 0.000 M/eps 1.3003 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 33 (TR stop; theta [4.78e-01, 6.16e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.34e-18
+    it  26 f 4.510172e+01 -> 4.509840e+01 ratio +1.35 |y| 9.34e-02 Delta 5.96e+01 |g| 5.5e+00 GN 0.000 M/eps 1.3003 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 42 (TR stop; theta [1.35e-01, 6.19e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.26e-18
+    it  27 f 4.509840e+01 -> 4.509611e+01 ratio +1.34 |y| 1.47e-01 Delta 5.96e+01 |g| 3.0e+00 GN 0.000 M/eps 1.3003 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 33 (TR stop; theta [5.72e-01, 6.16e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.21e-18
+    it  28 f 4.509611e+01 -> 4.509582e+01 ratio +1.17 |y| 2.74e-02 Delta 5.96e+01 |g| 2.4e+00 GN 0.000 M/eps 1.3003 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 208 (TR stop; theta [4.54e-06, 6.20e+06], hit True) t 6.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.08e-18
+    it  29 f 4.509582e+01 -> 4.493868e+01 ratio +0.98 |y| 5.96e+01 Delta 1.19e+02 |g| 1.2e+00 GN 0.002 hit M/eps 1.2998 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 6.2s
+      [beta] lanczos 257 (TR stop; theta [2.19e-06, 6.20e+06], hit True) t 8.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 9.48e-19
+    it  30 f 4.493868e+01 -> 4.463785e+01 ratio +0.97 |y| 1.19e+02 Delta 2.38e+02 |g| 1.5e+00 GN 0.004 hit M/eps 1.2988 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.4s
+      [beta] lanczos 35 (TR stop; theta [8.05e-01, 6.12e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 9.95e-19
+    it  31 f 4.463785e+01 -> 4.462904e+01 ratio +1.15 |y| 9.87e-02 Delta 2.38e+02 |g| 4.0e+00 GN 0.000 M/eps 1.2988 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 49 (TR stop; theta [5.22e-02, 6.15e+06], hit False) t 1.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.08e-18
+    it  32 f 4.462904e+01 -> 4.462760e+01 ratio +1.30 |y| 1.58e-01 Delta 2.38e+02 |g| 1.9e+00 GN 0.000 M/eps 1.2988 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.2s
+      [beta] lanczos 317 (TR stop; theta [2.01e-06, 6.18e+06], hit True) t 11.5s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 9.61e-19
+    it  33 f 4.462760e+01 -> 4.417449e+01 ratio +0.77 |y| 2.38e+02 Delta 4.77e+02 |g| 9.9e-01 GN 0.005 hit M/eps 1.2972 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 11.6s
+      [beta] lanczos 31 (TR stop; theta [9.07e-01, 6.05e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.17e-18
+    it  34 f 4.417449e+01 -> 4.404852e+01 ratio +1.14 |y| 3.83e-01 Delta 4.77e+02 |g| 2.3e+01 GN 0.000 M/eps 1.2968 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 30 (TR stop; theta [8.23e-01, 6.08e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 8.94e-19
+    it  35 f 4.404852e+01 -> 4.404033e+01 ratio +1.23 |y| 1.13e-01 Delta 4.77e+02 |g| 1.4e+01 GN 0.000 M/eps 1.2968 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 43 (TR stop; theta [9.33e-02, 6.12e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.12e-18
+    it  36 f 4.404033e+01 -> 4.403401e+01 ratio +1.27 |y| 2.95e-01 Delta 4.77e+02 |g| 5.4e+00 GN 0.000 M/eps 1.2968 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.1s
+      [beta] lanczos 68 (TR stop; theta [4.23e-03, 6.12e+06], hit False) t 1.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.26e-18
+    it  37 f 4.403401e+01 -> 4.402060e+01 ratio +1.21 |y| 2.18e+00 Delta 4.77e+02 |g| 3.3e+00 GN 0.000 M/eps 1.2967 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.7s
+      [beta] lanczos 389 (TR stop; theta [6.55e-07, 6.12e+06], hit True) t 21.3s
+    it  38 f 4.402060e+01 -> 4.431576e+01 ratio -0.26 |y| 4.77e+02 Delta 1.19e+02 |g| 5.1e-01 GN 0.013 hit M/eps 1.2967 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 21.3s
+      [beta] lanczos 309 (TR stop; theta [1.56e-06, 6.12e+06], hit True) t 10.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.16e-18
+    it  39 f 4.402060e+01 -> 4.372232e+01 ratio +0.97 |y| 1.19e+02 Delta 2.38e+02 |g| 5.1e-01 GN 0.006 hit M/eps 1.2957 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 10.9s
+  outer  2 rho 1.0e+03: M/eps 1.2957 phi 2.168307e-04 nu_F 3.144e-06 -> 2.957e+02 galerkin 2.8e-17 (40 inner, budget)
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 6 s
+    H_F(local, lean): slice 16/49, 13 s
+    H_F(local, lean): slice 24/49, 20 s
+    H_F(local, lean): slice 32/49, 27 s
+    H_F(local, lean): slice 40/49, 33 s
+    H_F(local, lean): slice 48/49, 40 s
+    H_F(local, lean): slice 49/49, 41 s
+  H_F(local) Gram (7726 x 7726, lean) in 41 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.780e+12 (lean build)
+[metric] force metric built in 41 s; mem {'in use GB': 1.516509696, 'peak GB': 8.258958592, 'host maxrss GB': 13.761504}
+  [metric] refreshed at outer 3; Delta 238.4428411579677 -> 3.244e+01 (|L^-1 grad|)
+    [noise] merit at 6 points 1e-10 away (metric): spread 3.414e-06, sigma_f 1.365e-06 (2.6e-09 of f)
+      [beta] lanczos 31 (TR stop; theta [9.16e-01, 6.58e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.28e-18
+    it   0 f 5.246655e+02 -> 5.245759e+02 ratio +1.15 |y| 3.08e-01 Delta 3.24e+01 |g| 3.2e+01 GN 0.000 M/eps 1.2957 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 33 (TR stop; theta [6.59e-01, 6.61e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.37e-18
+    it   1 f 5.245759e+02 -> 5.245669e+02 ratio +1.32 |y| 1.29e-01 Delta 3.24e+01 |g| 9.6e+00 GN 0.000 M/eps 1.2957 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 113 (TR stop; theta [7.71e-05, 6.64e+06], hit True) t 2.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.35e-18
+    it   2 f 5.245669e+02 -> 5.243057e+02 ratio +1.03 |y| 3.24e+01 Delta 6.49e+01 |g| 2.9e+00 GN 0.000 hit M/eps 1.2956 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 2.9s
+      [beta] lanczos 156 (TR stop; theta [4.15e-06, 6.67e+06], hit True) t 4.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.45e-18
+    it   3 f 5.243057e+02 -> 5.237723e+02 ratio +1.00 |y| 6.49e+01 Delta 1.30e+02 |g| 2.0e+00 GN 0.002 hit M/eps 1.2954 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 4.4s
+      [beta] lanczos 161 (TR stop; theta [3.60e-06, 6.69e+06], hit True) t 4.5s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.69e-18
+    it   4 f 5.237723e+02 -> 5.227406e+02 ratio +1.00 |y| 1.30e+02 Delta 2.60e+02 |g| 2.3e+00 GN 0.002 hit M/eps 1.2951 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 4.6s
+      [beta] lanczos 205 (TR stop; theta [3.11e-06, 6.70e+06], hit True) t 6.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.55e-18
+    it   5 f 5.227406e+02 -> 5.207207e+02 ratio +0.99 |y| 2.60e+02 Delta 5.19e+02 |g| 3.7e+00 GN 0.003 hit M/eps 1.2945 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 6.4s
+      [beta] lanczos 27 (TR stop; theta [1.26e+00, 6.64e+06], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.58e-18
+    it   6 f 5.207207e+02 -> 5.207030e+02 ratio +1.15 |y| 1.19e-01 Delta 5.19e+02 |g| 1.9e+01 GN 0.000 M/eps 1.2945 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 33 (TR stop; theta [6.41e-01, 6.67e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.44e-18
+    it   7 f 5.207030e+02 -> 5.206982e+02 ratio +1.28 |y| 9.66e-02 Delta 5.19e+02 |g| 6.7e+00 GN 0.000 M/eps 1.2945 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 310 (TR stop; theta [1.04e-06, 6.71e+06], hit True) t 10.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.36e-18
+    it   8 f 5.206982e+02 -> 5.168339e+02 ratio +0.95 |y| 5.19e+02 Delta 1.04e+03 |g| 1.1e+00 GN 0.007 hit M/eps 1.2933 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 11.0s
+      [beta] lanczos 27 (TR stop; theta [1.30e+00, 6.58e+06], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.35e-18
+    it   9 f 5.168339e+02 -> 5.166628e+02 ratio +1.15 |y| 3.47e-01 Delta 1.04e+03 |g| 6.8e+01 GN 0.000 M/eps 1.2932 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 32 (TR stop; theta [7.41e-01, 6.60e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.45e-18
+    it  10 f 5.166628e+02 -> 5.166326e+02 ratio +1.19 |y| 2.23e-01 Delta 1.04e+03 |g| 2.5e+01 GN 0.000 M/eps 1.2932 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 74 (TR stop; theta [3.30e-03, 6.67e+06], hit False) t 1.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.50e-18
+    it  11 f 5.166326e+02 -> 5.165703e+02 ratio +1.22 |y| 5.02e+00 Delta 1.04e+03 |g| 6.4e+00 GN 0.000 M/eps 1.2932 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.9s
+      [beta] lanczos 309 (TR stop; theta [7.45e-07, 6.68e+06], hit True) t 11.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.64e-18
+    it  12 f 5.165703e+02 -> 5.116155e+02 ratio +0.64 |y| 1.04e+03 Delta 1.04e+03 |g| 2.0e+00 GN 0.010 hit M/eps 1.2917 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 11.2s
+      [beta] lanczos 28 (TR stop; theta [1.10e+00, 6.41e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.55e-18
+    it  13 f 5.116155e+02 -> 5.090728e+02 ratio +1.15 |y| 1.35e+00 Delta 1.04e+03 |g| 2.3e+02 GN 0.001 M/eps 1.2909 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 32 (TR stop; theta [7.94e-01, 6.47e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.61e-18
+    it  14 f 5.090728e+02 -> 5.087865e+02 ratio +1.21 |y| 6.53e-01 Delta 1.04e+03 |g| 6.8e+01 GN 0.000 M/eps 1.2908 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 33 (TR stop; theta [5.75e-01, 6.52e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.66e-18
+    it  15 f 5.087865e+02 -> 5.087367e+02 ratio +1.29 |y| 3.36e-01 Delta 1.04e+03 |g| 1.9e+01 GN 0.000 M/eps 1.2908 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 38 (TR stop; theta [2.25e-01, 6.60e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.74e-18
+    it  16 f 5.087367e+02 -> 5.087125e+02 ratio +1.36 |y| 3.71e-01 Delta 1.04e+03 |g| 1.2e+01 GN 0.000 M/eps 1.2908 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 41 (TR stop; theta [1.30e-01, 6.72e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.68e-18
+    it  17 f 5.087125e+02 -> 5.087031e+02 ratio +1.37 |y| 2.96e-01 Delta 1.04e+03 |g| 6.8e+00 GN 0.000 M/eps 1.2908 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 48 (TR stop; theta [4.51e-02, 6.74e+06], hit False) t 1.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.70e-18
+    it  18 f 5.087031e+02 -> 5.086983e+02 ratio +1.34 |y| 3.61e-01 Delta 1.04e+03 |g| 4.3e+00 GN 0.000 M/eps 1.2908 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.2s
+      [beta] lanczos 316 (TR stop; theta [9.78e-07, 6.78e+06], hit True) t 12.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.86e-18
+    it  19 f 5.086983e+02 -> 5.037875e+02 ratio +0.68 |y| 1.04e+03 Delta 1.04e+03 |g| 2.6e+00 GN 0.007 hit M/eps 1.2892 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 12.4s
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 7 s
+    H_F(local, lean): slice 16/49, 16 s
+    H_F(local, lean): slice 24/49, 24 s
+    H_F(local, lean): slice 32/49, 31 s
+    H_F(local, lean): slice 40/49, 39 s
+    H_F(local, lean): slice 48/49, 46 s
+    H_F(local, lean): slice 49/49, 47 s
+  H_F(local) Gram (7726 x 7726, lean) in 47 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.694e+12 (lean build)
+      [metric] rebuilt in the inner loop (extra Lanczos time 48 s since the rebuild >= one rebuild (41 s)); Delta 1.038e+03 -> 1.279e+02 (|L^-1 g| 2.587e+02 -> 3.188e+01)
+      [beta] lanczos 37 (TR stop; theta [7.50e-01, 5.47e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.75e-18
+    it  20 f 5.037875e+02 -> 5.014929e+02 ratio +1.14 |y| 1.53e+00 Delta 1.28e+02 |g| 3.2e+01 GN 0.000 M/eps 1.2885 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 48.4s
+      [beta] lanczos 31 (TR stop; theta [8.25e-01, 5.59e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.62e-18
+    it  21 f 5.014929e+02 -> 5.013949e+02 ratio +1.27 |y| 3.48e-01 Delta 1.28e+02 |g| 4.1e+01 GN 0.000 M/eps 1.2885 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 31 (TR stop; theta [5.86e-01, 5.65e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.67e-18
+    it  22 f 5.013949e+02 -> 5.013710e+02 ratio +1.26 |y| 2.33e-01 Delta 1.28e+02 |g| 2.5e+01 GN 0.000 M/eps 1.2885 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 44 (TR stop; theta [8.59e-02, 5.66e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.65e-18
+    it  23 f 5.013710e+02 -> 5.013364e+02 ratio +1.27 |y| 7.44e-01 Delta 1.28e+02 |g| 1.1e+01 GN 0.000 M/eps 1.2885 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 32 (TR stop; theta [6.13e-01, 5.64e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.86e-18
+    it  24 f 5.013364e+02 -> 5.013329e+02 ratio +1.09 |y| 9.56e-02 Delta 1.28e+02 |g| 8.6e+00 GN 0.000 M/eps 1.2885 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 202 (TR stop; theta [1.16e-05, 5.65e+06], hit True) t 6.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.56e-18
+    it  25 f 5.013329e+02 -> 5.003439e+02 ratio +0.95 |y| 1.28e+02 Delta 2.56e+02 |g| 3.8e+00 GN 0.001 hit M/eps 1.2881 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 6.2s
+      [beta] lanczos 32 (TR stop; theta [9.63e-01, 5.65e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.61e-18
+    it  26 f 5.003439e+02 -> 5.003228e+02 ratio +1.21 |y| 1.72e-01 Delta 2.56e+02 |g| 1.0e+01 GN 0.000 M/eps 1.2881 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 252 (TR stop; theta [9.15e-07, 5.71e+06], hit True) t 8.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.46e-18
+    it  27 f 5.003228e+02 -> 4.984699e+02 ratio +1.00 |y| 2.56e+02 Delta 5.12e+02 |g| 2.1e+00 GN 0.007 hit M/eps 1.2876 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.1s
+      [beta] lanczos 34 (TR stop; theta [8.04e-01, 5.71e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.34e-18
+    it  28 f 4.984699e+02 -> 4.984589e+02 ratio +1.15 |y| 1.12e-01 Delta 5.12e+02 |g| 5.3e+00 GN 0.000 M/eps 1.2876 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 229 (TR stop; theta [1.21e-06, 5.76e+06], hit True) t 7.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.49e-18
+    it  29 f 4.984589e+02 -> 4.950837e+02 ratio +0.96 |y| 5.12e+02 Delta 1.02e+03 |g| 3.4e+00 GN 0.005 hit M/eps 1.2865 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 7.1s
+      [beta] lanczos 31 (TR stop; theta [9.63e-01, 5.54e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.43e-18
+    it  30 f 4.950837e+02 -> 4.949222e+02 ratio +1.14 |y| 3.85e-01 Delta 1.02e+03 |g| 2.3e+01 GN 0.000 M/eps 1.2864 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 33 (TR stop; theta [7.08e-01, 5.58e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.39e-18
+    it  31 f 4.949222e+02 -> 4.949079e+02 ratio +1.26 |y| 1.56e-01 Delta 1.02e+03 |g| 8.8e+00 GN 0.000 M/eps 1.2864 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 45 (TR stop; theta [8.85e-02, 5.66e+06], hit False) t 1.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.46e-18
+    it  32 f 4.949079e+02 -> 4.949006e+02 ratio +1.33 |y| 2.95e-01 Delta 1.02e+03 |g| 5.4e+00 GN 0.000 M/eps 1.2864 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.1s
+      [beta] lanczos 349 (TR stop; theta [5.44e-07, 5.72e+06], hit True) t 13.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.45e-18
+    it  33 f 4.949006e+02 -> 4.900556e+02 ratio +0.70 |y| 1.02e+03 Delta 1.02e+03 |g| 2.0e+00 GN 0.011 hit M/eps 1.2849 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 13.1s
+      [beta] lanczos 32 (TR stop; theta [9.15e-01, 5.42e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.44e-18
+    it  34 f 4.900556e+02 -> 4.880581e+02 ratio +1.15 |y| 1.27e+00 Delta 1.02e+03 |g| 5.8e+01 GN 0.000 M/eps 1.2843 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 31 (TR stop; theta [7.89e-01, 5.50e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.47e-18
+    it  35 f 4.880581e+02 -> 4.879386e+02 ratio +1.26 |y| 3.95e-01 Delta 1.02e+03 |g| 3.7e+01 GN 0.000 M/eps 1.2842 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 35 (TR stop; theta [4.11e-01, 5.56e+06], hit False) t 0.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.48e-18
+    it  36 f 4.879386e+02 -> 4.879069e+02 ratio +1.33 |y| 3.06e-01 Delta 1.02e+03 |g| 1.6e+01 GN 0.000 M/eps 1.2842 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 42 (TR stop; theta [1.15e-01, 5.62e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.51e-18
+    it  37 f 4.879069e+02 -> 4.878893e+02 ratio +1.32 |y| 4.51e-01 Delta 1.02e+03 |g| 1.0e+01 GN 0.000 M/eps 1.2842 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.1s
+      [beta] lanczos 32 (TR stop; theta [5.61e-01, 5.61e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.33e-18
+    it  38 f 4.878893e+02 -> 4.878872e+02 ratio +1.17 |y| 7.22e-02 Delta 1.02e+03 |g| 7.3e+00 GN 0.000 M/eps 1.2842 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 372 (TR stop; theta [4.46e-07, 5.65e+06], hit True) t 14.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.49e-18
+    it  39 f 4.878872e+02 -> 4.833269e+02 ratio +0.68 |y| 1.02e+03 Delta 1.02e+03 |g| 1.6e+00 GN 0.012 hit M/eps 1.2827 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 15.0s
+  outer  3 rho 1.0e+04: M/eps 1.2827 phi 3.003097e-04 nu_F 2.957e+02 -> 3.123e+03 galerkin 5.1e-17 (40 inner, budget)
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 7 s
+    H_F(local, lean): slice 16/49, 14 s
+    H_F(local, lean): slice 24/49, 22 s
+    H_F(local, lean): slice 32/49, 29 s
+    H_F(local, lean): slice 40/49, 36 s
+    H_F(local, lean): slice 48/49, 43 s
+    H_F(local, lean): slice 49/49, 44 s
+  H_F(local) Gram (7726 x 7726, lean) in 44 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.684e+13 (lean build)
+[metric] force metric built in 44 s; mem {'in use GB': 1.531461888, 'peak GB': 8.258958592, 'host maxrss GB': 14.491568}
+  [metric] refreshed at outer 4; Delta 1023.2406834319423 -> 9.928e+01 (|L^-1 grad|)
+    [noise] merit at 6 points 1e-10 away (metric): spread 8.739e-05, sigma_f 3.400e-05 (7.0e-09 of f)
+      [beta] lanczos 35 (TR stop; theta [8.11e-01, 5.56e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.47e-18
+    it   0 f 4.880212e+03 -> 4.859805e+03 ratio +1.14 |y| 4.49e+00 Delta 9.93e+01 |g| 9.9e+01 GN 0.000 M/eps 1.2821 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 32 (TR stop; theta [7.14e-01, 5.66e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.48e-18
+    it   1 f 4.859805e+03 -> 4.858743e+03 ratio +1.29 |y| 1.22e+00 Delta 9.93e+01 |g| 7.5e+01 GN 0.000 M/eps 1.2821 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 40 (TR stop; theta [1.96e-01, 5.72e+06], hit False) t 0.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.30e-18
+    it   2 f 4.858743e+03 -> 4.858439e+03 ratio +1.34 |y| 1.28e+00 Delta 9.93e+01 |g| 4.2e+01 GN 0.000 M/eps 1.2820 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 31 (TR stop; theta [7.63e-01, 5.73e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.28e-18
+    it   3 f 4.858439e+03 -> 4.858402e+03 ratio +1.22 |y| 2.60e-01 Delta 9.93e+01 |g| 2.9e+01 GN 0.000 M/eps 1.2820 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 136 (TR stop; theta [8.10e-05, 5.78e+06], hit True) t 3.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.30e-18
+    it   4 f 4.858402e+03 -> 4.856249e+03 ratio +1.08 |y| 9.93e+01 Delta 1.99e+02 |g| 1.1e+01 GN 0.000 hit M/eps 1.2820 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 3.7s
+      [beta] lanczos 158 (TR stop; theta [5.21e-06, 5.80e+06], hit True) t 4.5s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.28e-18
+    it   5 f 4.856249e+03 -> 4.852105e+03 ratio +1.01 |y| 1.99e+02 Delta 3.97e+02 |g| 9.6e+00 GN 0.001 hit M/eps 1.2818 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 4.5s
+      [beta] lanczos 178 (TR stop; theta [1.88e-06, 5.85e+06], hit True) t 5.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.22e-18
+    it   6 f 4.852105e+03 -> 4.844002e+03 ratio +1.01 |y| 3.97e+02 Delta 7.94e+02 |g| 6.7e+00 GN 0.003 hit M/eps 1.2816 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 5.3s
+      [beta] lanczos 202 (TR stop; theta [7.71e-07, 5.84e+06], hit True) t 6.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.38e-18
+    it   7 f 4.844002e+03 -> 4.828024e+03 ratio +1.00 |y| 7.94e+02 Delta 1.59e+03 |g| 1.0e+01 GN 0.007 hit M/eps 1.2811 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 6.3s
+      [beta] lanczos 49 (TR stop; theta [5.50e-02, 5.78e+06], hit False) t 1.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.26e-18
+    it   8 f 4.828024e+03 -> 4.827907e+03 ratio +1.20 |y| 9.17e-01 Delta 1.59e+03 |g| 1.2e+01 GN 0.000 M/eps 1.2811 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.2s
+      [beta] lanczos 31 (TR stop; theta [7.46e-01, 5.81e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.37e-18
+    it   9 f 4.827907e+03 -> 4.827897e+03 ratio +1.30 |y| 1.29e-01 Delta 1.59e+03 |g| 1.2e+01 GN 0.000 M/eps 1.2811 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 261 (TR stop; theta [4.35e-07, 5.83e+06], hit True) t 8.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.45e-18
+    it  10 f 4.827897e+03 -> 4.797455e+03 ratio +0.97 |y| 1.59e+03 Delta 3.18e+03 |g| 4.8e+00 GN 0.012 hit M/eps 1.2801 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.7s
+      [beta] lanczos 32 (TR stop; theta [9.42e-01, 5.65e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.34e-18
+    it  11 f 4.797455e+03 -> 4.796322e+03 ratio +1.15 |y| 9.62e-01 Delta 3.18e+03 |g| 4.7e+01 GN 0.000 M/eps 1.2801 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 31 (TR stop; theta [8.04e-01, 5.74e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.40e-18
+    it  12 f 4.796322e+03 -> 4.796245e+03 ratio +1.24 |y| 3.22e-01 Delta 3.18e+03 |g| 2.9e+01 GN 0.000 M/eps 1.2801 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 45 (TR stop; theta [9.14e-02, 5.74e+06], hit False) t 1.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.40e-18
+    it  13 f 4.796245e+03 -> 4.796208e+03 ratio +1.29 |y| 6.26e-01 Delta 3.18e+03 |g| 1.1e+01 GN 0.000 M/eps 1.2801 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.1s
+      [beta] lanczos 276 (TR stop; theta [3.78e-07, 5.76e+06], hit True) t 9.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.35e-18
+    it  14 f 4.796208e+03 -> 4.752702e+03 ratio +0.71 |y| 3.18e+03 Delta 3.18e+03 |g| 8.6e+00 GN 0.013 hit M/eps 1.2787 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 9.5s
+      [beta] lanczos 32 (TR stop; theta [9.00e-01, 5.53e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.22e-18
+    it  15 f 4.752702e+03 -> 4.736091e+03 ratio +1.15 |y| 3.63e+00 Delta 3.18e+03 |g| 1.7e+02 GN 0.000 M/eps 1.2781 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 31 (TR stop; theta [7.73e-01, 5.63e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.33e-18
+    it  16 f 4.736091e+03 -> 4.735123e+03 ratio +1.26 |y| 1.10e+00 Delta 3.18e+03 |g| 9.7e+01 GN 0.000 M/eps 1.2781 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 34 (TR stop; theta [4.63e-01, 5.66e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.24e-18
+    it  17 f 4.735123e+03 -> 4.734905e+03 ratio +1.32 |y| 7.53e-01 Delta 3.18e+03 |g| 4.4e+01 GN 0.000 M/eps 1.2781 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 37 (TR stop; theta [1.95e-01, 5.68e+06], hit False) t 0.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.38e-18
+    it  18 f 4.734905e+03 -> 4.734808e+03 ratio +1.33 |y| 7.99e-01 Delta 3.18e+03 |g| 2.7e+01 GN 0.000 M/eps 1.2781 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+      [beta] lanczos 45 (TR stop; theta [6.81e-02, 5.68e+06], hit False) t 1.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.34e-18
+    it  19 f 4.734808e+03 -> 4.734752e+03 ratio +1.31 |y| 1.04e+00 Delta 3.18e+03 |g| 1.7e+01 GN 0.000 M/eps 1.2781 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.1s
+      [beta] lanczos 310 (TR stop; theta [4.50e-07, 5.73e+06], hit True) t 10.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.58e-18
+    it  20 f 4.734752e+03 -> 4.694305e+03 ratio +0.69 |y| 3.18e+03 Delta 3.18e+03 |g| 7.0e+00 GN 0.010 hit M/eps 1.2768 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 11.0s
+      [beta] lanczos 34 (TR stop; theta [8.29e-01, 5.50e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.50e-18
+    it  21 f 4.694305e+03 -> 4.677028e+03 ratio +1.15 |y| 4.11e+00 Delta 3.18e+03 |g| 1.5e+02 GN 0.000 M/eps 1.2762 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 32 (TR stop; theta [7.07e-01, 5.60e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.50e-18
+    it  22 f 4.677028e+03 -> 4.676059e+03 ratio +1.29 |y| 1.17e+00 Delta 3.18e+03 |g| 7.8e+01 GN 0.000 M/eps 1.2762 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 31 (TR stop; theta [5.56e-01, 5.63e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.48e-18
+    it  23 f 4.676059e+03 -> 4.675884e+03 ratio +1.31 |y| 6.25e-01 Delta 3.18e+03 |g| 4.4e+01 GN 0.000 M/eps 1.2762 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 40 (TR stop; theta [1.62e-01, 5.66e+06], hit False) t 0.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.57e-18
+    it  24 f 4.675884e+03 -> 4.675766e+03 ratio +1.32 |y| 9.64e-01 Delta 3.18e+03 |g| 2.1e+01 GN 0.000 M/eps 1.2762 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 32 (TR stop; theta [5.39e-01, 5.71e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.78e-18
+    it  25 f 4.675766e+03 -> 4.675751e+03 ratio +1.17 |y| 2.00e-01 Delta 3.18e+03 |g| 1.8e+01 GN 0.000 M/eps 1.2762 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 341 (TR stop; theta [5.23e-07, 5.74e+06], hit True) t 12.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.61e-18
+    it  26 f 4.675751e+03 -> 4.636024e+03 ratio +0.71 |y| 3.18e+03 Delta 3.18e+03 |g| 5.6e+00 GN 0.008 hit M/eps 1.2749 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 12.6s
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 7 s
+    H_F(local, lean): slice 16/49, 17 s
+    H_F(local, lean): slice 24/49, 25 s
+    H_F(local, lean): slice 32/49, 33 s
+    H_F(local, lean): slice 40/49, 40 s
+    H_F(local, lean): slice 48/49, 48 s
+    H_F(local, lean): slice 49/49, 48 s
+  H_F(local) Gram (7726 x 7726, lean) in 49 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.599e+13 (lean build)
+      [metric] rebuilt in the inner loop (extra Lanczos time 53 s since the rebuild >= one rebuild (44 s)); Delta 3.177e+03 -> 1.279e+03 (|L^-1 g| 2.404e+02 -> 9.679e+01)
+      [beta] lanczos 35 (TR stop; theta [8.16e-01, 5.63e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.66e-18
+    it  27 f 4.636024e+03 -> 4.619954e+03 ratio +1.15 |y| 3.54e+00 Delta 1.28e+03 |g| 9.7e+01 GN 0.000 M/eps 1.2743 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 49.6s
+      [beta] lanczos 31 (TR stop; theta [8.26e-01, 5.72e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.65e-18
+    it  28 f 4.619954e+03 -> 4.619163e+03 ratio +1.28 |y| 8.92e-01 Delta 1.28e+03 |g| 9.0e+01 GN 0.000 M/eps 1.2743 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 32 (TR stop; theta [5.07e-01, 5.77e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.62e-18
+    it  29 f 4.619163e+03 -> 4.618984e+03 ratio +1.32 |y| 6.40e-01 Delta 1.28e+03 |g| 4.6e+01 GN 0.000 M/eps 1.2743 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 43 (TR stop; theta [1.04e-01, 5.81e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.61e-18
+    it  30 f 4.618984e+03 -> 4.618860e+03 ratio +1.30 |y| 1.26e+00 Delta 1.28e+03 |g| 2.3e+01 GN 0.000 M/eps 1.2743 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+      [beta] lanczos 29 (TR stop; theta [8.46e-01, 5.83e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.62e-18
+    it  31 f 4.618860e+03 -> 4.618848e+03 ratio +1.21 |y| 1.45e-01 Delta 1.28e+03 |g| 2.1e+01 GN 0.000 M/eps 1.2743 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 305 (TR stop; theta [1.55e-06, 5.85e+06], hit True) t 10.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.88e-18
+    it  32 f 4.618848e+03 -> 4.596415e+03 ratio +0.99 |y| 1.28e+03 Delta 2.56e+03 |g| 5.8e+00 GN 0.003 hit M/eps 1.2736 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 10.9s
+      [beta] lanczos 27 (TR stop; theta [1.17e+00, 5.75e+06], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.81e-18
+    it  33 f 4.596415e+03 -> 4.595941e+03 ratio +1.15 |y| 6.35e-01 Delta 2.56e+03 |g| 8.3e+01 GN 0.000 M/eps 1.2736 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 32 (TR stop; theta [7.60e-01, 5.81e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.84e-18
+    it  34 f 4.595941e+03 -> 4.595863e+03 ratio +1.21 |y| 3.62e-01 Delta 2.56e+03 |g| 2.6e+01 GN 0.000 M/eps 1.2736 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 278 (TR stop; theta [4.56e-07, 5.84e+06], hit True) t 9.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.88e-18
+    it  35 f 4.595863e+03 -> 4.558652e+03 ratio +0.85 |y| 2.56e+03 Delta 5.12e+03 |g| 6.5e+00 GN 0.009 hit M/eps 1.2723 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 9.3s
+      [beta] lanczos 33 (TR stop; theta [8.60e-01, 5.65e+06], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.99e-18
+    it  36 f 4.558652e+03 -> 4.551846e+03 ratio +1.16 |y| 2.29e+00 Delta 5.12e+03 |g| 7.5e+01 GN 0.000 M/eps 1.2721 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 31 (TR stop; theta [7.67e-01, 5.73e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.02e-18
+    it  37 f 4.551846e+03 -> 4.551469e+03 ratio +1.28 |y| 6.67e-01 Delta 5.12e+03 |g| 5.4e+01 GN 0.000 M/eps 1.2721 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 32 (TR stop; theta [5.35e-01, 5.78e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.11e-18
+    it  38 f 4.551469e+03 -> 4.551390e+03 ratio +1.30 |y| 4.23e-01 Delta 5.12e+03 |g| 3.0e+01 GN 0.000 M/eps 1.2721 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 43 (TR stop; theta [1.13e-01, 5.85e+06], hit False) t 1.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.82e-18
+    it  39 f 4.551390e+03 -> 4.551331e+03 ratio +1.31 |y| 8.09e-01 Delta 5.12e+03 |g| 1.5e+01 GN 0.000 M/eps 1.2721 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.0s
+  [multiplier] update 3.033e+04 clipped to 8.762e-04 (LS 2.190e-04)
+  outer  4 rho 1.0e+05: M/eps 1.2721 phi 3.744927e-04 nu_F 3.123e+03 -> 8.762e-04 galerkin 3.1e-17 (40 inner, budget)
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 7 s
+    H_F(local, lean): slice 16/49, 14 s
+    H_F(local, lean): slice 24/49, 21 s
+    H_F(local, lean): slice 32/49, 27 s
+    H_F(local, lean): slice 40/49, 34 s
+    H_F(local, lean): slice 48/49, 41 s
+    H_F(local, lean): slice 49/49, 42 s
+  H_F(local) Gram (7726 x 7726, lean) in 42 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.400e+14 (lean build)
+[metric] force metric built in 42 s; mem {'in use GB': 1.539513344, 'peak GB': 8.258958592, 'host maxrss GB': 15.281252}
+  [metric] refreshed at outer 5; Delta 5116.199424895213 -> 1.277e+02 (|L^-1 grad|)
+    [noise] merit at 6 points 1e-10 away (metric): spread 5.387e-04, sigma_f 1.853e-04 (5.0e-09 of f)
+      [beta] lanczos 5 (TR stop; theta [9.23e+03, 4.98e+07], hit False) t 0.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.79e-18
+    it   0 f 3.701566e+04 -> 3.701566e+04 ratio +1.28 |y| 2.61e-04 Delta 1.28e+02 |g| 1.3e+02 GN 0.000 M/eps 1.2721 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.1s
+      [beta] lanczos 112 (TR stop; theta [1.13e-04, 4.98e+07], hit True) t 2.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.92e-18
+    it   1 f 3.701566e+04 -> 3.700868e+04 ratio +1.05 |y| 1.28e+02 Delta 2.55e+02 |g| 2.9e+01 GN 0.000 hit M/eps 1.2721 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 2.9s
+      [beta] lanczos 28 (TR stop; theta [8.95e-01, 5.01e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.86e-18
+    it   2 f 3.700868e+04 -> 3.700860e+04 ratio +1.26 |y| 3.76e-01 Delta 2.55e+02 |g| 5.8e+01 GN 0.000 M/eps 1.2721 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 133 (TR stop; theta [9.64e-06, 5.01e+07], hit True) t 3.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.81e-18
+    it   3 f 3.700860e+04 -> 3.699524e+04 ratio +1.01 |y| 2.55e+02 Delta 5.11e+02 |g| 1.8e+01 GN 0.000 hit M/eps 1.2720 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 3.6s
+      [beta] lanczos 6 (TR stop; theta [6.76e+03, 5.02e+07], hit False) t 0.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.70e-18
+    it   4 f 3.699524e+04 -> 3.699524e+04 ratio +0.59 |y| 1.12e-04 Delta 5.11e+02 |g| 4.9e+01 GN 0.000 M/eps 1.2720 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 140 (TR stop; theta [2.43e-06, 5.02e+07], hit True) t 3.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.80e-18
+    it   5 f 3.699524e+04 -> 3.696898e+04 ratio +1.00 |y| 5.11e+02 Delta 1.02e+03 |g| 1.1e+01 GN 0.002 hit M/eps 1.2719 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 3.9s
+      [beta] lanczos 6 (TR stop; theta [6.48e+03, 5.03e+07], hit False) t 0.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.93e-18
+    it   6 f 3.696898e+04 -> 3.696899e+04 ratio -0.19 |y| 2.34e-04 Delta 1.02e+03 |g| 7.1e+01 GN 0.000 M/eps 1.2719 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 153 (TR stop; theta [1.45e-06, 5.03e+07], hit True) t 4.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.93e-18
+    it   7 f 3.696899e+04 -> 3.691716e+04 ratio +1.00 |y| 1.02e+03 Delta 2.04e+03 |g| 1.5e+01 GN 0.003 hit M/eps 1.2717 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 4.3s
+      [beta] lanczos 8 (TR stop; theta [2.68e+03, 5.03e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.91e-18
+    it   8 f 3.691716e+04 -> 3.691715e+04 ratio +1.36 |y| 1.06e-03 Delta 2.04e+03 |g| 2.0e+02 GN 0.000 M/eps 1.2717 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 27 (TR stop; theta [8.87e-01, 5.03e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.94e-18
+    it   9 f 3.691715e+04 -> 3.691709e+04 ratio +1.25 |y| 3.02e-01 Delta 2.04e+03 |g| 4.2e+01 GN 0.000 M/eps 1.2717 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 189 (TR stop; theta [5.44e-07, 5.03e+07], hit True) t 5.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.92e-18
+    it  10 f 3.691709e+04 -> 3.681436e+04 ratio +1.00 |y| 2.04e+03 Delta 4.09e+03 |g| 1.4e+01 GN 0.007 hit M/eps 1.2713 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 5.6s
+      [beta] lanczos 6 (TR stop; theta [8.17e+03, 4.98e+07], hit False) t 0.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.95e-18
+    it  11 f 3.681436e+04 -> 3.681423e+04 ratio +1.21 |y| 2.73e-03 Delta 4.09e+03 |g| 8.1e+02 GN 0.000 M/eps 1.2713 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 15 (TR stop; theta [9.04e+01, 5.02e+07], hit False) t 0.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.80e-18
+    it  12 f 3.681423e+04 -> 3.681419e+04 ratio +1.21 |y| 2.23e-02 Delta 4.09e+03 |g| 1.7e+02 GN 0.000 M/eps 1.2713 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 32 (TR stop; theta [8.15e-01, 5.01e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.80e-18
+    it  13 f 3.681419e+04 -> 3.681398e+04 ratio +1.17 |y| 6.35e-01 Delta 4.09e+03 |g| 3.2e+01 GN 0.000 M/eps 1.2713 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 16 (TR stop; theta [1.95e+01, 5.03e+07], hit False) t 0.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.74e-18
+    it  14 f 3.681398e+04 -> 3.681398e+04 ratio +1.25 |y| 1.51e-02 Delta 4.09e+03 |g| 4.7e+01 GN 0.000 M/eps 1.2713 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 233 (TR stop; theta [2.67e-07, 5.03e+07], hit True) t 7.5s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.66e-18
+    it  15 f 3.681398e+04 -> 3.661447e+04 ratio +0.98 |y| 4.09e+03 Delta 8.17e+03 |g| 7.0e+00 GN 0.001 hit M/eps 1.2706 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 7.5s
+      [beta] lanczos 8 (TR stop; theta [2.26e+03, 4.88e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.79e-18
+    it  16 f 3.661447e+04 -> 3.661222e+04 ratio +1.20 |y| 1.84e-02 Delta 8.17e+03 |g| 3.0e+03 GN 0.000 M/eps 1.2706 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 15 (TR stop; theta [8.50e+01, 4.97e+07], hit False) t 0.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.68e-18
+    it  17 f 3.661222e+04 -> 3.661172e+04 ratio +1.18 |y| 8.29e-02 Delta 8.17e+03 |g| 6.3e+02 GN 0.000 M/eps 1.2706 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 27 (TR stop; theta [1.07e+00, 4.97e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.66e-18
+    it  18 f 3.661172e+04 -> 3.660996e+04 ratio +1.15 |y| 1.64e+00 Delta 8.17e+03 |g| 1.1e+02 GN 0.000 M/eps 1.2706 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 27 (TR stop; theta [1.34e+00, 4.98e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.62e-18
+    it  19 f 3.660996e+04 -> 3.660972e+04 ratio +1.19 |y| 5.32e-01 Delta 8.17e+03 |g| 8.2e+01 GN 0.000 M/eps 1.2706 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 269 (TR stop; theta [2.27e-07, 4.99e+07], hit True) t 9.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.74e-18
+    it  20 f 3.660972e+04 -> 3.628459e+04 ratio +0.82 |y| 8.17e+03 Delta 1.63e+04 |g| 7.0e+00 GN 0.001 hit M/eps 1.2694 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 9.0s
+      [beta] lanczos 8 (TR stop; theta [2.09e+03, 4.75e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.75e-18
+    it  21 f 3.628459e+04 -> 3.624948e+04 ratio +1.20 |y| 7.34e-02 Delta 1.63e+04 |g| 1.2e+04 GN 0.000 M/eps 1.2693 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 14 (TR stop; theta [8.99e+01, 4.80e+07], hit False) t 0.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.79e-18
+    it  22 f 3.624948e+04 -> 3.624195e+04 ratio +1.18 |y| 3.16e-01 Delta 1.63e+04 |g| 2.6e+03 GN 0.000 M/eps 1.2692 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 27 (TR stop; theta [1.06e+00, 4.80e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.84e-18
+    it  23 f 3.624195e+04 -> 3.621512e+04 ratio +1.15 |y| 6.44e+00 Delta 1.63e+04 |g| 5.0e+02 GN 0.000 M/eps 1.2691 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 27 (TR stop; theta [1.30e+00, 4.86e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.72e-18
+    it  24 f 3.621512e+04 -> 3.621159e+04 ratio +1.19 |y| 2.07e+00 Delta 1.63e+04 |g| 4.8e+02 GN 0.000 M/eps 1.2691 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 47 (TR stop; theta [1.27e-01, 4.88e+07], hit False) t 1.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.87e-18
+    it  25 f 3.621159e+04 -> 3.620927e+04 ratio +1.26 |y| 3.68e+00 Delta 1.63e+04 |g| 3.9e+01 GN 0.000 M/eps 1.2691 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.2s
+      [beta] lanczos 6 (TR stop; theta [8.57e+03, 4.91e+07], hit False) t 0.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.83e-18
+    it  26 f 3.620927e+04 -> 3.620926e+04 ratio +1.31 |y| 4.53e-04 Delta 1.63e+04 |g| 1.9e+02 GN 0.000 M/eps 1.2691 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 32 (TR stop; theta [6.31e-01, 4.91e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.58e-18
+    it  27 f 3.620926e+04 -> 3.620900e+04 ratio +1.38 |y| 7.50e-01 Delta 1.63e+04 |g| 3.9e+01 GN 0.000 M/eps 1.2691 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 256 (TR stop; theta [2.35e-07, 4.93e+07], hit True) t 8.9s
+    it  28 f 3.620900e+04 -> 3.655165e+04 ratio -0.45 |y| 1.63e+04 Delta 4.09e+03 |g| 2.2e+01 GN 0.002 hit M/eps 1.2691 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.9s
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 7 s
+    H_F(local, lean): slice 16/49, 15 s
+    H_F(local, lean): slice 24/49, 24 s
+    H_F(local, lean): slice 32/49, 32 s
+    H_F(local, lean): slice 40/49, 39 s
+    H_F(local, lean): slice 48/49, 47 s
+    H_F(local, lean): slice 49/49, 48 s
+  H_F(local) Gram (7726 x 7726, lean) in 48 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.359e+14 (lean build)
+      [metric] rebuilt in the inner loop (extra Lanczos time 51 s since the rebuild >= one rebuild (42 s)); Delta 4.085e+03 -> 4.726e+03 (|L^-1 g| 2.166e+01 -> 2.505e+01)
+      [beta] lanczos 222 (TR stop; theta [2.89e-07, 6.74e+07], hit True) t 6.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.73e-18
+    it  29 f 3.620900e+04 -> 3.598861e+04 ratio +0.97 |y| 4.73e+03 Delta 9.45e+03 |g| 2.5e+01 GN 0.001 hit M/eps 1.2683 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 55.2s
+      [beta] lanczos 6 (TR stop; theta [7.71e+03, 6.59e+07], hit False) t 0.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.57e-18
+    it  30 f 3.598861e+04 -> 3.598493e+04 ratio +1.21 |y| 1.59e-02 Delta 9.45e+03 |g| 4.5e+03 GN 0.000 M/eps 1.2683 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 15 (TR stop; theta [9.09e+01, 6.65e+07], hit False) t 0.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.60e-18
+    it  31 f 3.598493e+04 -> 3.598389e+04 ratio +1.19 |y| 1.04e-01 Delta 9.45e+03 |g| 9.5e+02 GN 0.000 M/eps 1.2683 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 27 (TR stop; theta [1.07e+00, 6.69e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.51e-18
+    it  32 f 3.598389e+04 -> 3.598093e+04 ratio +1.15 |y| 2.13e+00 Delta 9.45e+03 |g| 1.7e+02 GN 0.000 M/eps 1.2683 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 28 (TR stop; theta [1.28e+00, 6.73e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.67e-18
+    it  33 f 3.598093e+04 -> 3.598052e+04 ratio +1.20 |y| 7.01e-01 Delta 9.45e+03 |g| 1.6e+02 GN 0.000 M/eps 1.2683 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 296 (TR stop; theta [2.25e-07, 6.77e+07], hit True) t 10.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.73e-18
+    it  34 f 3.598052e+04 -> 3.566371e+04 ratio +0.71 |y| 9.45e+03 Delta 9.45e+03 |g| 8.2e+00 GN 0.001 hit M/eps 1.2671 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 10.1s
+      [beta] lanczos 6 (TR stop; theta [7.93e+03, 6.41e+07], hit False) t 0.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.58e-18
+    it  35 f 3.566371e+04 -> 3.560675e+04 ratio +1.21 |y| 6.30e-02 Delta 9.45e+03 |g| 1.7e+04 GN 0.000 M/eps 1.2669 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 15 (TR stop; theta [9.24e+01, 6.51e+07], hit False) t 0.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.69e-18
+    it  36 f 3.560675e+04 -> 3.558953e+04 ratio +1.19 |y| 4.27e-01 Delta 9.45e+03 |g| 3.7e+03 GN 0.000 M/eps 1.2668 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 27 (TR stop; theta [1.05e+00, 6.46e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.63e-18
+    it  37 f 3.558953e+04 -> 3.554296e+04 ratio +1.15 |y| 8.47e+00 Delta 9.45e+03 |g| 7.1e+02 GN 0.000 M/eps 1.2666 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 23 (TR stop; theta [2.72e+00, 6.47e+07], hit False) t 0.5s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.81e-18
+    it  38 f 3.554296e+04 -> 3.553938e+04 ratio +1.20 |y| 1.45e+00 Delta 9.45e+03 |g| 6.9e+02 GN 0.000 M/eps 1.2666 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 38 (TR stop; theta [4.23e-01, 6.51e+07], hit False) t 0.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.74e-18
+    it  39 f 3.553938e+04 -> 3.553381e+04 ratio +1.25 |y| 3.90e+00 Delta 9.45e+03 |g| 1.1e+02 GN 0.000 M/eps 1.2666 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.9s
+  [multiplier] update 2.666e+05 clipped to 1.084e-04 (LS 2.710e-05)
+  outer  5 rho 1.0e+06: M/eps 1.2666 phi 4.220029e-04 nu_F 8.762e-04 -> 1.084e-04 galerkin 3.4e-17 (40 inner, budget)
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 7 s
+    H_F(local, lean): slice 16/49, 14 s
+    H_F(local, lean): slice 24/49, 21 s
+    H_F(local, lean): slice 32/49, 28 s
+    H_F(local, lean): slice 40/49, 35 s
+    H_F(local, lean): slice 48/49, 42 s
+    H_F(local, lean): slice 49/49, 43 s
+  H_F(local) Gram (7726 x 7726, lean) in 43 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.300e+15 (lean build)
+[metric] force metric built in 43 s; mem {'in use GB': 1.545457408, 'peak GB': 8.258958592, 'host maxrss GB': 15.972524}
+  [metric] refreshed at outer 6; Delta 9451.492704210465 -> 3.895e+02 (|L^-1 grad|)
+    [noise] merit at 6 points 1e-10 away (metric): spread 5.626e-03, sigma_f 2.022e-03 (5.7e-09 of f)
+      [beta] lanczos 30 (TR stop; theta [7.94e-01, 5.32e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.83e-18
+    it   0 f 3.553381e+05 -> 3.553325e+05 ratio +1.29 |y| 3.17e+00 Delta 3.89e+02 |g| 3.9e+02 GN 0.000 M/eps 1.2666 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 139 (TR stop; theta [5.28e-05, 5.37e+07], hit True) t 3.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.80e-18
+    it   1 f 3.553325e+05 -> 3.552608e+05 ratio +1.05 |y| 3.89e+02 Delta 7.79e+02 |g| 3.5e+01 GN 0.000 hit M/eps 1.2666 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 3.8s
+      [beta] lanczos 6 (TR stop; theta [5.81e+03, 5.40e+07], hit False) t 0.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.68e-18
+    it   2 f 3.552608e+05 -> 3.552608e+05 ratio +0.98 |y| 8.18e-04 Delta 7.79e+02 |g| 3.8e+02 GN 0.000 M/eps 1.2666 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 32 (TR stop; theta [5.70e-01, 5.40e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.75e-18
+    it   3 f 3.552608e+05 -> 3.552596e+05 ratio +1.44 |y| 1.68e+00 Delta 7.79e+02 |g| 8.5e+01 GN 0.000 M/eps 1.2666 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 31 (TR stop; theta [4.16e-01, 5.43e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.83e-18
+    it   4 f 3.552596e+05 -> 3.552590e+05 ratio +1.54 |y| 1.32e+00 Delta 7.79e+02 |g| 1.2e+02 GN 0.000 M/eps 1.2666 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 129 (TR stop; theta [1.66e-05, 5.45e+07], hit True) t 3.5s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.89e-18
+    it   5 f 3.552590e+05 -> 3.551426e+05 ratio +1.02 |y| 7.79e+02 Delta 1.56e+03 |g| 4.8e+01 GN 0.000 hit M/eps 1.2665 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 3.5s
+      [beta] lanczos 26 (TR stop; theta [9.63e-01, 5.45e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.75e-18
+    it   6 f 3.551426e+05 -> 3.551423e+05 ratio +1.25 |y| 7.78e-01 Delta 1.56e+03 |g| 1.7e+02 GN 0.000 M/eps 1.2665 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 145 (TR stop; theta [3.24e-06, 5.46e+07], hit True) t 3.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.94e-18
+    it   7 f 3.551423e+05 -> 3.549110e+05 ratio +1.01 |y| 1.56e+03 Delta 3.12e+03 |g| 5.9e+01 GN 0.001 hit M/eps 1.2664 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 3.9s
+      [beta] lanczos 6 (TR stop; theta [7.84e+03, 5.46e+07], hit False) t 0.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.99e-18
+    it   8 f 3.549110e+05 -> 3.549110e+05 ratio +1.83 |y| 6.23e-04 Delta 3.12e+03 |g| 2.1e+02 GN 0.000 M/eps 1.2664 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 171 (TR stop; theta [8.65e-07, 5.46e+07], hit True) t 4.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.88e-18
+    it   9 f 3.549110e+05 -> 3.544485e+05 ratio +1.00 |y| 3.12e+03 Delta 6.23e+03 |g| 4.4e+01 GN 0.004 hit M/eps 1.2663 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 4.9s
+      [beta] lanczos 6 (TR stop; theta [8.32e+03, 5.47e+07], hit False) t 0.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.75e-18
+    it  10 f 3.544485e+05 -> 3.544484e+05 ratio +1.23 |y| 2.20e-03 Delta 6.23e+03 |g| 5.5e+02 GN 0.000 M/eps 1.2663 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 27 (TR stop; theta [8.71e-01, 5.47e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.87e-18
+    it  11 f 3.544484e+05 -> 3.544480e+05 ratio +1.23 |y| 8.34e-01 Delta 6.23e+03 |g| 1.1e+02 GN 0.000 M/eps 1.2663 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 191 (TR stop; theta [4.50e-07, 5.48e+07], hit True) t 5.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.89e-18
+    it  12 f 3.544480e+05 -> 3.535311e+05 ratio +1.00 |y| 6.23e+03 Delta 1.25e+04 |g| 6.3e+01 GN 0.000 hit M/eps 1.2659 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 5.6s
+      [beta] lanczos 8 (TR stop; theta [2.47e+03, 5.43e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.75e-18
+    it  13 f 3.535311e+05 -> 3.535299e+05 ratio +1.20 |y| 1.36e-02 Delta 1.25e+04 |g| 2.1e+03 GN 0.000 M/eps 1.2659 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 17 (TR stop; theta [3.48e+01, 5.44e+07], hit False) t 0.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.82e-18
+    it  14 f 3.535299e+05 -> 3.535295e+05 ratio +1.21 |y| 1.03e-01 Delta 1.25e+04 |g| 4.6e+02 GN 0.000 M/eps 1.2659 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 32 (TR stop; theta [7.45e-01, 5.45e+07], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.61e-18
+    it  15 f 3.535295e+05 -> 3.535280e+05 ratio +1.18 |y| 1.79e+00 Delta 1.25e+04 |g| 9.5e+01 GN 0.000 M/eps 1.2659 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 230 (TR stop; theta [3.17e-07, 5.47e+07], hit True) t 7.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.75e-18
+    it  16 f 3.535280e+05 -> 3.517437e+05 ratio +0.98 |y| 1.25e+04 Delta 2.49e+04 |g| 7.0e+01 GN 0.001 hit M/eps 1.2652 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 7.2s
+      [beta] lanczos 6 (TR stop; theta [8.24e+03, 5.35e+07], hit False) t 0.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.62e-18
+    it  17 f 3.517437e+05 -> 3.517270e+05 ratio +1.21 |y| 3.35e-02 Delta 2.49e+04 |g| 8.9e+03 GN 0.000 M/eps 1.2652 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 15 (TR stop; theta [9.45e+01, 5.33e+07], hit False) t 0.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.58e-18
+    it  18 f 3.517270e+05 -> 3.517221e+05 ratio +1.19 |y| 2.24e-01 Delta 2.49e+04 |g| 2.0e+03 GN 0.000 M/eps 1.2652 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 31 (TR stop; theta [8.99e-01, 5.33e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.57e-18
+    it  19 f 3.517221e+05 -> 3.517053e+05 ratio +1.14 |y| 5.50e+00 Delta 2.49e+04 |g| 3.7e+02 GN 0.000 M/eps 1.2652 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 16 (TR stop; theta [2.35e+01, 5.37e+07], hit False) t 0.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.77e-18
+    it  20 f 3.517053e+05 -> 3.517051e+05 ratio +1.21 |y| 1.11e-01 Delta 2.49e+04 |g| 4.0e+02 GN 0.000 M/eps 1.2652 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 47 (TR stop; theta [7.00e-02, 5.38e+07], hit False) t 1.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.62e-18
+    it  21 f 3.517051e+05 -> 3.517024e+05 ratio +1.27 |y| 5.70e+00 Delta 2.49e+04 |g| 8.4e+01 GN 0.000 M/eps 1.2652 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.1s
+      [beta] lanczos 35 (TR stop; theta [4.82e-01, 5.39e+07], hit False) t 0.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.54e-18
+    it  22 f 3.517024e+05 -> 3.517019e+05 ratio +1.21 |y| 1.17e+00 Delta 2.49e+04 |g| 6.0e+01 GN 0.000 M/eps 1.2652 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 26 (TR stop; theta [1.24e+00, 5.40e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.64e-18
+    it  23 f 3.517019e+05 -> 3.517018e+05 ratio +1.00 |y| 3.94e-01 Delta 2.49e+04 |g| 1.1e+02 GN 0.000 M/eps 1.2652 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 269 (TR stop; theta [2.03e-07, 5.40e+07], hit True) t 8.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.41e-18
+    it  24 f 3.517018e+05 -> 3.487123e+05 ratio +0.84 |y| 2.49e+04 Delta 4.99e+04 |g| 3.4e+01 GN 0.001 hit M/eps 1.2641 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.8s
+      [beta] lanczos 8 (TR stop; theta [2.31e+03, 5.15e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.67e-18
+    it  25 f 3.487123e+05 -> 3.484202e+05 ratio +1.21 |y| 2.14e-01 Delta 4.99e+04 |g| 3.3e+04 GN 0.000 M/eps 1.2640 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 15 (TR stop; theta [8.26e+01, 5.17e+07], hit False) t 0.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.67e-18
+    it  26 f 3.484202e+05 -> 3.483581e+05 ratio +1.18 |y| 9.24e-01 Delta 4.99e+04 |g| 7.3e+03 GN 0.000 M/eps 1.2640 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 27 (TR stop; theta [1.05e+00, 5.17e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.69e-18
+    it  27 f 3.483581e+05 -> 3.481473e+05 ratio +1.15 |y| 1.82e+01 Delta 4.99e+04 |g| 1.4e+03 GN 0.000 M/eps 1.2639 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 27 (TR stop; theta [1.24e+00, 5.22e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.56e-18
+    it  28 f 3.481473e+05 -> 3.481212e+05 ratio +1.19 |y| 5.77e+00 Delta 4.99e+04 |g| 1.2e+03 GN 0.000 M/eps 1.2639 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 49 (TR stop; theta [1.10e-01, 5.24e+07], hit False) t 1.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.59e-18
+    it  29 f 3.481212e+05 -> 3.481055e+05 ratio +1.26 |y| 9.87e+00 Delta 4.99e+04 |g| 7.0e+01 GN 0.000 M/eps 1.2639 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.2s
+      [beta] lanczos 6 (TR stop; theta [8.51e+03, 5.32e+07], hit False) t 0.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.53e-18
+    it  30 f 3.481055e+05 -> 3.481055e+05 ratio +1.52 |y| 1.14e-03 Delta 4.99e+04 |g| 5.2e+02 GN 0.000 M/eps 1.2639 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 32 (TR stop; theta [6.32e-01, 5.32e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.56e-18
+    it  31 f 3.481055e+05 -> 3.481038e+05 ratio +1.37 |y| 1.88e+00 Delta 4.99e+04 |g| 1.1e+02 GN 0.000 M/eps 1.2639 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 271 (TR stop; theta [2.06e-07, 5.34e+07], hit True) t 8.9s
+    it  32 f 3.481038e+05 -> 3.501730e+05 ratio -0.30 |y| 4.99e+04 Delta 1.25e+04 |g| 2.9e+01 GN 0.002 hit M/eps 1.2639 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.9s
+      [beta] lanczos 232 (TR stop; theta [2.74e-07, 5.34e+07], hit True) t 7.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.56e-18
+    it  33 f 3.481038e+05 -> 3.463696e+05 ratio +0.98 |y| 1.25e+04 Delta 2.49e+04 |g| 2.9e+01 GN 0.001 hit M/eps 1.2632 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 7.3s
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 8 s
+    H_F(local, lean): slice 16/49, 15 s
+    H_F(local, lean): slice 24/49, 22 s
+    H_F(local, lean): slice 32/49, 30 s
+    H_F(local, lean): slice 40/49, 37 s
+    H_F(local, lean): slice 48/49, 47 s
+    H_F(local, lean): slice 49/49, 48 s
+  H_F(local) Gram (7726 x 7726, lean) in 48 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.360e+15 (lean build)
+      [metric] rebuilt in the inner loop (extra Lanczos time 47 s since the rebuild >= one rebuild (43 s)); Delta 2.493e+04 -> 2.507e+03 (|L^-1 g| 8.171e+03 -> 8.217e+02)
+      [beta] lanczos 27 (TR stop; theta [1.09e+00, 5.71e+06], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.58e-18
+    it  34 f 3.463696e+05 -> 3.463362e+05 ratio +1.16 |y| 4.62e+00 Delta 2.51e+03 |g| 8.2e+02 GN 0.000 M/eps 1.2632 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 48.9s
+      [beta] lanczos 32 (TR stop; theta [7.49e-01, 5.76e+06], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.72e-18
+    it  35 f 3.463362e+05 -> 3.463323e+05 ratio +1.25 |y| 2.36e+00 Delta 2.51e+03 |g| 2.1e+02 GN 0.000 M/eps 1.2632 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 186 (TR stop; theta [1.61e-06, 5.78e+06], hit True) t 5.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.78e-18
+    it  36 f 3.463323e+05 -> 3.459727e+05 ratio +1.01 |y| 2.51e+03 Delta 5.01e+03 |g| 4.6e+01 GN 0.002 hit M/eps 1.2630 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 5.4s
+      [beta] lanczos 28 (TR stop; theta [8.14e-01, 5.78e+06], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.87e-18
+    it  37 f 3.459727e+05 -> 3.459720e+05 ratio +1.28 |y| 1.09e+00 Delta 5.01e+03 |g| 1.1e+02 GN 0.000 M/eps 1.2630 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 195 (TR stop; theta [5.34e-07, 5.77e+06], hit True) t 5.8s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.93e-18
+    it  38 f 3.459720e+05 -> 3.452643e+05 ratio +1.00 |y| 5.01e+03 Delta 1.00e+04 |g| 3.7e+01 GN 0.006 hit M/eps 1.2628 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 5.9s
+      [beta] lanczos 27 (TR stop; theta [9.38e-01, 5.77e+06], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.90e-18
+    it  39 f 3.452643e+05 -> 3.452630e+05 ratio +1.18 |y| 1.14e+00 Delta 1.00e+04 |g| 1.3e+02 GN 0.000 M/eps 1.2628 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+  [multiplier] update 2.628e+06 clipped to 4.502e-03 (LS 1.126e-03)
+  outer  6 rho 1.0e+07: M/eps 1.2628 phi 4.563382e-04 nu_F 1.084e-04 -> 4.502e-03 galerkin 3.1e-17 (40 inner, budget)
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 7 s
+    H_F(local, lean): slice 16/49, 14 s
+    H_F(local, lean): slice 24/49, 21 s
+    H_F(local, lean): slice 32/49, 28 s
+    H_F(local, lean): slice 40/49, 35 s
+    H_F(local, lean): slice 48/49, 42 s
+    H_F(local, lean): slice 49/49, 43 s
+  H_F(local) Gram (7726 x 7726, lean) in 43 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.380e+16 (lean build)
+[metric] force metric built in 43 s; mem {'in use GB': 1.561430272, 'peak GB': 8.258958592, 'host maxrss GB': 16.680888}
+  [metric] refreshed at outer 7; Delta 10027.967274894763 -> 9.237e+02 (|L^-1 grad|)
+    [noise] merit at 6 points 1e-10 away (metric): spread 7.041e-02, sigma_f 2.372e-02 (6.9e-09 of f)
+      [beta] lanczos 8 (TR stop; theta [2.46e+03, 5.88e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.85e-18
+    it   0 f 3.452630e+06 -> 3.452629e+06 ratio +1.26 |y| 6.74e-03 Delta 9.24e+02 |g| 9.2e+02 GN 0.000 M/eps 1.2628 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 32 (TR stop; theta [5.06e-01, 5.88e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.00e-18
+    it   1 f 3.452629e+06 -> 3.452625e+06 ratio +1.45 |y| 3.09e+00 Delta 9.24e+02 |g| 2.0e+02 GN 0.000 M/eps 1.2628 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 107 (TR stop; theta [5.36e-05, 5.88e+07], hit True) t 2.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.94e-18
+    it   2 f 3.452625e+06 -> 3.452207e+06 ratio +1.02 |y| 9.24e+02 Delta 1.85e+03 |g| 1.2e+02 GN 0.000 hit M/eps 1.2628 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 2.7s
+      [beta] lanczos 25 (TR stop; theta [9.78e-01, 5.87e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.94e-18
+    it   3 f 3.452207e+06 -> 3.452205e+06 ratio +1.17 |y| 1.60e+00 Delta 1.85e+03 |g| 2.9e+02 GN 0.000 M/eps 1.2628 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 104 (TR stop; theta [1.55e-05, 5.88e+07], hit True) t 2.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.75e-18
+    it   4 f 3.452205e+06 -> 3.451392e+06 ratio +1.01 |y| 1.85e+03 Delta 3.69e+03 |g| 1.2e+02 GN 0.000 hit M/eps 1.2627 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 2.7s
+      [beta] lanczos 29 (TR stop; theta [7.30e-01, 5.88e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.92e-18
+    it   5 f 3.451392e+06 -> 3.451390e+06 ratio +1.30 |y| 2.08e+00 Delta 3.69e+03 |g| 2.8e+02 GN 0.000 M/eps 1.2627 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 147 (TR stop; theta [6.14e-07, 5.87e+07], hit True) t 4.0s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.05e-18
+    it   6 f 3.451390e+06 -> 3.449740e+06 ratio +1.00 |y| 3.69e+03 Delta 7.39e+03 |g| 4.3e+01 GN 0.005 hit M/eps 1.2627 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 4.1s
+      [beta] lanczos 8 (TR stop; theta [1.86e+03, 5.87e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.11e-18
+    it   7 f 3.449740e+06 -> 3.449740e+06 ratio +1.13 |y| 2.12e-03 Delta 7.39e+03 |g| 3.1e+02 GN 0.000 M/eps 1.2627 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 151 (TR stop; theta [4.88e-07, 5.87e+07], hit True) t 4.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.24e-18
+    it   8 f 3.449740e+06 -> 3.446462e+06 ratio +1.00 |y| 7.39e+03 Delta 1.48e+04 |g| 6.6e+01 GN 0.000 hit M/eps 1.2625 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 4.2s
+      [beta] lanczos 8 (TR stop; theta [2.15e+03, 5.87e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.05e-18
+    it   9 f 3.446462e+06 -> 3.446462e+06 ratio +1.21 |y| 6.43e-03 Delta 1.48e+04 |g| 9.9e+02 GN 0.000 M/eps 1.2625 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 27 (TR stop; theta [7.62e-01, 5.87e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.99e-18
+    it  10 f 3.446462e+06 -> 3.446460e+06 ratio +1.20 |y| 1.66e+00 Delta 1.48e+04 |g| 2.2e+02 GN 0.000 M/eps 1.2625 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.7s
+      [beta] lanczos 181 (TR stop; theta [2.40e-07, 5.87e+07], hit True) t 5.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.17e-18
+    it  11 f 3.446460e+06 -> 3.439930e+06 ratio +1.00 |y| 1.48e+04 Delta 2.96e+04 |g| 8.3e+01 GN 0.000 hit M/eps 1.2623 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 5.2s
+      [beta] lanczos 8 (TR stop; theta [2.31e+03, 5.86e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.08e-18
+    it  12 f 3.439930e+06 -> 3.439927e+06 ratio +1.19 |y| 2.42e-02 Delta 2.96e+04 |g| 3.6e+03 GN 0.000 M/eps 1.2623 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 18 (TR stop; theta [2.75e+01, 5.86e+07], hit False) t 0.4s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.13e-18
+    it  13 f 3.439927e+06 -> 3.439925e+06 ratio +1.24 |y| 2.05e-01 Delta 2.96e+04 |g| 7.8e+02 GN 0.000 M/eps 1.2623 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 32 (TR stop; theta [6.71e-01, 5.86e+07], hit False) t 0.7s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.11e-18
+    it  14 f 3.439925e+06 -> 3.439921e+06 ratio +1.18 |y| 3.30e+00 Delta 2.96e+04 |g| 1.8e+02 GN 0.000 M/eps 1.2623 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.8s
+      [beta] lanczos 203 (TR stop; theta [2.33e-07, 5.86e+07], hit True) t 6.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.04e-18
+    it  15 f 3.439921e+06 -> 3.427047e+06 ratio +0.99 |y| 2.96e+04 Delta 5.91e+04 |g| 7.1e+01 GN 0.000 hit M/eps 1.2618 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 6.1s
+      [beta] lanczos 8 (TR stop; theta [2.29e+03, 5.83e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.93e-18
+    it  16 f 3.427047e+06 -> 3.426991e+06 ratio +1.20 |y| 9.34e-02 Delta 5.91e+04 |g| 1.5e+04 GN 0.000 M/eps 1.2618 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 15 (TR stop; theta [8.15e+01, 5.81e+07], hit False) t 0.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.87e-18
+    it  17 f 3.426991e+06 -> 3.426980e+06 ratio +1.19 |y| 4.00e-01 Delta 5.91e+04 |g| 3.3e+03 GN 0.000 M/eps 1.2618 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 27 (TR stop; theta [1.05e+00, 5.81e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.91e-18
+    it  18 f 3.426980e+06 -> 3.426933e+06 ratio +1.15 |y| 8.52e+00 Delta 5.91e+04 |g| 6.5e+02 GN 0.000 M/eps 1.2618 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 23 (TR stop; theta [3.19e+00, 5.82e+07], hit False) t 0.5s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 2.10e-18
+    it  19 f 3.426933e+06 -> 3.426930e+06 ratio +1.21 |y| 1.35e+00 Delta 5.91e+04 |g| 7.5e+02 GN 0.000 M/eps 1.2618 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.5s
+      [beta] lanczos 230 (TR stop; theta [1.98e-07, 5.82e+07], hit True) t 7.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.93e-18
+    it  20 f 3.426930e+06 -> 3.403149e+06 ratio +0.93 |y| 5.91e+04 Delta 1.18e+05 |g| 1.1e+02 GN 0.001 hit M/eps 1.2609 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 7.2s
+      [beta] lanczos 8 (TR stop; theta [2.26e+03, 5.70e+07], hit False) t 0.2s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.94e-18
+    it  21 f 3.403149e+06 -> 3.402259e+06 ratio +1.21 |y| 3.87e-01 Delta 1.18e+05 |g| 5.8e+04 GN 0.000 M/eps 1.2609 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.2s
+      [beta] lanczos 15 (TR stop; theta [7.83e+01, 5.67e+07], hit False) t 0.3s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.87e-18
+    it  22 f 3.402259e+06 -> 3.402070e+06 ratio +1.18 |y| 1.64e+00 Delta 1.18e+05 |g| 1.3e+04 GN 0.000 M/eps 1.2608 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.4s
+      [beta] lanczos 27 (TR stop; theta [1.03e+00, 5.67e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.66e-18
+    it  23 f 3.402070e+06 -> 3.401389e+06 ratio +1.15 |y| 3.30e+01 Delta 1.18e+05 |g| 2.8e+03 GN 0.000 M/eps 1.2608 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 27 (TR stop; theta [1.19e+00, 5.72e+07], hit False) t 0.6s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.75e-18
+    it  24 f 3.401389e+06 -> 3.401304e+06 ratio +1.19 |y| 1.07e+01 Delta 1.18e+05 |g| 1.7e+03 GN 0.000 M/eps 1.2608 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 0.6s
+      [beta] lanczos 320 (TR stop; theta [1.72e-07, 5.75e+07], hit True) t 11.1s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.64e-18
+    it  25 f 3.401304e+06 -> 3.379108e+06 ratio +0.45 |y| 1.18e+05 Delta 1.18e+05 |g| 1.1e+02 GN 0.002 hit M/eps 1.2600 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 11.1s
+    H_F(local, lean): slice 1/49, 1 s
+    H_F(local, lean): slice 8/49, 8 s
+    H_F(local, lean): slice 16/49, 15 s
+    H_F(local, lean): slice 24/49, 23 s
+    H_F(local, lean): slice 32/49, 30 s
+    H_F(local, lean): slice 40/49, 38 s
+    H_F(local, lean): slice 48/49, 46 s
+    H_F(local, lean): slice 49/49, 47 s
+  H_F(local) Gram (7726 x 7726, lean) in 47 s
+  metric: trace H_J 2.054e-04, trace H_F(local) 2.228e+16 (lean build)
+      [metric] rebuilt in the inner loop (extra Lanczos time 46 s since the rebuild >= one rebuild (43 s)); Delta 1.182e+05 -> 2.600e+03 (|L^-1 g| 2.218e+05 -> 2.600e+03)
+      [beta] lanczos 37 (TR stop; theta [7.61e-01, 5.31e+06], hit False) t 0.9s
+      [constraints] b21_proj 7.56e-06, b21_proj - target 1.43e-18
+time budget reached: state saved
+saved /work/out/bs0.02.json; total 1821 s; mem {'in use GB': 1.52516864, 'peak GB': 8.258958592, 'host maxrss GB': 17.02674}

@@ -1,0 +1,8 @@
+0.02 {'|u_b-u_start|/|u_start|': 0.0398, 'cos(d_b, d_0.02)': 1.0, 'cos(d_b, d_1.0)': 0.6327}
+0.05 {'|u_b-u_start|/|u_start|': 0.0562, '|u_b-u_prev|/|u_start|': 0.0179, 'cos(d_b, d_prev)': 0.9883, 'cos(d_b, d_0.02)': 0.9883, 'cos(d_b, d_1.0)': 0.6883}
+0.1 {'|u_b-u_start|/|u_start|': 0.0587, '|u_b-u_prev|/|u_start|': 0.0188, 'cos(d_b, d_prev)': 0.9474, 'cos(d_b, d_0.02)': 0.8998, 'cos(d_b, d_1.0)': 0.7454}
+0.2 {'|u_b-u_start|/|u_start|': 0.0988, '|u_b-u_prev|/|u_start|': 0.0525, 'cos(d_b, d_prev)': 0.9016, 'cos(d_b, d_0.02)': 0.6524, 'cos(d_b, d_1.0)': 0.7885}
+0.35 {'|u_b-u_start|/|u_start|': 0.1453, '|u_b-u_prev|/|u_start|': 0.0531, 'cos(d_b, d_prev)': 0.9772, 'cos(d_b, d_0.02)': 0.6117, 'cos(d_b, d_1.0)': 0.8748}
+0.5 {'|u_b-u_start|/|u_start|': 0.2024, '|u_b-u_prev|/|u_start|': 0.0693, 'cos(d_b, d_prev)': 0.9738, 'cos(d_b, d_0.02)': 0.6186, 'cos(d_b, d_1.0)': 0.9567}
+0.75 {'|u_b-u_start|/|u_start|': 0.2312, '|u_b-u_prev|/|u_start|': 0.0405, 'cos(d_b, d_prev)': 0.9914, 'cos(d_b, d_0.02)': 0.6255, 'cos(d_b, d_1.0)': 0.985}
+1.0 {'|u_b-u_start|/|u_start|': 0.2794, '|u_b-u_prev|/|u_start|': 0.0652, 'cos(d_b, d_prev)': 0.985, 'cos(d_b, d_0.02)': 0.6327, 'cos(d_b, d_1.0)': 1.0}

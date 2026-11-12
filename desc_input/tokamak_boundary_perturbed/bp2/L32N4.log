@@ -1,0 +1,1018 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+/work/src/desc/__init__.py:102: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  from pynvml import (
+[     1.0 s] base tokamak_island_C_L32M32.h5: L 32 M 32 N 0, NFP 1, Psi 1.0
+[     6.0 s] resonance |iota| = 1/2: rho 0.63751, iota -0.500000, d iota/d rho 0.23397; ripple helicity cos(2 theta + 1 zeta) (auto)
+[     6.6 s] resolution -> L 32 M 32 N 4 (grid 64/64/8)
+[    12.0 s] minor radius a = 1.198366 m
+[    15.2 s] ripple fit onto boundary basis (M 32, N 4): max error 3.46e-07 per unit xi
+[    15.2 s] largest dRb modes (m, n): [((-1, -1), -0.5820219932886727), ((3, 1), 0.5388825826858339), ((-3, -1), -0.5355708550286999), ((1, 1), 0.4924314444258616), ((2, 1), 0.09080766401106646), ((4, 1), -0.07764731069880976)]
+[    15.2 s] largest dZb modes (m, n): [((-1, 1), 0.4806128574509517), ((-3, 1), -0.4488168894681197), ((3, -1), -0.4345176400815082), ((1, -1), 0.40272167209867615), ((4, -1), -0.05759627440781485), ((-6, 1), -0.051189606715185104)]
+[   133.9 s] amp 0: force 1.729e-07, geometric n!=0 max 1.22e-16, lambda_mk peak {'rho': 0.16999999999999998, '|lambda_mk|': 7.202325584259772e-12, '|lambda_mk| / |lambda_00|': 2.3859235041132117e-17}
+[   134.0 s] === amp xi/a = 0.0001 (xi = 1.198e-04 m) ===
+Building objective: force
+Precomputing transforms
+Timer: Precomputing transforms = 2.17 sec
+ObjectiveFunction deriv_mode : batched
+ObjectiveFunction jac_chunk_size: 8327
+Timer: Objective build = 3.38 sec
+Building objective: lcfs R
+Building objective: lcfs Z
+Building objective: fixed Psi
+Building objective: fixed pressure
+Building objective: fixed current
+Building objective: fixed sheet current
+Building objective: self_consistency R
+Building objective: self_consistency Z
+Building objective: lambda gauge
+Building objective: axis R self consistency
+Building objective: axis Z self consistency
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 1.24 sec
+Perturbing Rb_lmn, Zb_lmn
+Factorizing linear constraints
+Timer: linear constraint factorize = 5.77 sec
+Computing df
+Timer: df computation = 16.8 sec
+Factoring df
+Timer: df/dx factorization = 6.27 sec
+Computing d^2f
+Timer: d^2f computation = 9.73 sec
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 2.04 ms
+||dx||/||x|| =  2.326e-02
+Timer: Total perturbation = 49.9 sec
+Building objective: force
+Precomputing transforms
+Timer: Precomputing transforms = 1.53 sec
+ObjectiveFunction deriv_mode : batched
+ObjectiveFunction jac_chunk_size: 8327
+Timer: Objective build = 1.73 sec
+Building objective: lcfs R
+Building objective: lcfs Z
+Building objective: fixed Psi
+Building objective: fixed pressure
+Building objective: fixed current
+Building objective: fixed sheet current
+Building objective: self_consistency R
+Building objective: self_consistency Z
+Building objective: lambda gauge
+Building objective: axis R self consistency
+Building objective: axis Z self consistency
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 242 ms
+Timer: LinearConstraintProjection build = 1.19 sec
+Number of parameters: 6980
+Number of objectives: 37026
+Timer: Initializing the optimization = 3.18 sec
+
+Starting optimization
+Using method: lsq-exact
+Solver options:
+------------------------------------------------------------
+Maximum Function Evaluations       : 1501
+Maximum Allowed Total Δx Norm      : inf
+Scaled Termination                 : True
+Trust Region Method                : qr
+Initial Trust Radius               : 7.418e+02
+Maximum Trust Radius               : inf
+Minimum Trust Radius               : 2.220e-16
+Trust Radius Increase Ratio        : 2.000e+00
+Trust Radius Decrease Ratio        : 2.500e-01
+Trust Radius Increase Threshold    : 7.500e-01
+Trust Radius Decrease Threshold    : 2.500e-01
+------------------------------------------------------------ 
+
+   Iteration     Total nfev        Cost      Cost reduction    Step norm     Optimality   
+       0              1          1.859e-03                                    1.782e-02   
+       1              2          1.374e-05      1.845e-03      3.177e-02      1.079e-03   
+       2              3          2.912e-06      1.083e-05      1.939e-02      5.704e-04   
+       3              4          2.312e-08      2.889e-06      6.789e-03      3.477e-05   
+       4              6          1.081e-08      1.230e-08      2.803e-03      5.309e-05   
+       5              7          8.032e-09      2.779e-09      2.929e-03      4.492e-05   
+       6              9          1.756e-10      7.857e-09      7.982e-04      7.827e-06   
+       7             11          2.503e-11      1.506e-10      4.077e-04      2.799e-06   
+       8             13          1.988e-12      2.304e-11      2.246e-04      5.746e-07   
+       9             15          1.007e-12      9.801e-13      1.148e-04      4.448e-07   
+      10             16          4.581e-13      5.493e-13      1.278e-04      2.473e-07   
+      11             18          1.456e-13      3.125e-13      3.143e-05      2.247e-08   
+      12             20          1.428e-13      2.784e-15      1.883e-05      4.513e-09   
+      13             22          1.427e-13      1.448e-16      9.380e-06      1.060e-09   
+      14             24          1.427e-13      1.435e-17      4.897e-06      2.410e-10   
+      15             25          1.427e-13      6.613e-18      9.462e-06      9.787e-10   
+Optimization terminated successfully.
+`ftol` condition satisfied. (ftol=1.00e-04)
+         Current function value: 1.427e-13
+         Total delta_x: 3.856e-02
+         Iterations: 15
+         Function evaluations: 25
+         Jacobian evaluations: 16
+Timer: Solution time = 50.3 sec
+Timer: Avg time per step = 3.14 sec
+==============================================================================================================
+                                                                 Start  -->   End
+Total (sum of squares):                                      1.859e-03  -->   1.427e-13, 
+Maximum absolute Force error:                                1.091e+05  -->   2.251e-01 (N)
+Minimum absolute Force error:                                3.817e-05  -->   1.499e-07 (N)
+Average absolute Force error:                                1.646e+03  -->   3.860e-03 (N)
+Maximum absolute Force error:                                4.454e-02  -->   9.193e-08 (normalized)
+Minimum absolute Force error:                                1.559e-11  -->   6.121e-14 (normalized)
+Average absolute Force error:                                6.721e-04  -->   1.576e-09 (normalized)
+R boundary error:                                            0.000e+00  -->   1.707e-21 (m)
+Z boundary error:                                            0.000e+00  -->   1.198e-21 (m)
+Fixed Psi error:                                             0.000e+00  -->   0.000e+00 (Wb)
+Fixed pressure profile error:                                0.000e+00  -->   0.000e+00 (Pa)
+Fixed current profile error:                                 0.000e+00  -->   0.000e+00 (A)
+Fixed sheet current error:                                   0.000e+00  -->   0.000e+00 (~)
+==============================================================================================================
+
+[   354.3 s] amp 0.0001: force 1.877e-07 (x2 grid 1.890e-07); resonance {'rho': 0.6375134069707759, 'iota': -0.5, 'd iota/d rho': 0.23397101025332945, "shear rho iota'/iota": -0.29831931175798876}; at resonance {'rho': 0.6375134069707759, '|lambda_mk|': 15.934898305362202, '|lambda_mk| / |lambda_00|': 7.256859978033243e-05, '<|F|>_s / <|grad B^2/2mu0|>_s': 1.840991134142913e-07}; geometric r_2n/r00 at rho 0.6375 ['1.51e-01', '1.33e-04', '1.10e-06', '8.56e-08', '6.88e-08']; force peak {'rho': 0.02, '<|F|>_s / <|grad B^2/2mu0|>_s': 1.1603246382117262e-06}; lambda_mk peak {'rho': 0.81, '|lambda_mk|': 52.32084728853663, '|lambda_mk| / |lambda_00|': 0.00025434611661311155}; 220 s
+[   354.3 s] === amp xi/a = 0.0003 (xi = 3.595e-04 m) ===
+Building objective: force
+Precomputing transforms
+Timer: Precomputing transforms = 800 ms
+ObjectiveFunction deriv_mode : batched
+ObjectiveFunction jac_chunk_size: 8327
+Timer: Objective build = 834 ms
+Building objective: lcfs R
+Building objective: lcfs Z
+Building objective: fixed Psi
+Building objective: fixed pressure
+Building objective: fixed current
+Building objective: fixed sheet current
+Building objective: self_consistency R
+Building objective: self_consistency Z
+Building objective: lambda gauge
+Building objective: axis R self consistency
+Building objective: axis Z self consistency
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 205 ms
+Perturbing Rb_lmn, Zb_lmn
+Factorizing linear constraints
+Timer: linear constraint factorize = 1.14 sec
+Computing df
+Timer: df computation = 1.33 sec
+Factoring df
+Timer: df/dx factorization = 6.79 sec
+Computing d^2f
+Timer: d^2f computation = 20.1 ms
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 1.79 ms
+||dx||/||x|| =  1.020e-02
+Timer: Total perturbation = 10.8 sec
+Building objective: force
+Precomputing transforms
+Timer: Precomputing transforms = 935 ms
+ObjectiveFunction deriv_mode : batched
+ObjectiveFunction jac_chunk_size: 8327
+Timer: Objective build = 971 ms
+Building objective: lcfs R
+Building objective: lcfs Z
+Building objective: fixed Psi
+Building objective: fixed pressure
+Building objective: fixed current
+Building objective: fixed sheet current
+Building objective: self_consistency R
+Building objective: self_consistency Z
+Building objective: lambda gauge
+Building objective: axis R self consistency
+Building objective: axis Z self consistency
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 216 ms
+Timer: LinearConstraintProjection build = 848 ms
+Number of parameters: 6980
+Number of objectives: 37026
+Timer: Initializing the optimization = 2.03 sec
+
+Starting optimization
+Using method: lsq-exact
+Solver options:
+------------------------------------------------------------
+Maximum Function Evaluations       : 1501
+Maximum Allowed Total Δx Norm      : inf
+Scaled Termination                 : True
+Trust Region Method                : qr
+Initial Trust Radius               : 7.418e+02
+Maximum Trust Radius               : inf
+Minimum Trust Radius               : 2.220e-16
+Trust Radius Increase Ratio        : 2.000e+00
+Trust Radius Decrease Ratio        : 2.500e-01
+Trust Radius Increase Threshold    : 7.500e-01
+Trust Radius Decrease Threshold    : 2.500e-01
+------------------------------------------------------------ 
+
+   Iteration     Total nfev        Cost      Cost reduction    Step norm     Optimality   
+       0              1          1.157e-03                                    1.627e-02   
+       1              2          1.405e-06      1.155e-03      1.584e-02      4.931e-04   
+       2              3          8.289e-08      1.322e-06      9.487e-03      6.499e-05   
+       3              5          9.238e-09      7.365e-08      2.906e-03      5.609e-05   
+       4              7          7.446e-10      8.493e-09      1.706e-03      9.940e-06   
+       5             10          3.809e-11      7.065e-10      2.299e-04      3.163e-06   
+       6             11          1.376e-11      2.433e-11      4.597e-04      2.196e-06   
+       7             13          9.287e-12      4.472e-12      1.140e-04      1.476e-06   
+       8             14          5.824e-13      8.705e-12      1.291e-04      3.762e-07   
+       9             16          3.160e-13      2.664e-13      6.165e-05      2.220e-07   
+      10             17          1.737e-13      1.423e-13      6.299e-05      9.274e-08   
+      11             19          1.504e-13      2.325e-14      3.032e-05      4.246e-08   
+      12             21          1.445e-13      5.927e-15      1.563e-05      8.539e-09   
+      13             23          1.442e-13      2.579e-16      7.653e-06      2.486e-09   
+      14             25          1.442e-13      2.742e-17      3.904e-06      5.753e-10   
+      15             27          1.442e-13      3.669e-18      1.961e-06      1.485e-10   
+Optimization terminated successfully.
+`ftol` condition satisfied. (ftol=1.00e-04)
+         Current function value: 1.442e-13
+         Total delta_x: 1.616e-02
+         Iterations: 15
+         Function evaluations: 27
+         Jacobian evaluations: 16
+Timer: Solution time = 42.7 sec
+Timer: Avg time per step = 2.67 sec
+==============================================================================================================
+                                                                 Start  -->   End
+Total (sum of squares):                                      1.157e-03  -->   1.442e-13, 
+Maximum absolute Force error:                                9.031e+03  -->   2.526e-01 (N)
+Minimum absolute Force error:                                1.447e-02  -->   5.135e-08 (N)
+Average absolute Force error:                                1.188e+03  -->   4.191e-03 (N)
+Maximum absolute Force error:                                3.688e-03  -->   1.032e-07 (normalized)
+Minimum absolute Force error:                                5.911e-09  -->   2.097e-14 (normalized)
+Average absolute Force error:                                4.851e-04  -->   1.712e-09 (normalized)
+R boundary error:                                            0.000e+00  -->   2.753e-20 (m)
+Z boundary error:                                            0.000e+00  -->   2.738e-20 (m)
+Fixed Psi error:                                             0.000e+00  -->   0.000e+00 (Wb)
+Fixed pressure profile error:                                0.000e+00  -->   0.000e+00 (Pa)
+Fixed current profile error:                                 0.000e+00  -->   0.000e+00 (A)
+Fixed sheet current error:                                   0.000e+00  -->   0.000e+00 (~)
+==============================================================================================================
+
+[   519.7 s] amp 0.0003: force 2.105e-07 (x2 grid 2.128e-07); resonance {'rho': 0.6375133449084147, 'iota': -0.5, 'd iota/d rho': 0.23396963619883124, "shear rho iota'/iota": -0.29831753076024364}; at resonance {'rho': 0.6375133449084147, '|lambda_mk|': 89.7999680582962, '|lambda_mk| / |lambda_00|': 0.0004089557899607953, '<|F|>_s / <|grad B^2/2mu0|>_s': 2.546199352313453e-07}; geometric r_2n/r00 at rho 0.6375 ['1.51e-01', '3.41e-04', '1.51e-06', '2.08e-08', '1.70e-07']; force peak {'rho': 0.02, '<|F|>_s / <|grad B^2/2mu0|>_s': 1.0082418014678983e-06}; lambda_mk peak {'rho': 0.8, '|lambda_mk|': 151.41241000897728, '|lambda_mk| / |lambda_00|': 0.0007280699034202605}; 165 s
+[   519.7 s] === amp xi/a = 0.001 (xi = 1.198e-03 m) ===
+Building objective: force
+Precomputing transforms
+Timer: Precomputing transforms = 840 ms
+ObjectiveFunction deriv_mode : batched
+ObjectiveFunction jac_chunk_size: 8327
+Timer: Objective build = 874 ms
+Building objective: lcfs R
+Building objective: lcfs Z
+Building objective: fixed Psi
+Building objective: fixed pressure
+Building objective: fixed current
+Building objective: fixed sheet current
+Building objective: self_consistency R
+Building objective: self_consistency Z
+Building objective: lambda gauge
+Building objective: axis R self consistency
+Building objective: axis Z self consistency
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 212 ms
+Perturbing Rb_lmn, Zb_lmn
+Factorizing linear constraints
+Timer: linear constraint factorize = 842 ms
+Computing df
+Timer: df computation = 133 ms
+Factoring df
+Timer: df/dx factorization = 7.82 sec
+Computing d^2f
+Timer: d^2f computation = 17.6 ms
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 1.92 ms
+||dx||/||x|| =  3.802e-02
+Timer: Total perturbation = 10.3 sec
+Building objective: force
+Precomputing transforms
+Timer: Precomputing transforms = 1.00 sec
+ObjectiveFunction deriv_mode : batched
+ObjectiveFunction jac_chunk_size: 8327
+Timer: Objective build = 1.04 sec
+Building objective: lcfs R
+Building objective: lcfs Z
+Building objective: fixed Psi
+Building objective: fixed pressure
+Building objective: fixed current
+Building objective: fixed sheet current
+Building objective: self_consistency R
+Building objective: self_consistency Z
+Building objective: lambda gauge
+Building objective: axis R self consistency
+Building objective: axis Z self consistency
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 217 ms
+Timer: LinearConstraintProjection build = 878 ms
+Number of parameters: 6980
+Number of objectives: 37026
+Timer: Initializing the optimization = 2.13 sec
+
+Starting optimization
+Using method: lsq-exact
+Solver options:
+------------------------------------------------------------
+Maximum Function Evaluations       : 1501
+Maximum Allowed Total Δx Norm      : inf
+Scaled Termination                 : True
+Trust Region Method                : qr
+Initial Trust Radius               : 7.431e+02
+Maximum Trust Radius               : inf
+Minimum Trust Radius               : 2.220e-16
+Trust Radius Increase Ratio        : 2.000e+00
+Trust Radius Decrease Ratio        : 2.500e-01
+Trust Radius Increase Threshold    : 7.500e-01
+Trust Radius Decrease Threshold    : 2.500e-01
+------------------------------------------------------------ 
+
+   Iteration     Total nfev        Cost      Cost reduction    Step norm     Optimality   
+       0              1          5.296e-03                                    2.363e-02   
+       1              2          2.055e-04      5.091e-03      5.640e-02      3.330e-03   
+       2              3          9.544e-06      1.959e-04      3.804e-02      5.522e-04   
+       3              4          2.112e-07      9.333e-06      1.222e-02      1.442e-04   
+       4              6          2.538e-08      1.858e-07      4.352e-03      1.107e-04   
+       5              8          2.619e-09      2.276e-08      2.083e-03      3.605e-05   
+       6             10          4.126e-10      2.207e-09      1.116e-03      1.469e-05   
+       7             12          1.589e-10      2.537e-10      5.631e-04      7.086e-06   
+       8             13          1.268e-10      3.212e-11      4.742e-04      5.117e-06   
+       9             14          5.521e-13      1.263e-10      1.706e-04      3.031e-07   
+      10             16          3.204e-13      2.317e-13      8.600e-05      1.382e-07   
+      11             17          2.025e-13      1.179e-13      7.682e-05      4.148e-08   
+      12             19          1.910e-13      1.148e-14      4.379e-05      2.113e-08   
+      13             21          1.886e-13      2.421e-15      2.178e-05      3.073e-09   
+      14             23          1.884e-13      1.624e-16      1.159e-05      1.219e-09   
+      15             24          1.884e-13      8.026e-17      2.049e-05      3.592e-09   
+      16             25          1.882e-13      1.506e-16      2.033e-05      3.423e-09   
+      17             26          1.881e-13      1.452e-16      2.011e-05      3.171e-09   
+      18             27          1.879e-13      1.363e-16      1.997e-05      2.936e-09   
+      19             29          1.878e-13      1.082e-16      1.049e-05      7.632e-10   
+      20             30          1.877e-13      8.403e-17      1.971e-05      2.800e-09   
+      21             31          1.876e-13      1.204e-16      1.961e-05      2.684e-09   
+      22             33          1.875e-13      8.991e-17      1.032e-05      6.942e-10   
+      23             34          1.874e-13      8.291e-17      1.955e-05      2.711e-09   
+      24             36          1.874e-13      8.419e-17      1.030e-05      6.694e-10   
+      25             37          1.873e-13      8.263e-17      1.961e-05      2.635e-09   
+      26             39          1.872e-13      7.990e-17      1.042e-05      6.469e-10   
+      27             40          1.871e-13      8.339e-17      1.988e-05      2.539e-09   
+      28             42          1.870e-13      7.730e-17      1.075e-05      6.182e-10   
+      29             43          1.869e-13      8.602e-17      2.048e-05      2.426e-09   
+      30             45          1.869e-13      7.680e-17      1.144e-05      5.800e-10   
+      31             46          1.868e-13      9.196e-17      2.169e-05      2.295e-09   
+      32             48          1.867e-13      7.942e-17      1.268e-05      5.307e-10   
+      33             49          1.866e-13      1.022e-16      2.371e-05      2.162e-09   
+      34             51          1.865e-13      8.522e-17      1.430e-05      4.867e-10   
+      35             52          1.864e-13      1.120e-16      2.585e-05      2.117e-09   
+      36             54          1.863e-13      8.892e-17      1.512e-05      5.138e-10   
+      37             55          1.862e-13      1.093e-16      2.621e-05      2.405e-09   
+      38             57          1.861e-13      8.524e-17      1.411e-05      6.373e-10   
+      39             58          1.860e-13      9.475e-17      2.445e-05      2.835e-09   
+      40             60          1.859e-13      8.076e-17      1.237e-05      7.388e-10   
+      41             61          1.859e-13      8.128e-17      2.246e-05      3.089e-09   
+      42             63          1.858e-13      7.927e-17      1.114e-05      7.903e-10   
+      43             64          1.857e-13      7.203e-17      2.112e-05      3.241e-09   
+      44             65          1.856e-13      9.896e-17      2.049e-05      3.206e-09   
+      45             67          1.855e-13      7.940e-17      1.020e-05      8.640e-10   
+      46             68          1.855e-13      5.914e-17      1.985e-05      3.707e-09   
+      47             69          1.854e-13      9.544e-17      1.950e-05      3.809e-09   
+      48             70          1.853e-13      8.853e-17      1.918e-05      4.349e-09   
+      49             71          1.852e-13      8.598e-17      1.887e-05      5.120e-09   
+      50             72          1.851e-13      7.300e-17      1.857e-05      6.377e-09   
+      51             73          1.851e-13      6.848e-17      1.839e-05      7.706e-09   
+      52             74          1.850e-13      6.936e-17      1.827e-05      8.642e-09   
+      53             75          1.847e-13      2.502e-16      4.639e-06      5.915e-10   
+      54             76          1.847e-13      3.348e-17      9.060e-06      2.599e-09   
+      55             77          1.847e-13      5.500e-17      9.078e-06      2.424e-09   
+      56             79          1.846e-13      4.436e-17      4.571e-06      6.038e-10   
+      57             80          1.846e-13      3.194e-17      9.083e-06      2.373e-09   
+      58             81          1.845e-13      5.180e-17      9.139e-06      2.208e-09   
+      59             83          1.845e-13      3.971e-17      4.616e-06      5.425e-10   
+      60             84          1.845e-13      3.288e-17      9.177e-06      2.106e-09   
+      61             85          1.844e-13      4.805e-17      9.230e-06      1.966e-09   
+      62             87          1.844e-13      3.443e-17      4.668e-06      4.824e-10   
+      63             88          1.843e-13      3.378e-17      9.265e-06      1.856e-09   
+      64             90          1.843e-13      3.208e-17      4.695e-06      4.474e-10   
+      65             91          1.843e-13      3.402e-17      9.303e-06      1.721e-09   
+      66             93          1.842e-13      2.962e-17      4.714e-06      4.176e-10   
+      67             94          1.842e-13      3.407e-17      9.330e-06      1.603e-09   
+      68             96          1.842e-13      2.765e-17      4.727e-06      3.913e-10   
+      69             97          1.841e-13      3.395e-17      9.344e-06      1.499e-09   
+      70             98          1.841e-13      1.591e-18      1.850e-05      5.309e-09   
+      71             99          1.840e-13      1.020e-16      4.782e-06      3.375e-10   
+      72             100         1.840e-13      3.329e-17      9.362e-06      1.316e-09   
+      73             101         1.840e-13      1.446e-17      1.843e-05      4.672e-09   
+      74             102         1.839e-13      8.262e-17      4.766e-06      3.088e-10   
+      75             103         1.839e-13      3.240e-17      9.305e-06      1.183e-09   
+      76             104         1.839e-13      2.187e-17      1.827e-05      4.191e-09   
+      77             105         1.838e-13      7.399e-17      1.819e-05      3.965e-09   
+      78             106         1.837e-13      7.132e-17      1.808e-05      3.785e-09   
+      79             107         1.836e-13      6.939e-17      1.795e-05      3.615e-09   
+      80             108         1.836e-13      6.764e-17      1.781e-05      3.454e-09   
+      81             109         1.835e-13      6.609e-17      1.767e-05      3.311e-09   
+      82             110         1.834e-13      6.461e-17      1.752e-05      3.171e-09   
+      83             111         1.834e-13      6.323e-17      1.738e-05      3.036e-09   
+      84             112         1.833e-13      6.190e-17      1.723e-05      2.897e-09   
+      85             113         1.833e-13      6.062e-17      1.708e-05      2.763e-09   
+      86             114         1.832e-13      5.938e-17      1.694e-05      2.681e-09   
+      87             115         1.831e-13      5.816e-17      1.679e-05      2.657e-09   
+      88             116         1.831e-13      5.698e-17      1.664e-05      2.637e-09   
+      89             117         1.830e-13      5.582e-17      1.649e-05      2.623e-09   
+      90             118         1.830e-13      5.471e-17      1.634e-05      2.613e-09   
+      91             119         1.829e-13      5.363e-17      1.620e-05      2.608e-09   
+      92             120         1.829e-13      5.260e-17      1.607e-05      2.611e-09   
+      93             121         1.828e-13      5.162e-17      1.595e-05      2.618e-09   
+      94             122         1.828e-13      5.069e-17      1.585e-05      2.634e-09   
+      95             123         1.827e-13      4.983e-17      1.575e-05      2.657e-09   
+      96             124         1.827e-13      4.902e-17      1.567e-05      2.689e-09   
+      97             125         1.826e-13      4.827e-17      1.561e-05      2.729e-09   
+      98             126         1.826e-13      4.758e-17      1.557e-05      2.778e-09   
+      99             127         1.825e-13      4.694e-17      1.554e-05      2.836e-09   
+      100            128         1.825e-13      4.684e-17      1.553e-05      2.877e-09   
+      101            129         1.824e-13      4.572e-17      1.553e-05      2.958e-09   
+      102            130         1.824e-13      4.538e-17      1.555e-05      3.039e-09   
+      103            131         1.823e-13      4.489e-17      1.558e-05      3.130e-09   
+      104            132         1.823e-13      4.458e-17      1.562e-05      3.223e-09   
+      105            133         1.823e-13      4.425e-17      1.567e-05      3.319e-09   
+      106            134         1.822e-13      4.402e-17      1.573e-05      3.417e-09   
+      107            135         1.822e-13      4.382e-17      1.580e-05      3.513e-09   
+      108            136         1.821e-13      4.368e-17      1.587e-05      3.607e-09   
+      109            137         1.821e-13      4.356e-17      1.594e-05      3.696e-09   
+      110            138         1.820e-13      4.347e-17      1.602e-05      3.784e-09   
+      111            139         1.820e-13      4.339e-17      1.609e-05      3.865e-09   
+      112            140         1.819e-13      4.331e-17      1.616e-05      3.941e-09   
+      113            141         1.819e-13      4.321e-17      1.622e-05      4.015e-09   
+      114            142         1.819e-13      4.309e-17      1.628e-05      4.085e-09   
+      115            143         1.818e-13      4.295e-17      1.633e-05      4.153e-09   
+      116            144         1.818e-13      4.278e-17      1.638e-05      4.222e-09   
+      117            145         1.817e-13      4.259e-17      1.642e-05      4.290e-09   
+      118            146         1.817e-13      4.235e-17      1.645e-05      4.365e-09   
+      119            147         1.816e-13      4.211e-17      1.648e-05      4.441e-09   
+      120            148         1.816e-13      4.182e-17      1.651e-05      4.526e-09   
+      121            149         1.816e-13      4.151e-17      1.653e-05      4.621e-09   
+      122            150         1.815e-13      4.118e-17      1.655e-05      4.727e-09   
+      123            151         1.815e-13      4.081e-17      1.657e-05      4.847e-09   
+      124            152         1.814e-13      4.043e-17      1.659e-05      4.984e-09   
+      125            153         1.814e-13      3.999e-17      1.662e-05      5.141e-09   
+      126            154         1.814e-13      3.953e-17      1.666e-05      5.321e-09   
+      127            155         1.813e-13      3.901e-17      1.670e-05      5.528e-09   
+      128            156         1.813e-13      3.845e-17      1.676e-05      5.765e-09   
+      129            157         1.812e-13      3.782e-17      1.683e-05      6.066e-09   
+      130            158         1.812e-13      3.942e-17      1.693e-05      6.348e-09   
+      131            159         1.812e-13      3.709e-17      1.704e-05      6.726e-09   
+      132            160         1.810e-13      1.319e-16      4.634e-06      5.004e-10   
+      133            161         1.810e-13      1.369e-17      8.910e-06      2.228e-09   
+Optimization terminated successfully.
+`ftol` condition satisfied. (ftol=1.00e-04)
+         Current function value: 1.810e-13
+         Total delta_x: 5.423e-02
+         Iterations: 133
+         Function evaluations: 161
+         Jacobian evaluations: 134
+Timer: Solution time = 4.88 min
+Timer: Avg time per step = 2.18 sec
+==============================================================================================================
+                                                                 Start  -->   End
+Total (sum of squares):                                      5.296e-03  -->   1.810e-13, 
+Maximum absolute Force error:                                3.403e+05  -->   4.965e-01 (N)
+Minimum absolute Force error:                                3.516e-04  -->   2.058e-08 (N)
+Average absolute Force error:                                2.575e+03  -->   9.147e-03 (N)
+Maximum absolute Force error:                                1.390e-01  -->   2.027e-07 (normalized)
+Minimum absolute Force error:                                1.436e-10  -->   8.404e-15 (normalized)
+Average absolute Force error:                                1.052e-03  -->   3.735e-09 (normalized)
+R boundary error:                                            0.000e+00  -->   1.539e-19 (m)
+Z boundary error:                                            0.000e+00  -->   6.790e-21 (m)
+Fixed Psi error:                                             0.000e+00  -->   0.000e+00 (Wb)
+Fixed pressure profile error:                                0.000e+00  -->   0.000e+00 (Pa)
+Fixed current profile error:                                 0.000e+00  -->   0.000e+00 (A)
+Fixed sheet current error:                                   0.000e+00  -->   0.000e+00 (~)
+==============================================================================================================
+
+[   932.3 s] amp 0.001: force 5.000e-07 (x2 grid 5.047e-07); resonance {'rho': 0.6375125386225877, 'iota': -0.5000000000000001, 'd iota/d rho': 0.23396526220229472, "shear rho iota'/iota": -0.2983115765121685}; at resonance {'rho': 0.6375125386225877, '|lambda_mk|': 282.12895126303215, '|lambda_mk| / |lambda_00|': 0.0012848380687046303, '<|F|>_s / <|grad B^2/2mu0|>_s': 6.996843587790671e-07}; geometric r_2n/r00 at rho 0.6375 ['1.51e-01', '1.18e-03', '2.36e-06', '1.60e-07', '1.13e-07']; force peak {'rho': 0.02, '<|F|>_s / <|grad B^2/2mu0|>_s': 1.084683467859858e-06}; lambda_mk peak {'rho': 0.8, '|lambda_mk|': 490.0872754906201, '|lambda_mk| / |lambda_00|': 0.0022750959373897496}; 413 s
+[   932.3 s] === amp xi/a = 0.003 (xi = 3.595e-03 m) ===
+Building objective: force
+Precomputing transforms
+Timer: Precomputing transforms = 871 ms
+ObjectiveFunction deriv_mode : batched
+ObjectiveFunction jac_chunk_size: 8327
+Timer: Objective build = 905 ms
+Building objective: lcfs R
+Building objective: lcfs Z
+Building objective: fixed Psi
+Building objective: fixed pressure
+Building objective: fixed current
+Building objective: fixed sheet current
+Building objective: self_consistency R
+Building objective: self_consistency Z
+Building objective: lambda gauge
+Building objective: axis R self consistency
+Building objective: axis Z self consistency
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 212 ms
+Perturbing Rb_lmn, Zb_lmn
+Factorizing linear constraints
+Timer: linear constraint factorize = 814 ms
+Computing df
+Timer: df computation = 1.34 sec
+Factoring df
+Timer: df/dx factorization = 6.67 sec
+Computing d^2f
+Timer: d^2f computation = 16.0 ms
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 1.84 ms
+||dx||/||x|| =  4.693e-02
+Timer: Total perturbation = 10.3 sec
+Building objective: force
+Precomputing transforms
+Timer: Precomputing transforms = 895 ms
+ObjectiveFunction deriv_mode : batched
+ObjectiveFunction jac_chunk_size: 8327
+Timer: Objective build = 929 ms
+Building objective: lcfs R
+Building objective: lcfs Z
+Building objective: fixed Psi
+Building objective: fixed pressure
+Building objective: fixed current
+Building objective: fixed sheet current
+Building objective: self_consistency R
+Building objective: self_consistency Z
+Building objective: lambda gauge
+Building objective: axis R self consistency
+Building objective: axis Z self consistency
+ObjectiveFunction deriv_mode : blocked
+lcfs R jac_chunk_size: None
+lcfs Z jac_chunk_size: None
+fixed Psi jac_chunk_size: None
+fixed pressure jac_chunk_size: None
+fixed current jac_chunk_size: None
+fixed sheet current jac_chunk_size: None
+self_consistency R jac_chunk_size: None
+self_consistency Z jac_chunk_size: None
+lambda gauge jac_chunk_size: None
+axis R self consistency jac_chunk_size: None
+axis Z self consistency jac_chunk_size: None
+Timer: Objective build = 212 ms
+Timer: LinearConstraintProjection build = 852 ms
+Number of parameters: 6980
+Number of objectives: 37026
+Timer: Initializing the optimization = 1.99 sec
+
+Starting optimization
+Using method: lsq-exact
+Solver options:
+------------------------------------------------------------
+Maximum Function Evaluations       : 1501
+Maximum Allowed Total Δx Norm      : inf
+Scaled Termination                 : True
+Trust Region Method                : qr
+Initial Trust Radius               : 7.359e+02
+Maximum Trust Radius               : inf
+Minimum Trust Radius               : 2.220e-16
+Trust Radius Increase Ratio        : 2.000e+00
+Trust Radius Decrease Ratio        : 2.500e-01
+Trust Radius Increase Threshold    : 7.500e-01
+Trust Radius Decrease Threshold    : 2.500e-01
+------------------------------------------------------------ 
+
+   Iteration     Total nfev        Cost      Cost reduction    Step norm     Optimality   
+       0              1          4.275e-03                                    2.086e-02   
+       1              2          5.441e-04      3.731e-03      8.480e-02      5.392e-03   
+       2              3          8.312e-05      4.610e-04      7.616e-02      1.989e-03   
+       3              4          9.340e-07      8.218e-05      1.848e-02      1.262e-04   
+       4              5          5.767e-07      3.573e-07      1.555e-02      4.075e-04   
+       5              7          2.720e-08      5.495e-07      6.266e-03      3.923e-05   
+       6              9          1.020e-08      1.700e-08      3.553e-03      5.299e-05   
+       7             10          5.762e-09      4.437e-09      3.088e-03      2.638e-05   
+       8             12          1.116e-10      5.650e-09      1.022e-03      5.621e-06   
+       9             14          1.270e-11      9.894e-11      5.920e-04      1.867e-06   
+      10             16          2.814e-12      9.887e-12      2.983e-04      6.875e-07   
+      11             18          7.884e-13      2.025e-12      1.522e-04      2.219e-07   
+      12             20          5.302e-13      2.582e-13      7.413e-05      5.582e-08   
+      13             22          5.164e-13      1.377e-14      3.576e-05      1.516e-08   
+      14             24          5.151e-13      1.329e-15      1.686e-05      3.544e-09   
+      15             25          5.151e-13      3.363e-17      3.200e-05      1.332e-08   
+      16             26          5.142e-13      8.847e-16      8.283e-06      9.065e-10   
+      17             27          5.139e-13      3.000e-16      1.594e-05      3.537e-09   
+      18             28          5.138e-13      1.058e-16      3.154e-05      1.313e-08   
+      19             29          5.130e-13      7.746e-16      8.158e-06      9.100e-10   
+      20             30          5.127e-13      2.912e-16      1.582e-05      3.505e-09   
+      21             31          5.126e-13      1.271e-16      3.143e-05      1.289e-08   
+      22             32          5.119e-13      7.236e-16      8.124e-06      8.793e-10   
+      23             33          5.116e-13      2.854e-16      1.581e-05      3.363e-09   
+      24             34          5.114e-13      1.675e-16      3.141e-05      1.232e-08   
+      25             35          5.107e-13      6.677e-16      3.153e-05      1.182e-08   
+      26             36          5.101e-13      6.391e-16      3.154e-05      1.147e-08   
+      27             37          5.095e-13      6.324e-16      3.157e-05      1.104e-08   
+      28             38          5.088e-13      6.188e-16      3.160e-05      1.060e-08   
+      29             39          5.082e-13      6.063e-16      3.163e-05      1.016e-08   
+      30             40          5.076e-13      5.943e-16      3.166e-05      9.746e-09   
+      31             41          5.071e-13      5.840e-16      3.170e-05      9.365e-09   
+      32             42          5.065e-13      5.751e-16      3.173e-05      9.021e-09   
+      33             43          5.059e-13      5.673e-16      3.177e-05      8.712e-09   
+      34             44          5.054e-13      5.605e-16      3.182e-05      8.437e-09   
+      35             45          5.048e-13      5.545e-16      3.187e-05      8.190e-09   
+      36             46          5.043e-13      5.490e-16      3.194e-05      7.967e-09   
+      37             47          5.037e-13      5.440e-16      3.201e-05      7.759e-09   
+      38             48          5.032e-13      5.441e-16      3.212e-05      7.484e-09   
+      39             49          5.026e-13      5.349e-16      3.222e-05      7.299e-09   
+      40             50          5.021e-13      5.313e-16      3.233e-05      7.108e-09   
+      41             51          5.016e-13      5.275e-16      3.247e-05      6.914e-09   
+      42             52          5.010e-13      5.236e-16      3.261e-05      6.721e-09   
+      43             53          5.005e-13      5.186e-16      3.278e-05      6.539e-09   
+      44             54          5.000e-13      5.102e-16      3.296e-05      6.392e-09   
+      45             55          4.995e-13      4.923e-16      3.319e-05      6.319e-09   
+      46             56          4.991e-13      4.604e-16      3.351e-05      6.271e-09   
+      47             57          4.987e-13      3.736e-16      3.389e-05      6.463e-09   
+      48             58          4.985e-13      2.364e-16      3.433e-05      6.876e-09   
+      49             59          4.972e-13      1.247e-15      1.072e-05      6.130e-10   
+      50             60          4.970e-13      1.687e-16      1.850e-05      2.327e-09   
+      51             61          4.967e-13      3.476e-16      1.827e-05      2.404e-09   
+      52             62          4.963e-13      3.517e-16      1.817e-05      2.479e-09   
+      53             63          4.960e-13      3.643e-16      1.806e-05      2.501e-09   
+      54             64          4.956e-13      3.694e-16      1.792e-05      2.491e-09   
+      55             65          4.952e-13      3.773e-16      1.780e-05      2.406e-09   
+      56             66          4.949e-13      3.751e-16      1.767e-05      2.289e-09   
+      57             67          4.945e-13      3.691e-16      1.753e-05      2.152e-09   
+      58             69          4.942e-13      2.924e-16      9.156e-06      5.310e-10   
+      59             70          4.940e-13      2.425e-16      1.717e-05      1.975e-09   
+      60             71          4.936e-13      3.451e-16      1.710e-05      1.799e-09   
+      61             73          4.934e-13      2.375e-16      8.904e-06      4.391e-10   
+      62             74          4.931e-13      2.581e-16      1.687e-05      1.613e-09   
+      63             75          4.931e-13      4.877e-17      3.256e-05      6.130e-09   
+      64             76          4.923e-13      7.559e-16      9.022e-06      3.251e-10   
+      65             77          4.920e-13      2.575e-16      1.677e-05      1.277e-09   
+      66             78          4.918e-13      2.546e-16      3.230e-05      5.098e-09   
+      67             79          4.912e-13      6.102e-16      3.244e-05      4.660e-09   
+      68             80          4.906e-13      5.549e-16      3.238e-05      4.338e-09   
+      69             82          4.902e-13      4.145e-16      1.668e-05      9.501e-10   
+      70             83          4.899e-13      3.502e-16      3.197e-05      4.049e-09   
+      71             84          4.894e-13      4.718e-16      3.198e-05      3.944e-09   
+      72             86          4.891e-13      3.277e-16      1.640e-05      9.167e-10   
+      73             87          4.887e-13      3.452e-16      3.170e-05      3.818e-09   
+      74             89          4.884e-13      3.006e-16      1.623e-05      8.893e-10   
+      75             90          4.881e-13      3.369e-16      3.156e-05      3.762e-09   
+      76             92          4.878e-13      2.826e-16      1.613e-05      8.858e-10   
+      77             93          4.875e-13      3.283e-16      3.143e-05      3.727e-09   
+      78             95          4.872e-13      2.696e-16      1.604e-05      8.881e-10   
+      79             96          4.869e-13      3.201e-16      3.131e-05      3.708e-09   
+      80             98          4.866e-13      2.593e-16      1.595e-05      8.926e-10   
+      81             99          4.863e-13      3.126e-16      3.119e-05      3.704e-09   
+      82             101         4.861e-13      2.510e-16      1.587e-05      8.990e-10   
+      83             102         4.858e-13      3.056e-16      3.105e-05      3.710e-09   
+      84             104         4.855e-13      2.439e-16      1.577e-05      9.062e-10   
+      85             105         4.852e-13      2.991e-16      3.090e-05      3.724e-09   
+      86             107         4.850e-13      2.377e-16      1.567e-05      9.144e-10   
+      87             108         4.847e-13      2.930e-16      3.074e-05      3.742e-09   
+      88             110         4.844e-13      2.323e-16      1.557e-05      9.218e-10   
+      89             111         4.842e-13      2.871e-16      3.056e-05      3.759e-09   
+      90             113         4.839e-13      2.274e-16      1.545e-05      9.283e-10   
+      91             114         4.837e-13      2.815e-16      3.038e-05      3.775e-09   
+      92             116         4.834e-13      2.230e-16      1.534e-05      9.334e-10   
+      93             117         4.832e-13      2.759e-16      3.019e-05      3.786e-09   
+      94             119         4.829e-13      2.188e-16      1.523e-05      9.373e-10   
+      95             120         4.827e-13      2.704e-16      3.001e-05      3.795e-09   
+      96             122         4.824e-13      2.150e-16      1.512e-05      9.402e-10   
+      97             123         4.822e-13      2.650e-16      2.982e-05      3.802e-09   
+      98             125         4.820e-13      2.113e-16      1.501e-05      9.423e-10   
+      99             126         4.817e-13      2.595e-16      2.965e-05      3.809e-09   
+      100            128         4.815e-13      2.078e-16      1.491e-05      9.445e-10   
+      101            129         4.812e-13      2.541e-16      2.947e-05      3.817e-09   
+      102            131         4.810e-13      2.045e-16      1.481e-05      9.466e-10   
+      103            132         4.808e-13      2.486e-16      2.930e-05      3.828e-09   
+      104            134         4.806e-13      2.012e-16      1.472e-05      9.504e-10   
+      105            135         4.804e-13      2.431e-16      2.914e-05      3.844e-09   
+      106            137         4.802e-13      1.980e-16      1.463e-05      9.551e-10   
+      107            138         4.799e-13      2.376e-16      2.897e-05      3.867e-09   
+      108            140         4.797e-13      1.948e-16      1.455e-05      9.616e-10   
+      109            141         4.795e-13      2.320e-16      2.880e-05      3.896e-09   
+      110            143         4.793e-13      1.917e-16      1.446e-05      9.696e-10   
+      111            144         4.791e-13      2.264e-16      2.863e-05      3.931e-09   
+      112            146         4.789e-13      1.887e-16      1.437e-05      9.795e-10   
+      113            147         4.787e-13      2.208e-16      2.846e-05      3.974e-09   
+      114            149         4.785e-13      1.857e-16      1.428e-05      9.913e-10   
+      115            150         4.783e-13      2.150e-16      2.828e-05      4.023e-09   
+      116            152         4.781e-13      1.827e-16      1.419e-05      1.005e-09   
+      117            153         4.779e-13      2.093e-16      2.810e-05      4.078e-09   
+      118            155         4.777e-13      1.797e-16      1.410e-05      1.020e-09   
+      119            156         4.775e-13      2.034e-16      2.792e-05      4.139e-09   
+      120            158         4.773e-13      1.767e-16      1.400e-05      1.036e-09   
+      121            159         4.771e-13      1.975e-16      2.773e-05      4.203e-09   
+      122            161         4.769e-13      1.738e-16      1.391e-05      1.053e-09   
+      123            162         4.767e-13      1.916e-16      2.754e-05      4.271e-09   
+      124            164         4.766e-13      1.709e-16      1.381e-05      1.071e-09   
+      125            165         4.764e-13      1.856e-16      2.735e-05      4.340e-09   
+      126            167         4.762e-13      1.680e-16      1.371e-05      1.090e-09   
+      127            168         4.760e-13      1.796e-16      2.716e-05      4.410e-09   
+      128            170         4.759e-13      1.651e-16      1.362e-05      1.108e-09   
+      129            171         4.757e-13      1.736e-16      2.697e-05      4.480e-09   
+      130            173         4.755e-13      1.623e-16      1.352e-05      1.126e-09   
+      131            174         4.754e-13      1.677e-16      2.677e-05      4.547e-09   
+      132            176         4.752e-13      1.595e-16      1.342e-05      1.144e-09   
+      133            177         4.751e-13      1.619e-16      2.658e-05      4.611e-09   
+      134            179         4.749e-13      1.567e-16      1.333e-05      1.160e-09   
+      135            180         4.747e-13      1.561e-16      2.639e-05      4.668e-09   
+      136            182         4.746e-13      1.540e-16      1.323e-05      1.174e-09   
+      137            183         4.744e-13      1.505e-16      2.620e-05      4.717e-09   
+      138            184         4.742e-13      1.987e-16      2.608e-05      4.712e-09   
+      139            186         4.741e-13      1.491e-16      1.308e-05      1.194e-09   
+      140            187         4.739e-13      1.416e-16      2.589e-05      4.776e-09   
+      141            188         4.738e-13      1.900e-16      2.576e-05      4.754e-09   
+      142            190         4.736e-13      1.445e-16      1.292e-05      1.205e-09   
+      143            191         4.735e-13      1.333e-16      2.557e-05      4.799e-09   
+      144            192         4.733e-13      1.816e-16      2.545e-05      4.759e-09   
+      145            194         4.732e-13      1.398e-16      1.275e-05      1.204e-09   
+      146            195         4.730e-13      1.256e-16      2.526e-05      4.781e-09   
+      147            196         4.729e-13      1.736e-16      2.514e-05      4.723e-09   
+      148            198         4.727e-13      1.351e-16      1.260e-05      1.193e-09   
+      149            199         4.726e-13      1.187e-16      2.497e-05      4.721e-09   
+      150            200         4.724e-13      1.662e-16      2.486e-05      4.648e-09   
+      151            202         4.723e-13      1.304e-16      1.245e-05      1.172e-09   
+      152            203         4.722e-13      1.128e-16      2.470e-05      4.627e-09   
+      153            204         4.720e-13      1.593e-16      2.460e-05      4.543e-09   
+      154            206         4.719e-13      1.257e-16      1.233e-05      1.144e-09   
+      155            207         4.718e-13      1.076e-16      2.446e-05      4.509e-09   
+      156            208         4.716e-13      1.529e-16      2.438e-05      4.417e-09   
+      157            210         4.715e-13      1.211e-16      1.222e-05      1.112e-09   
+      158            211         4.714e-13      1.031e-16      2.427e-05      4.375e-09   
+      159            212         4.713e-13      1.470e-16      2.420e-05      4.283e-09   
+      160            214         4.712e-13      1.166e-16      1.213e-05      1.077e-09   
+      161            215         4.711e-13      9.902e-17      2.411e-05      4.238e-09   
+      162            216         4.709e-13      1.415e-16      2.406e-05      4.147e-09   
+      163            218         4.708e-13      1.123e-16      1.206e-05      1.044e-09   
+      164            219         4.707e-13      9.539e-17      2.399e-05      4.106e-09   
+      165            220         4.706e-13      1.363e-16      2.395e-05      4.037e-09   
+      166            222         4.705e-13      1.082e-16      1.201e-05      1.015e-09   
+      167            223         4.704e-13      9.206e-17      2.389e-05      4.006e-09   
+      168            224         4.702e-13      1.315e-16      2.386e-05      3.940e-09   
+      169            226         4.701e-13      1.043e-16      1.197e-05      9.911e-10   
+      170            227         4.701e-13      8.897e-17      2.381e-05      3.914e-09   
+      171            228         4.699e-13      1.270e-16      2.378e-05      3.852e-09   
+      172            230         4.698e-13      1.007e-16      1.193e-05      9.705e-10   
+      173            231         4.697e-13      8.606e-17      2.374e-05      3.831e-09   
+      174            232         4.696e-13      1.228e-16      2.372e-05      3.772e-09   
+      175            234         4.695e-13      9.729e-17      1.189e-05      9.511e-10   
+      176            235         4.694e-13      8.329e-17      2.368e-05      3.755e-09   
+      177            236         4.693e-13      1.188e-16      2.366e-05      3.698e-09   
+      178            238         4.692e-13      9.411e-17      1.186e-05      9.334e-10   
+      179            239         4.691e-13      8.064e-17      2.362e-05      3.683e-09   
+      180            240         4.690e-13      1.150e-16      2.359e-05      3.629e-09   
+      181            242         4.689e-13      9.113e-17      1.182e-05      9.166e-10   
+      182            243         4.689e-13      7.810e-17      2.355e-05      3.615e-09   
+      183            244         4.687e-13      1.115e-16      2.353e-05      3.561e-09   
+      184            246         4.687e-13      8.834e-17      1.179e-05      9.003e-10   
+      185            247         4.686e-13      7.566e-17      2.349e-05      3.550e-09   
+      186            248         4.685e-13      1.081e-16      2.347e-05      3.498e-09   
+      187            250         4.684e-13      8.577e-17      1.176e-05      8.847e-10   
+      188            251         4.683e-13      7.328e-17      2.343e-05      3.489e-09   
+      189            252         4.682e-13      1.049e-16      2.341e-05      3.440e-09   
+      190            254         4.681e-13      8.347e-17      1.172e-05      8.705e-10   
+      191            255         4.681e-13      7.094e-17      2.337e-05      3.436e-09   
+      192            256         4.680e-13      1.019e-16      2.335e-05      3.391e-09   
+      193            258         4.679e-13      8.148e-17      1.169e-05      8.591e-10   
+      194            259         4.678e-13      6.862e-17      2.331e-05      3.394e-09   
+      195            260         4.677e-13      9.914e-17      2.330e-05      3.355e-09   
+      196            262         4.676e-13      7.984e-17      1.166e-05      8.509e-10   
+      197            263         4.676e-13      6.633e-17      2.326e-05      3.367e-09   
+      198            264         4.675e-13      9.664e-17      2.325e-05      3.335e-09   
+      199            266         4.674e-13      7.854e-17      1.164e-05      8.476e-10   
+      200            267         4.673e-13      6.407e-17      2.322e-05      3.358e-09   
+      201            268         4.672e-13      9.501e-17      2.322e-05      3.302e-09   
+      202            270         4.671e-13      7.695e-17      1.162e-05      8.501e-10   
+      203            271         4.671e-13      6.185e-17      2.319e-05      3.367e-09   
+      204            272         4.670e-13      9.295e-17      2.319e-05      3.322e-09   
+      205            273         4.669e-13      9.122e-17      2.318e-05      3.346e-09   
+      206            274         4.668e-13      9.064e-17      2.317e-05      3.364e-09   
+      207            275         4.667e-13      8.996e-17      2.317e-05      3.386e-09   
+      208            276         4.666e-13      8.933e-17      2.317e-05      3.409e-09   
+      209            277         4.665e-13      8.872e-17      2.317e-05      3.433e-09   
+      210            278         4.665e-13      8.815e-17      2.317e-05      3.457e-09   
+      211            279         4.664e-13      8.762e-17      2.317e-05      3.478e-09   
+      212            280         4.663e-13      8.713e-17      2.317e-05      3.494e-09   
+      213            281         4.662e-13      8.668e-17      2.317e-05      3.500e-09   
+      214            282         4.661e-13      8.626e-17      2.317e-05      3.492e-09   
+      215            283         4.660e-13      8.587e-17      2.318e-05      3.469e-09   
+      216            284         4.659e-13      8.545e-17      2.318e-05      3.429e-09   
+      217            285         4.658e-13      8.500e-17      2.318e-05      3.374e-09   
+      218            286         4.658e-13      8.449e-17      2.318e-05      3.311e-09   
+      219            287         4.657e-13      8.393e-17      2.319e-05      3.244e-09   
+      220            288         4.656e-13      8.332e-17      2.319e-05      3.179e-09   
+      221            289         4.655e-13      8.269e-17      2.320e-05      3.120e-09   
+      222            290         4.654e-13      8.207e-17      2.320e-05      3.068e-09   
+      223            291         4.654e-13      8.146e-17      2.321e-05      3.023e-09   
+      224            292         4.653e-13      8.087e-17      2.322e-05      2.985e-09   
+      225            293         4.652e-13      8.030e-17      2.323e-05      2.955e-09   
+      226            294         4.651e-13      7.975e-17      2.324e-05      2.929e-09   
+      227            295         4.650e-13      7.922e-17      2.325e-05      2.909e-09   
+      228            296         4.650e-13      7.871e-17      2.326e-05      2.892e-09   
+      229            297         4.649e-13      7.822e-17      2.328e-05      2.879e-09   
+      230            298         4.648e-13      7.775e-17      2.329e-05      2.869e-09   
+      231            299         4.647e-13      7.730e-17      2.330e-05      2.861e-09   
+      232            300         4.646e-13      7.686e-17      2.332e-05      2.855e-09   
+      233            301         4.646e-13      7.644e-17      2.333e-05      2.850e-09   
+      234            302         4.645e-13      7.603e-17      2.335e-05      2.847e-09   
+      235            303         4.644e-13      7.564e-17      2.337e-05      2.844e-09   
+      236            304         4.643e-13      7.525e-17      2.338e-05      2.843e-09   
+      237            305         4.643e-13      7.488e-17      2.340e-05      2.842e-09   
+      238            306         4.642e-13      7.452e-17      2.342e-05      2.843e-09   
+      239            307         4.641e-13      7.418e-17      2.343e-05      2.842e-09   
+      240            308         4.640e-13      7.384e-17      2.345e-05      2.843e-09   
+      241            309         4.640e-13      7.351e-17      2.347e-05      2.845e-09   
+      242            310         4.639e-13      7.320e-17      2.349e-05      2.846e-09   
+      243            311         4.638e-13      7.289e-17      2.351e-05      2.848e-09   
+      244            312         4.637e-13      7.260e-17      2.353e-05      2.850e-09   
+      245            313         4.637e-13      7.232e-17      2.355e-05      2.852e-09   
+      246            314         4.636e-13      7.204e-17      2.357e-05      2.854e-09   
+      247            315         4.635e-13      7.177e-17      2.359e-05      2.857e-09   
+      248            316         4.635e-13      7.152e-17      2.361e-05      2.860e-09   
+      249            317         4.634e-13      7.127e-17      2.363e-05      2.863e-09   
+      250            318         4.633e-13      7.103e-17      2.365e-05      2.866e-09   
+      251            319         4.632e-13      7.079e-17      2.367e-05      2.870e-09   
+      252            320         4.632e-13      7.056e-17      2.369e-05      2.874e-09   
+      253            321         4.631e-13      7.034e-17      2.371e-05      2.879e-09   
+      254            322         4.630e-13      7.011e-17      2.373e-05      2.884e-09   
+      255            323         4.630e-13      6.989e-17      2.375e-05      2.890e-09   
+      256            324         4.629e-13      6.966e-17      2.377e-05      2.897e-09   
+      257            325         4.628e-13      6.944e-17      2.379e-05      2.906e-09   
+      258            326         4.628e-13      6.921e-17      2.380e-05      2.915e-09   
+      259            327         4.627e-13      6.898e-17      2.382e-05      2.925e-09   
+      260            328         4.626e-13      6.876e-17      2.384e-05      2.936e-09   
+      261            329         4.626e-13      6.853e-17      2.386e-05      2.949e-09   
+      262            330         4.625e-13      6.831e-17      2.387e-05      2.963e-09   
+      263            331         4.624e-13      6.809e-17      2.389e-05      2.977e-09   
+      264            332         4.623e-13      6.788e-17      2.391e-05      2.992e-09   
+      265            333         4.623e-13      6.767e-17      2.392e-05      3.009e-09   
+      266            334         4.622e-13      6.746e-17      2.394e-05      3.026e-09   
+      267            335         4.621e-13      6.726e-17      2.395e-05      3.043e-09   
+      268            336         4.621e-13      6.706e-17      2.397e-05      3.061e-09   
+      269            337         4.620e-13      6.687e-17      2.398e-05      3.079e-09   
+      270            338         4.619e-13      6.668e-17      2.400e-05      3.098e-09   
+      271            339         4.619e-13      6.649e-17      2.401e-05      3.117e-09   
+      272            340         4.618e-13      6.631e-17      2.403e-05      3.137e-09   
+      273            341         4.617e-13      6.613e-17      2.404e-05      3.156e-09   
+      274            342         4.617e-13      6.596e-17      2.406e-05      3.176e-09   
+      275            343         4.616e-13      6.579e-17      2.407e-05      3.196e-09   
+      276            344         4.615e-13      6.562e-17      2.409e-05      3.217e-09   
+      277            345         4.615e-13      6.545e-17      2.411e-05      3.237e-09   
+      278            346         4.614e-13      6.529e-17      2.412e-05      3.257e-09   
+      279            347         4.614e-13      6.514e-17      2.414e-05      3.278e-09   
+      280            348         4.613e-13      6.498e-17      2.415e-05      3.298e-09   
+      281            349         4.612e-13      6.483e-17      2.417e-05      3.318e-09   
+      282            350         4.612e-13      6.469e-17      2.418e-05      3.339e-09   
+      283            351         4.611e-13      6.454e-17      2.420e-05      3.359e-09   
+      284            352         4.610e-13      6.441e-17      2.421e-05      3.379e-09   
+      285            353         4.610e-13      6.427e-17      2.423e-05      3.399e-09   
+      286            354         4.609e-13      6.414e-17      2.424e-05      3.419e-09   
+      287            355         4.608e-13      6.401e-17      2.426e-05      3.439e-09   
+      288            356         4.608e-13      6.388e-17      2.427e-05      3.459e-09   
+      289            357         4.607e-13      6.376e-17      2.429e-05      3.478e-09   
+      290            358         4.606e-13      6.364e-17      2.430e-05      3.498e-09   
+      291            359         4.606e-13      6.352e-17      2.432e-05      3.517e-09   
+      292            360         4.605e-13      6.341e-17      2.433e-05      3.535e-09   
+      293            361         4.605e-13      6.330e-17      2.434e-05      3.554e-09   
+      294            362         4.604e-13      6.319e-17      2.436e-05      3.572e-09   
+      295            363         4.603e-13      6.309e-17      2.437e-05      3.589e-09   
+      296            364         4.603e-13      6.299e-17      2.439e-05      3.607e-09   
+      297            365         4.602e-13      6.289e-17      2.440e-05      3.624e-09   
+      298            366         4.601e-13      6.279e-17      2.441e-05      3.641e-09   
+      299            367         4.601e-13      6.270e-17      2.443e-05      3.657e-09   
+      300            368         4.600e-13      6.261e-17      2.444e-05      3.673e-09   
+Warning: Maximum number of iterations has been exceeded.
+         Current function value: 4.600e-13
+         Total delta_x: 7.562e-02
+         Iterations: 300
+         Function evaluations: 368
+         Jacobian evaluations: 301
+Timer: Solution time = 10.7 min
+Timer: Avg time per step = 2.14 sec
+==============================================================================================================
+                                                                 Start  -->   End
+Total (sum of squares):                                      4.275e-03  -->   4.600e-13, 
+Maximum absolute Force error:                                2.566e+05  -->   1.223e+00 (N)
+Minimum absolute Force error:                                6.880e-02  -->   3.646e-07 (N)
+Average absolute Force error:                                2.653e+03  -->   2.284e-02 (N)
+Maximum absolute Force error:                                1.048e-01  -->   4.993e-07 (normalized)
+Minimum absolute Force error:                                2.810e-08  -->   1.489e-13 (normalized)
+Average absolute Force error:                                1.083e-03  -->   9.328e-09 (normalized)
+R boundary error:                                            0.000e+00  -->   2.740e-20 (m)
+Z boundary error:                                            0.000e+00  -->   3.128e-20 (m)
+Fixed Psi error:                                             0.000e+00  -->   0.000e+00 (Wb)
+Fixed pressure profile error:                                0.000e+00  -->   0.000e+00 (Pa)
+Fixed current profile error:                                 0.000e+00  -->   0.000e+00 (A)
+Fixed sheet current error:                                   0.000e+00  -->   0.000e+00 (~)
+==============================================================================================================
+
+[  1695.5 s] amp 0.003: force 1.308e-06 (x2 grid 1.315e-06); resonance {'rho': 0.6375062294771618, 'iota': -0.5000000000000001, 'd iota/d rho': 0.23393216302616032, "shear rho iota'/iota": -0.29826642240848833}; at resonance {'rho': 0.6375062294771618, '|lambda_mk|': 826.3603292874656, '|lambda_mk| / |lambda_00|': 0.003763149308260811, '<|F|>_s / <|grad B^2/2mu0|>_s': 2.051764527476896e-06}; geometric r_2n/r00 at rho 0.6375 ['1.51e-01', '3.56e-03', '7.52e-06', '1.02e-08', '6.00e-08']; force peak {'rho': 0.92, '<|F|>_s / <|grad B^2/2mu0|>_s': 2.9753916503044168e-06}; lambda_mk peak {'rho': 0.8, '|lambda_mk|': 1454.582945227553, '|lambda_mk| / |lambda_00|': 0.007028984492121847}; 763 s
+[  1695.5 s] done
