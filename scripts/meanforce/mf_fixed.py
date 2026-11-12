@@ -36,12 +36,16 @@ from boundary_potential import BoundaryPotential  # noqa: E402
 from desc_input import DESCInput  # noqa: E402
 from force import ForceResidual  # noqa: E402
 from free_boundary import _chunked, reference  # noqa: E402
-from objective import Fields  # noqa: E402
+from objective import Fields, _cartesian  # noqa: E402
 from optimize_fb import annulus  # noqa: E402
 from pressure import Pressure  # noqa: E402
 
 D = os.path.join(ROOT, "desc_input", "vmec_free_boundary", "NCSX")
 log = functools.partial(print, flush=True)
+
+
+class NextStage(Exception):
+    """End the current alpha stage (control file NEXT, or --stage-flat) and continue with the next alpha."""
 
 
 class Budget(Exception):
@@ -68,6 +72,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--eq", default=os.path.join(D, "NCSX_fb_L16M16N12.h5"))
     ap.add_argument("--coils", default=os.path.join(D, "NCSX_coils.h5"))
+    ap.add_argument("--bext", choices=("coils", "desc-fit", "desc-J"), default="coils",
+                    help="external field: the coils (default); desc-fit: B_DESC - B_ann[J_fit] (the start is B_DESC "
+                         "at the points); desc-J: B_DESC - B_ann[J_DESC] (vacuum up to the annulus error). Both are "
+                         "built with this run's own Fields (annulus, N_phi, interpolation) at the collocation points")
     ap.add_argument("--factors", type=float, nargs=3, default=(1, 1, 1))
     ap.add_argument("--LMN", type=int, nargs=3, default=None,
                     help="NEST basis L M N directly (overrides --factors)")
@@ -96,6 +104,15 @@ def main():
     ap.add_argument("--stiff-modes", type=int, nargs=3, default=None, metavar=("K_FULL", "K_LOC", "NVEC"),
                     help="test 2 at the --start state: Lanczos on the full and the local (no J0 x dB) step model in "
                          "the same metric, and the anatomy of the top/bottom NVEC Ritz vectors (scripts/meanforce/stiff_modes.py)")
+    ap.add_argument("--line-scan", type=float, nargs="+", default=None,
+                    help="with --anatomy: scan M exactly along the converged steps at these radius multiples "
+                         "(scripts/meanforce/line_anatomy.py), t in [0, --line-tmax]")
+    ap.add_argument("--line-tmax", type=float, default=2.0)
+    ap.add_argument("--chord-study", type=int, default=None,
+                    help="at the --start state (nu, rho from it): K production inner steps keeping every iterate, then the "
+                         "merit gradient along each chord and a steepest-descent line probe at each iterate (line_anatomy.chord_study)")
+    ap.add_argument("--accel", action="store_true", help="with --line-scan: geodesic acceleration along each step and an "
+                    "exact scan of M along the curved path (line_anatomy.accel_scan)")
     ap.add_argument("--anatomy-deltas", type=float, nargs="+", default=[3.0, 30.0, 1e4],
                     help="radii as multiples of |L^-1 grad| (force metric)")
     ap.add_argument("--test-model", choices=("gn", "hvp", "beta"), default="gn",
@@ -128,6 +145,19 @@ def main():
     ap.add_argument("--hvp", dest="model", action="store_const", const="hvp", help="alias for --model hvp")
     ap.add_argument("--gn", dest="model", action="store_const", const="gn", help="alias for --model gn")
     ap.add_argument("--cg-tol", type=float, default=1e-2)
+    ap.add_argument("--geo-accel", action="store_true",
+                    help="geodesic acceleration on trust-region boundary steps (trial z + d + a, a = -(J^T J)^-1 J^T q)")
+    ap.add_argument("--accel-amax", type=float, default=0.75, help="--geo-accel: skip when |a|/|y| (metric) exceeds this")
+    ap.add_argument("--accel-tol", type=float, default=1e-4, help="--geo-accel: Lanczos tolerance of the a solve")
+    ap.add_argument("--accel-maxiter", type=int, default=300, help="--geo-accel: Lanczos cap of the a solve")
+    ap.add_argument("--radius-by-delta", action="store_true",
+                    help="after an accepted interior step with ratio < 0.25, shrink the radius to max(0.25|y|, 0.25 Delta)")
+    ap.add_argument("--f-noise", default=None,
+                    help="noise-tolerant trust-region ratio: an absolute sigma_f, or 'auto' (measured at the start)")
+    ap.add_argument("--no-share-stop", action="store_true",
+                    help="do not end the inner solve on a small model decrease of the Krylov minimizer (share < 1e-8)")
+    ap.add_argument("--keep-start-mult", action="store_true",
+                    help="with --ref-start: keep the --start file's nu and rho instead of resetting them")
     ap.add_argument("--stat-tol", type=float, default=1e-3)
     ap.add_argument("--stat-window", type=int, default=10)
     ap.add_argument("--delta0", type=float, default=1e-3, help="first trust radius (and the radius at each outer reset)")
@@ -135,6 +165,11 @@ def main():
                     help="keep the trust radius across outer iterations / bounds (old behaviour)")
     ap.add_argument("--gram-chunk", type=int, default=1024)
     ap.add_argument("--time-budget", type=float, default=None, help="seconds; stop cleanly")
+    ap.add_argument("--stall-stop", type=float, default=None,
+                    help="end the sweep when the bound is unmet and M/eps changed by less than this fraction over an outer")
+    ap.add_argument("--stage-flat", type=float, default=None,
+                    help="continuation: end a stage that is not the last alpha once the bound is met (M/eps <= 1.01) and "
+                         "phi fell by less than this fraction over the last outer iteration")
     ap.add_argument("--setup-only", action="store_true", help="stop after the start state")
     ap.add_argument("--cross", default=None,
                     help="npz of a LOWER-resolution optimum: embed it (and that basis's J_fit) in this "
@@ -164,15 +199,51 @@ def main():
     ap.add_argument("--edge-alpha", type=float, default=None,
                     help="--force-norm p: also bound the edge mean (rho >= rho-cut) at edge-alpha x DESC's edge mean, "
                          "through one composite constraint (M_p^16 + (r M_edge)^16)^(1/16) <= eps, r = eps / eps_edge")
+    ap.add_argument("--p-band", type=float, nargs=2, default=None, metavar=("LO", "HI"),
+                    help="--force-norm p: the p-norm region is the DESC-rho band LO <= rho <= HI instead of rho < rho-cut; "
+                         "with --edge-alpha the composite then also bounds the mean over everything outside the band")
+    ap.add_argument("--mean-whole", action="store_true",
+                    help="--force-norm p with --edge-alpha: the composite's second term is the whole-volume mean (not the "
+                         "mean outside the band/interior), so the volume mean is bounded too (strictly tighter than a mean bound)")
+    ap.add_argument("--ref-start", action="store_true",
+                    help="--force-norm p: normalize alpha and --edge-alpha by the --start state's own p-norm and "
+                         "outside mean (after embedding) instead of DESC's; logged ratios '/DESC' then mean '/start'")
+    ap.add_argument("--ref-state", default=None,
+                    help="--ref-start: take the reference band p-norm and mean from this npz (this run's basis) instead "
+                         "of the --start state (e.g. warm-start a tighter run while keeping the original reference)")
+    ap.add_argument("--colloc-rho", type=float, default=None,
+                    help="radial collocation factor (Gauss-Legendre radii = colloc-rho (L + L_eq) / 2 + 1); "
+                         "default --colloc. Angles keep --colloc")
+    ap.add_argument("--snap-outer", action="store_true", help="also save the state after every outer iteration (_o<k>)")
+    ap.add_argument("--shell-max", type=float, nargs=2, default=None, metavar=("LO", "HI"),
+                    help="--eval-only: per collocation radius in [LO, HI], the max and mean of |F| over the shell "
+                         "(/ norm) for DESC and each state")
+    ap.add_argument("--eval-save", action="store_true",
+                    help="--eval-only: save each evaluated state (u and its least-squares pressure c_p) as <out>_eval_<name>.npz")
     ap.add_argument("--p-model-beta", action="store_true",
                     help="--force-norm p: use --beta along F_i instead of the exact p - 1")
     ap.add_argument("--eval-only", action="store_true",
                     help="--force-norm p: report the start (J_fit) and --start states' p-norms, interior max, "
                          "edge and mean against DESC's, for each p of the schedule, then exit (no metric build)")
+    ap.add_argument("--rho-bins", type=float, nargs="+", default=None,
+                    help="--eval-only: also print the force density per rho bin relative to the volume mean, for each state and DESC")
+    ap.add_argument("--eval-blend", type=float, nargs="+", default=[],
+                    help="--eval-only: also evaluate J_fit + s (J - J_fit) for each state and each s (grid error is linear in J - J_fit)")
     ap.add_argument("--eval-state", action="append", default=[],
                     help="--eval-only: extra states name=path.npz (this run's basis); repeatable")
     ap.add_argument("--out", default=os.path.join(ROOT, "results", "meanforce", "fixed"))
     ap.add_argument("--mirror", default=None, help="directory for fsynced copies (Volume)")
+    ap.add_argument("--pin-b21", type=float, default=None,
+                    help="hold the resonant field b_mk at q res at BETA x the vacuum amplitude, along the island phase "
+                         "(an affine row: b_mk is linear in u under option A)")
+    ap.add_argument("--b21-mk", type=int, nargs=2, default=(2, 1), help="(m, k) of the resonant harmonic (start_check)")
+    ap.add_argument("--b21-vac", type=float, default=3.778e-4, help="vacuum |b_mk| at the resonance (start_check)")
+    ap.add_argument("--b21-phase-state", default=None,
+                    help="npz whose b_mk sets the island phase (an island seed); default: the phase of --start")
+    ap.add_argument("--b21-report", action="store_true", help="--eval-only: print b_mk at q res for each state")
+    ap.add_argument("--plane", action="append", default=[],
+                    help="--eval-only: exact map of the force on a plane, 'name|base|d1+|d1-|d2+|d2-|s0,s1,ns|t0,t1,nt' "
+                         "(npz paths or J_fit; d = u(d+) - u(d-)); repeatable")
     ap.add_argument("--pin-current", action="store_true",
                     help="exact constraint: the m = 0 modes of a stay at J_fit's (the current enclosed by every "
                          "DESC surface, in every cross-section); a --start state is restored onto it")
@@ -213,7 +284,7 @@ def main():
         dump()
 
     t1 = time.time()
-    inp0 = DESCInput.load(a.eq, field=a.coils)
+    inp0 = DESCInput.load(a.eq, field=a.coils if a.bext == "coils" else None)
     eq0 = inp0.eq
     kw = ({"L": a.LMN[0], "M": a.LMN[1], "N": a.LMN[2]} if a.LMN else
           {"factors": tuple(a.factors)})
@@ -222,6 +293,8 @@ def main():
     b = cur0.basis
     res = tuple(int(round(a.colloc * (u + v))) for u, v in
                 ((b.L, eq0.L), (b.M, eq0.M), (b.N, eq0.N)))
+    if a.colloc_rho:
+        res = (int(round(a.colloc_rho * (b.L + eq0.L))),) + res[1:]
     ref = reference(inp0, res, current=cur0)
     norm = ref["norm"]
     M_desc = ref["F_desc_vol"] / norm
@@ -235,6 +308,8 @@ def main():
     box.locate_plasma_planes(inp0, sym=bool(eq0.sym), verbose=True)
     fr = ForceResidual(inp0, box, resolution=res)
     fr.norm, fr.F_desc_vol = norm, ref["F_desc_vol"]
+    if a.bext != "coils":
+        fr.B_ext = np.zeros((len(fr.x), 3))  # set from DESC's field once Fields exists
     if "B_ext" not in vars(fr):
         fr.B_ext = _chunked(inp0.B_ext, fr.x)
     phase("annulus + locate + ForceResidual", t1)
@@ -252,10 +327,38 @@ def main():
     G = mff.gram_P(fields, cur0, pre0, chunk=a.gram_chunk, log=log)
     phase("pressure Gram", t1)
     u0 = jnp.asarray(cur0.u)
+    if a.bext != "coils":
+        t1 = time.time()
+        B_D = np.asarray(fields.desc["B"])
+        if a.bext == "desc-fit":
+            B_src = np.asarray(fields.B_plasma(u0))
+        else:  # DESC's J at the annulus' inside nodes, through the run's own operator
+            J_rows = np.asarray(inp0.compute_points(["J"], np.asarray(fields.rows_rtz))["J"])
+            Jr = fields._cyl_rows(jnp.asarray(J_rows, fields.cyl_dtype))
+            if getattr(fields, "cyl_fused", False):
+                itp_ = getattr(fields.to_points, "interp", fields.to_points)
+                Bc = itp_.from_planes(*fields._cyl_planes(Jr, itp_.Ep))[: len(fields.phi)]
+            else:
+                Bc = fields.to_points(*fields.solver.field_modes_F(*fields._cyl_sources(Jr)))
+            B_src = np.asarray(_cartesian(Bc, fields.phi))
+        B_ext = B_D - B_src
+        fields.B_ext = jnp.asarray(B_ext)
+        fr.B_ext = B_ext
+        wv = fr.dV / fr.dV.sum()
+        rmsB = float(np.sqrt(np.sum(wv * np.sum(B_D**2, 1))))
+        dB0 = np.asarray(fields.B_ext + fields.B_plasma(u0)) - B_D
+        run["bext"] = {"kind": a.bext, "rms |B_ext| / rms |B_DESC|": float(np.sqrt(np.sum(wv * np.sum(B_ext**2, 1))) / rmsB),
+                       "start rms |B - B_DESC| / rms |B_DESC|": float(np.sqrt(np.sum(wv * np.sum(dB0**2, 1))) / rmsB)}
+        log(f"[bext] {a.bext}: {run['bext']}")
+        for d_ in [os.path.dirname(a.out) or "."] + ([a.mirror] if a.mirror else []):
+            np.savez(os.path.join(d_, os.path.basename(a.out) + "_bext.npz"), B_ext=B_ext, B_DESC=B_D,
+                     x=np.asarray(fr.x), rtz=np.asarray(fr.rtz))
+        phase(f"B_ext ({a.bext})", t1)
     Jfit = mff._J(fields, u0, fields.I)
     sw = jnp.asarray(fields.sw)
     rmsJ = float(jnp.sqrt(jnp.sum(sw[:, None] ** 2 * Jfit**2)))
     A = mff.FixedAnchor(fields, cur0, pre0, u0, rmsJ, norm, G, log=log)
+    A.edge_all = bool(a.mean_whole)
     del G
     run["pressure space"] = {"rank": A.p_rank, "cond(G)": A.p_cond}
     M_desc_mean = M_desc
@@ -277,24 +380,32 @@ def main():
         rho_pts = np.asarray(fr.rtz[:, 0])
         assert len(rho_pts) == A.n_pts, (len(rho_pts), A.n_pts)
         pmask = rho_pts < a.rho_cut
+        if a.p_band:
+            pmask = (rho_pts >= a.p_band[0]) & (rho_pts <= a.p_band[1])
+            log(f"[p-norm] band {a.p_band[0]:.4f} <= rho <= {a.p_band[1]:.4f}: {int(pmask.sum())} points on "
+                f"{len(np.unique(rho_pts[pmask]))} radii; the 'edge' terms are the mean outside the band")
         tg = fr.tgrid
         absF_desc = np.asarray(inp0.compute_tensor(["|F|"], tg.rho, tg.theta, tg.zeta)["|F|"]).ravel()
         assert absF_desc.size == A.n_pts, (absF_desc.size, A.n_pts)
         w_pts = np.asarray(sw) ** 2
         p_list = list(a.p_schedule or [a.p])
-        desc_p = {p_: mff.desc_pnorm(absF_desc, w_pts, pmask, p_, norm) for p_ in p_list}
+        desc_p = {p_: mff.desc_pnorm(absF_desc, w_pts, pmask, p_, norm, edge_all=a.mean_whole) for p_ in p_list}
+        if a.mean_whole:
+            log("[p-norm] composite second term = the WHOLE-volume mean (--mean-whole)")
         run["pnorm"] = {"rho_cut": a.rho_cut, "interior points": int(pmask.sum()), "points": int(A.n_pts),
                         "interior volume": float(w_pts[pmask].sum()), "DESC": {str(k): v for k, v in desc_p.items()},
                         "M_desc (mean)": M_desc_mean}
         for p_, d_ in desc_p.items():
             log(f"[p-norm] DESC on the same points, p {p_:g}: interior p-norm {d_['M_p']:.4e}, interior max "
                 f"{d_['max_int']:.4e}, interior mean {d_['mean_int']:.4e}, edge mean {d_['edge']:.4e} (/ norm); "
-                f"interior rho < {a.rho_cut}: {int(pmask.sum())} of {A.n_pts} points, volume {w_pts[pmask].sum():.3f}")
+                + (f"band {a.p_band[0]:.4f}-{a.p_band[1]:.4f}" if a.p_band else f"interior rho < {a.rho_cut}")
+                + f": {int(pmask.sum())} of {A.n_pts} points, volume {w_pts[pmask].sum():.3f}")
         A.set_pnorm(p_list[0], pmask, exact_beta=not a.p_model_beta)
         M_desc = desc_p[p_list[0]]["M_p"]
         if a.edge_alpha is not None:
             set_pn(p_list[0], a.alphas[0])
-            log(f"[p-norm] edge bound: mean over rho >= {a.rho_cut} <= {a.edge_alpha:g} x DESC edge mean "
+            log(f"[p-norm] edge bound: mean over " + ("the points outside the band" if a.p_band else f"rho >= {a.rho_cut}")
+                + f" <= {a.edge_alpha:g} x DESC's mean there "
                 f"{desc_p[p_list[0]]['edge']:.4e}, composite q = 16")
 
     t1 = time.time()
@@ -348,6 +459,18 @@ def main():
         log(f"cross evaluation done in {time.time() - t1:.0f} s")
         return
 
+    bfn = None
+    if a.pin_b21 is not None or a.b21_report or a.plane:
+        t1 = time.time()
+        bfn, binfo = mff.resonant_b_fn(inp0, fields, fr, u0, a.b21_mk[0], a.b21_mk[1], log=log)
+        bfn = jax.jit(bfn)
+        run["b_mk"] = binfo
+        phase(f"b{a.b21_mk[0]}{a.b21_mk[1]} functional", t1)
+
+    def bmk(uu):
+        v = np.asarray(bfn(jnp.asarray(uu)))
+        return complex(v[0], v[1])
+
     if a.eval_only:
         if a.force_norm != "p":
             raise SystemExit("--eval-only needs --force-norm p")
@@ -361,7 +484,66 @@ def main():
         for spec in a.eval_state:
             nm_, pth = spec.split("=", 1)
             cases.append((nm_, jnp.asarray(np.load(pth)["u"])))
+        for s_ in a.eval_blend:
+            cases += [(f"{nm_}@s{s_:g}", u0 + s_ * (zz - u0)) for nm_, zz in list(cases[1:]) if "@s" not in nm_]
         run["eval"] = {}
+        if a.b21_report:
+            run["b_mk report"] = {}
+            for nm_, zz in cases:
+                bv = bmk(zz)
+                run["b_mk report"][nm_] = [bv.real, bv.imag]
+                log(f"[b{a.b21_mk[0]}{a.b21_mk[1]}] {nm_}: |b| {abs(bv):.4e} ({abs(bv) / a.b21_vac:.2%} of vacuum), "
+                    f"phase {np.degrees(np.angle(bv)):+.1f} deg")
+        for spec in a.plane:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import plane_map as PM
+            run.setdefault("planes", {})
+            run["planes"][spec.split("|")[0]] = PM.plane(A, spec, u0, rho_pts, w_pts, pmask, norm, M_desc_mean,
+                                                         desc_p, bmk if bfn is not None else None, a.b21_vac,
+                                                         a.out, a.mirror, log)
+            dump()
+        if a.eval_save:
+            for nm_, zz in cases:
+                se_ = A.state(zz)
+                tag_ = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in nm_)
+                for d_ in [os.path.dirname(a.out) or "."] + ([a.mirror] if a.mirror else []):
+                    np.savez(os.path.join(d_, os.path.basename(a.out) + f"_eval_{tag_}.npz"), u=np.asarray(zz),
+                             c_p=np.asarray(se_["c"]), nu=np.zeros(3), rho=1.0, eps=0.0)
+                log(f"[eval] saved {nm_}: M/M_desc {float(se_['M_mean']) / M_desc_mean:.4f}, |J - J_fit|/rms "
+                    f"{float(jnp.sqrt(jnp.sum(se_['g'] ** 2))):.5f}")
+        if a.shell_max:
+            ur = np.unique(rho_pts)
+            ur = ur[(ur >= a.shell_max[0]) & (ur <= a.shell_max[1])]
+            sel_ = [rho_pts == r_ for r_ in ur]
+
+            def shells(absF):
+                return ([float(absF[k_].max()) / norm for k_ in sel_],
+                        [float(np.sum(w_pts[k_] * absF[k_]) / np.sum(w_pts[k_])) / norm for k_ in sel_])
+            run["shell max"] = {"rho": ur.tolist(), "DESC": shells(absF_desc)}
+            log("[shell] rho          " + " ".join(f"{x:8.4f}" for x in ur))
+            mx, mn = run["shell max"]["DESC"]
+            log("[shell] DESC max     " + " ".join(f"{x:8.2e}" for x in mx))
+            log("[shell] DESC mean    " + " ".join(f"{x:8.2e}" for x in mn))
+            for nm_, zz in cases:
+                mx, mn = shells(np.asarray(A.state(zz)["absF"]))
+                run["shell max"][nm_] = (mx, mn)
+                log(f"[shell] {nm_[:9]:9s} max  " + " ".join(f"{x:8.2e}" for x in mx))
+                log(f"[shell] {nm_[:9]:9s} mean " + " ".join(f"{x:8.2e}" for x in mn))
+            dump()
+        if a.rho_bins:
+            rb = np.array(a.rho_bins)
+            vol_b = np.histogram(rho_pts, bins=rb, weights=w_pts)[0]
+
+            def dens(absF):
+                tot = float(np.sum(w_pts * absF) / np.sum(w_pts))
+                return (np.histogram(rho_pts, bins=rb, weights=w_pts * absF)[0] / np.maximum(vol_b, 1e-300)) / tot
+            run["rho bins"] = {"edges": rb.tolist(), "volume": vol_b.tolist(), "DESC": dens(absF_desc).tolist()}
+            log("[bins] edges " + " ".join(f"{x:.3f}" for x in rb))
+            log("[bins] DESC        " + " ".join(f"{x:5.2f}" for x in dens(absF_desc)))
+            for nm_, zz in cases:
+                dd = dens(np.asarray(A.state(zz)["absF"]))
+                run["rho bins"][nm_] = dd.tolist()
+                log(f"[bins] {nm_[:11]:11s} " + " ".join(f"{x:5.2f}" for x in dd))
         for nm_, zz in cases:
             run["eval"][nm_] = []
             bins = np.array([x for x in (0.0, 0.5, 0.6, 0.7, 0.75, 0.78, 0.81, 0.84, 0.87, 0.9, 0.93) if x < a.rho_cut] + [a.rho_cut])
@@ -406,9 +588,21 @@ def main():
         if a.precond != "force":
             del HJ
     LC = None
-    if a.pin_current or a.pin_flux:
+    if a.pin_current or a.pin_flux or a.pin_b21 is not None:
         t1 = time.time()
-        LC = mff.LinearConstraints(cur0, fields, fr, u0, pin_current=a.pin_current, pin_flux=a.pin_flux, log=log)
+        aff = []
+        if a.pin_b21 is not None:
+            ph_src = a.b21_phase_state or a.start
+            bph = bmk(np.load(ph_src)["u"])
+            ph0 = float(np.angle(bph))
+            cph, sph = float(np.cos(ph0)), float(np.sin(ph0))
+            tgt = a.pin_b21 * a.b21_vac
+            log(f"[b21 pin] island phase {np.degrees(ph0):+.1f} deg from {ph_src} (|b| {abs(bph):.3e}); target "
+                f"Re(b e^-i phase) = {a.pin_b21:g} x {a.b21_vac:.3e} = {tgt:.4e}")
+            run["b21 pin"] = {"beta": a.pin_b21, "phase deg": float(np.degrees(ph0)), "phase from": ph_src, "target": tgt}
+            aff.append(("b21_proj", lambda uu: bfn(uu)[0] * cph + bfn(uu)[1] * sph, tgt))
+        LC = mff.LinearConstraints(cur0, fields, fr, u0, pin_current=a.pin_current, pin_flux=a.pin_flux, log=log,
+                                   affine=aff)
         phase("linear constraints", t1)
     mk_metric = (lambda LL: LC.metric(LL)) if LC is not None else pw.Metric
     met = mk_metric(L)
@@ -453,6 +647,38 @@ def main():
                               "n_pinned": int(len(LC.idx)), "before": v0, "after": v1,
                               "Psi_ref": getattr(LC, "psi_ref", None), "Psi_desc": float(inp0.eq.Psi)}
         del s_b, s_a
+    if a.ref_start and a.force_norm == "p":
+        # the bounds are fractions of the START state's own band p-norm and outside mean (a new constraint:
+        # the start's multiplier and penalty, from a different bound, are reset)
+        z_ref = jnp.asarray(np.load(a.ref_state)["u"]) if a.ref_state else z
+        if a.ref_state:
+            log(f"[p-norm] reference state: {a.ref_state}")
+        for p_ in p_list:
+            A.set_pnorm(p_, pmask, exact_beta=not a.p_model_beta)
+            sr = A.state(z_ref)
+            aF_ = np.asarray(sr["absF"])
+            desc_p[p_] = {"M_p": float(sr["M_p"]), "max_int": float(sr["M_max_int"]), "edge": float(sr["M_edge"]),
+                          "mean_int": float(np.sum(w_pts[pmask] * aF_[pmask]) / w_pts[pmask].sum() / norm)}
+            im = int(np.argmax(np.where(pmask, aF_, -1.0)))
+            log(f"[p-norm] reference = start state, p {p_:g}: band p-norm {desc_p[p_]['M_p']:.4e}, band max "
+                f"{desc_p[p_]['max_int']:.4e} at rho {rho_pts[im]:.4f}, band mean {desc_p[p_]['mean_int']:.4e}, "
+                f"outside mean {desc_p[p_]['edge']:.4e}, volume mean {float(sr['M_mean']):.4e} (/ norm)")
+        run["pnorm"]["reference"] = {"kind": "start", **{str(k): v for k, v in desc_p.items()}}
+        A.set_pnorm(p_list[0], pmask, exact_beta=not a.p_model_beta)
+        if a.edge_alpha is not None:
+            set_pn(p_list[0], a.alphas[0])
+        M_desc = desc_p[p_list[0]]["M_p"]
+        W.eps = a.alphas[0] * M_desc
+        if a.keep_start_mult and a.start and "nu" in np.load(a.start).files:
+            st_ = np.load(a.start)
+            W.nu, W.rho = np.asarray(st_["nu"], float), float(st_["rho"])
+        else:
+            W.nu, W.rho = np.zeros_like(np.asarray(W.nu, float)), a.rho0
+        log(f"[p-norm] eps = {a.alphas[0]:g} x start band p-norm = {W.eps:.4e}"
+            + (f"; outside mean <= {a.edge_alpha:g} x start outside mean" if a.edge_alpha is not None else "")
+            + f"; multiplier nu {np.asarray(W.nu).tolist()}, rho {W.rho}")
+        z = jnp.asarray(z)
+        s0 = A.state(z)
     # one product of each kind, timed (after compile)
     rows = mff.FixedRows(A, s0, W, norm)
     v = jnp.ones(A.n_u) * 1e-6
@@ -481,6 +707,14 @@ def main():
     solver.diagnose = lambda *args, **kw: {"skipped": "fixed boundary"}
     solver.delta0 = a.delta0
     solver.delta_reset = not a.no_delta_reset
+    solver.radius_by_delta = a.radius_by_delta
+    solver.no_share_stop = a.no_share_stop
+    solver.f_sigma = None if a.f_noise is None else ("auto" if a.f_noise == "auto" else float(a.f_noise))
+    solver.geo_accel = ({"amax": a.accel_amax, "tol": a.accel_tol, "maxiter": a.accel_maxiter}
+                        if a.geo_accel else None)
+    if a.geo_accel or a.radius_by_delta or a.no_share_stop or a.f_noise:
+        log(f"[solver] geodesic acceleration {solver.geo_accel}; radius-by-delta {a.radius_by_delta}; f-noise {a.f_noise}; "
+            f"share stop {'off' if a.no_share_stop else 'on'}")
     best = {"z": z, "s": s0, "n": 0}
 
     build_state = {"psi1": None}
@@ -540,6 +774,23 @@ def main():
         + f"; metric {a.precond}" + (f" (rebuild: Lanczos cap or rent-or-buy; outer if psi' changed > x{a.outer_rebuild_factor:g})"
                                      if a.precond == "force" else "")
         + f"; LS multiplier {'on' if solver.mult_ls else 'off'}; Lanczos stop {a.lanczos_stop}")
+    if a.chord_study:
+        import json as _json
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import line_anatomy as LA
+        W.eps = a.alphas[0] * M_desc
+        if a.precond == "force":
+            met_c, D_c = refresh(z)
+            solver.met, solver.Delta = met_c, D_c
+        log(f"[chord] start: M/eps {float(A.state(z)['M']) / W.eps:.4f}, nu {W.nu.tolist()}, rho {W.rho}, Delta {solver.Delta}")
+        cres = LA.chord_study(A, solver, W, norm, solver.met, z, a.chord_study, log)
+        with open(a.out + "_chord.json", "w") as fh:
+            _json.dump(cres, fh, indent=1, default=float)
+        if a.mirror:
+            import shutil
+            shutil.copy(a.out + "_chord.json", a.mirror)
+        log("chord study done")
+        return
     if a.subproblem_test or a.anatomy or a.stiff_modes:
         W.eps = a.alphas[0] * M_desc
         s, f, phi, c = solver.evaluate(z)
@@ -577,8 +828,24 @@ def main():
             def ev(d):
                 s_n, f_n, phi_n, c_n = solver.evaluate(z + d)
                 return float(f_n), float(s_n["M"]) / W.eps, float(phi_n)
-            SA.run(Hv, grad, f0, met, a.anatomy, a.anatomy_deltas, ev, (float(f), float(s["M"]) / W.eps, float(phi)),
-                   log, out_path=a.out + "_anatomy.npz")
+            rec = SA.run(Hv, grad, f0, met, a.anatomy, a.anatomy_deltas, ev, (float(f), float(s["M"]) / W.eps, float(phi)),
+                         log, out_path=a.out + "_anatomy.npz", keep=tuple(a.line_scan or ()))
+            if a.line_scan:
+                import json as _json
+                import line_anatomy as LA
+                ts = np.linspace(0.0, a.line_tmax, 41)
+                lres = {}
+                for m in a.line_scan:
+                    if a.accel:
+                        lres[str(m)] = LA.accel_scan(A, z, rec["steps"][m], met, rows, norm, W.eps, log, ts,
+                                                     tag=f"Delta {m:g}|g|")
+                    else:
+                        lres[str(m)] = LA.run(A, z, met.back(rec["steps"][m]), norm, W.eps, log, ts, tag=f"Delta {m:g}|g|")
+                with open(a.out + "_line.json", "w") as fh:
+                    _json.dump(lres, fh, indent=1)
+                if a.mirror:
+                    import shutil
+                    shutil.copy(a.out + "_line.json", a.mirror)
             if a.mirror:
                 import shutil
                 shutil.copy(a.out + "_anatomy.npz", a.mirror)
@@ -617,7 +884,8 @@ def main():
                 if a.edge_alpha is not None:
                     set_pn(p_cur, a.alphas[0])
                 build_state["psi1"] = None  # new weights: rebuild the force metric at the first outer
-                log(f"[p-norm] p {p_cur:g}: eps = alpha x DESC interior p-norm {M_desc:.4e}")
+                log(f"[p-norm] p {p_cur:g}: eps = alpha x " + ("start" if a.ref_start else "DESC")
+                    + f" {'band' if a.p_band else 'interior'} p-norm {M_desc:.4e}")
             for alpha in a.alphas:
                 t1 = time.time()
                 W.eps = alpha * M_desc
@@ -627,23 +895,41 @@ def main():
                 entry = {"alpha": alpha, "eps": W.eps, "p": p_cur}
                 run["alphas"].append(entry)
 
-                def cb(zz, s, outer, entry=entry):
+                is_last = alpha == a.alphas[-1]
+
+                def cb(zz, s, outer, entry=entry, is_last=is_last):
                     entry["outer"] = outer
                     entry["time"] = time.time() - t1
                     entry.pop("inner (current outer)", None)
                     run["memory"].append({"phase": f"alpha {alpha} outer {len(outer)}",
                                           "t": time.time() - t0, **mem()})
                     save_state(f"{ptag}a{alpha}_latest", zz, s, W)
+                    if a.snap_outer:
+                        save_state(f"{ptag}a{alpha}_o{len(outer)}", zz, s, W)
                     dump()
+                    best["z"], best["s"] = zz, s
+                    if a.stall_stop and len(outer) >= 2:
+                        cA, cB = outer[-2]["c"][0], outer[-1]["c"][0]
+                        if cB > 1e-2 and abs(cA - cB) <= a.stall_stop * (1 + cB):
+                            log(f"[stage] alpha {alpha}: infeasible stall (M/eps {1 + cA:.4f} -> {1 + cB:.4f}): ending the sweep")
+                            raise NextStage("stall")
+                    if a.stage_flat and not is_last and len(outer) >= 2:
+                        c0, ph0, ph1 = outer[-1]["c"][0], outer[-2]["phi"], outer[-1]["phi"]
+                        if c0 <= 1e-2 and (ph0 - ph1) <= a.stage_flat * abs(ph0):
+                            log(f"[stage] alpha {alpha}: bound met (M/eps {1 + c0:.4f}) and phi fell "
+                                f"{(ph0 - ph1) / abs(ph0):.2%} over the last outer (< {a.stage_flat:.0%}): next stage")
+                            raise NextStage("flat")
 
                 def on_step(hist, entry=entry):
                     entry["inner (current outer)"] = hist
                     if hist and hist[-1]["accepted"] and A.pnorm is not None:
                         rep = pn_report(A.last_s, A.pnorm["p"])
+                        im_ = int(jnp.argmax(jnp.where(A.pnorm["mask"] > 0, A.last_s["absF"], -1.0)))
+                        rep["rho of max"] = float(rho_pts[im_])
                         hist[-1]["pnorm"] = rep
-                        log(f"      [p-norm] p {rep['p']:g}: M_p/DESC {rep['M_p/DESC']:.4f}, interior max/DESC "
-                            f"{rep['max_int/DESC']:.4f}, edge mean/DESC {rep['edge/DESC']:.4f}, mean/M_desc "
-                            f"{rep['mean/M_desc']:.4f}")
+                        log(f"      [p-norm] p {rep['p']:g}: M_p/ref {rep['M_p/DESC']:.4f}, max/ref "
+                            f"{rep['max_int/DESC']:.4f} at rho {rep['rho of max']:.4f}, outside mean/ref {rep['edge/DESC']:.4f}, "
+                            f"mean/M_desc {rep['mean/M_desc']:.4f}")
                     if hist and hist[-1]["accepted"] and LC is not None:
                         vx = LC.violation(A.last_z)
                         hist[-1]["constraints"] = vx
@@ -656,11 +942,26 @@ def main():
                     dump()
                     if a.time_budget and time.time() - t0 > a.time_budget:
                         raise Budget()
+                    ctl = os.path.join(a.mirror or os.path.dirname(os.path.abspath(a.out)), "CONTROL")
+                    if os.path.exists(ctl):
+                        cmd_ = open(ctl).read().strip().upper()
+                        os.remove(ctl)
+                        log(f"[control] {cmd_} at alpha {alpha}, inner step {len(hist)}")
+                        if cmd_ == "STOP":
+                            raise Budget()
+                        if cmd_ == "NEXT":
+                            raise NextStage("manual")
 
                 solver.on_step = on_step
-                z, outer = solver.solve_alpha(z, max_outer=a.max_outer, maxiter=a.maxiter,
-                                              gtol=a.gtol, callback=cb, stat_tol=a.stat_tol,
-                                              stat_window=a.stat_window)
+                forced = False
+                try:
+                    z, outer = solver.solve_alpha(z, max_outer=a.max_outer, maxiter=a.maxiter,
+                                                  gtol=a.gtol, callback=cb, stat_tol=a.stat_tol,
+                                                  stat_window=a.stat_window)
+                except NextStage as e:
+                    z = best["z"] if best.get("z") is not None else z
+                    forced = str(e) == "manual"
+                    entry["stage end"] = str(e)
                 s = A.state(z)
                 c = W.constraints(s)
                 entry.update({"M/M_desc": float(s["M"]) / M_desc, "rms|F|": float(s["rmsF"]),
@@ -677,7 +978,7 @@ def main():
                 log(f"alpha {alpha} done in {time.time() - t1:.0f} s: |J - J_fit|/rms "
                     f"{entry['|J-J_fit|/rms']:.4e}, M/M_desc {entry['M/M_desc']:.4f}")
                 dump()
-                if not entry["feasible"]:
+                if not entry["feasible"] and not forced:
                     log(f"alpha {alpha} not met: stopping the sweep")
                     stop = True
                     break

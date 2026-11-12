@@ -506,6 +506,61 @@ class Solver:
         f, phi, c = self.W.merit(s)
         return s, f, phi, c
 
+    def estimate_f_noise(self, z, f0, k=6, scale=1e-10, seed=0):
+        """Evaluation noise of the merit: f at k points z + met.back(v), |v| = scale (metric), where
+        the smooth change |grad| scale is far below roundoff. Returns the standard deviation."""
+        rng = np.random.default_rng(seed)
+        fs = [float(f0)]
+        for _ in range(k):
+            v = rng.standard_normal(int(np.asarray(z).size))
+            v = jnp.asarray(scale * v / np.linalg.norm(v))
+            fs.append(float(self.evaluate(z + self.met.back(v))[1]))
+        fs = np.array(fs)
+        sig = float(np.std(fs - fs[0], ddof=1))
+        self.log(f"    [noise] merit at {k} points {scale:g} away (metric): spread {fs.max() - fs.min():.3e}, "
+                 f"sigma_f {sig:.3e} ({sig / max(abs(f0), 1e-300):.1e} of f)")
+        return sig
+
+    def _geodesic(self, z, s, d, ny, rows, met, s_new, f_new, cfg):
+        """Geodesic acceleration for a trust-region boundary step d (fixed-boundary rows).
+
+        F is exactly quadratic in z, so f2 = (F(z + d) + F(z - d))/2 - F(z) is its exact second-order
+        term along d. In row space it is q = [0, sF (w f2), 0] (weights frozen at z; the misfit rows
+        are linear). a = -(J^T J)^-1 J^T q, solved by Lanczos in the same metric with radius
+        cfg['amax'] |y|, keeps the force on its linearized path, and the trial is z + d + a.
+        Returns None when |a|/|y| exceeds cfg['amax'] (the step is too curved to correct)."""
+        import meanforce_fixed as mff
+        t1 = time.time()
+        sm = self.A.state(z - d)
+        f2 = 0.5 * (jnp.asarray(s_new["F"]) + jnp.asarray(sm["F"])) - jnp.asarray(s["F"])
+        del sm
+        w = jnp.asarray(self.A.sw) ** 2
+        n3 = rows.n3
+        q = jnp.concatenate([jnp.zeros(n3), rows.sF3 * (w[:, None] * f2).ravel(), jnp.zeros(1)])
+        Hv = lambda v: rows.JT(rows.J(v))  # noqa: E731
+        saved = dict(mff.LAST_H)
+        try:
+            ya, _, ahit, k, _, _, _ = mff.lanczos_tr_step_H(Hv, rows.JT(q), 0.5 * float(q @ q), met,
+                                                             cfg["amax"] * ny, cfg["tol"], cfg["maxiter"])
+        finally:
+            mff.LAST_H.clear()
+            mff.LAST_H.update(saved)
+        na = float(jnp.linalg.norm(ya))
+        a_h = met.back(ya)
+        nq = float(jnp.linalg.norm(q))
+        red = 1.0 - float(jnp.linalg.norm(rows.J(a_h) + q)) / max(nq, 1e-300)
+        info = {"|a|/|y|": na / max(ny, 1e-300), "lanczos": int(k), "hit": bool(ahit), "q removed": red}
+        if na > cfg["amax"] * ny * (1 + 1e-9) or not np.isfinite(na):
+            self.log(f"      [accel] skipped: |a|/|y| {na / max(ny, 1e-300):.3f} > {cfg['amax']}")
+            return None
+        z_a = z + d + a_h
+        s_a, f_a, phi_a, c_a = self.evaluate(z_a)
+        info.update({"f straight": float(f_new), "f curved": float(f_a), "time": time.time() - t1})
+        self.log(f"      [accel] |a|/|y| {na / max(ny, 1e-300):.3f} (lanczos {k}{', hit' if ahit else ''}), "
+                 f"q removed {red:.3f}; f straight {f_new:.6e}, curved {f_a:.6e} -> "
+                 f"{'curved' if f_a < f_new else 'straight'}; {time.time() - t1:.1f}s")
+        return {"z": z_a, "s": s_a, "f": f_a, "phi": phi_a, "c": c_a, "info": info}
+
     def inner(self, z, maxiter=40, ftol=1e-12, gn_tol=1e-8, gtol=1e-3, hist=None,
               flat_tol=None, flat_window=10):
         """Trust-region steps on L_A at fixed multipliers. Stops on its own tests
@@ -520,6 +575,10 @@ class Solver:
             self.Delta = self.delta0
         tiny_run, rej_run = 0, 0
         rows, qr_cache = None, None
+        if getattr(self, "f_sigma", None) == "auto" or getattr(self, "f_sigma_auto", False):
+            # the merit (and its noise) changes with nu and rho: measure sigma_f at every inner solve
+            self.f_sigma_auto = True
+            self.f_sigma = self.estimate_f_noise(z, f)
         for it in range(maxiter):
             t0 = time.time()
             if rows is None:
@@ -569,13 +628,53 @@ class Solver:
             z_new = z + d
             s_new, f_new, phi_new, c_new = self.evaluate(z_new)
             pred = f_model0 - m_step
-            ratio = (f - f_new) / pred if pred > 0 else 0.0
+            acc_cfg = getattr(self, "geo_accel", None)
+            if acc_cfg is not None and hit and self.step == "gltr" and hasattr(rows, "aF"):
+                try:
+                    ainfo = self._geodesic(z, s, d, ny, rows, met, s_new, f_new, acc_cfg)
+                except Exception as e:  # the acceleration must not stop the run
+                    ainfo = None
+                    self.log(f"      [accel] failed: {e!r}")
+                if ainfo is not None:
+                    extra["accel"] = ainfo["info"]
+                    if ainfo["f"] < f_new:  # take the curved step z + d + a
+                        z_new, s_new, f_new, phi_new, c_new = ainfo["z"], ainfo["s"], ainfo["f"], ainfo["phi"], ainfo["c"]
+                        d = z_new - z
+                    # the per-step callback reads the anchor's last evaluated state as the accepted one
+                    if hasattr(self.A, "last_s"):
+                        self.A.last_z, self.A.last_s = jnp.asarray(z_new), s_new
+            sig = float(getattr(self, "f_sigma", 0.0) or 0.0)
+            if sig > 0 and np.isfinite(f_new):
+                # noise-tolerant ratio (Sun & Nocedal): f is known only to +- sig, so a step whose
+                # predicted decrease is at that level is neither confirmed nor refuted
+                ratio = (f - f_new + 2.0 * sig) / (pred + 2.0 * sig) if pred > -2.0 * sig else 0.0
+            else:
+                ratio = (f - f_new) / pred if pred > 0 else 0.0
             Delta_old = self.Delta
-            if not np.isfinite(ratio) or ratio < 0.25:
+            if (getattr(self, "radius_by_delta", False) and not hit and np.isfinite(f_new)
+                    and (f_new < f or (sig > 0 and ratio > 0.1)) and np.isfinite(ratio) and ratio < 0.25):
+                # an accepted interior step with a poor ratio: shrink the radius, not the step
+                # (0.25 |y| of a tiny interior wall step collapses the radius by orders of magnitude)
+                self.Delta = max(0.25 * ny, 0.25 * self.Delta)
+            elif not np.isfinite(ratio) or ratio < 0.25:
                 self.Delta = 0.25 * ny
             elif ratio > 0.75 and hit:
                 self.Delta = max(2.0 * ny, self.Delta)
-            accepted = bool(np.isfinite(f_new) and f_new < f)
+            if sig > 0:
+                # with a noisy f, accept on the relaxed ratio (an increase within the noise is not
+                # evidence against the model, and refusing it pins the iterate to a lucky low value of
+                # the noise); a rejection always shrinks the radius
+                if np.isfinite(f_new) and pred < 10.0 * sig and f_new <= f + 4.0 * sig:
+                    # a noise-level step: its outcome carries no information about the model (and f is
+                    # deterministic, so rejecting it would repeat the same step); take it, keep the radius
+                    accepted = True
+                    self.Delta = Delta_old
+                else:
+                    accepted = bool(np.isfinite(f_new) and ratio > 0.1)
+                    if not accepted:
+                        self.Delta = 0.25 * min(ny, Delta_old)
+            else:
+                accepted = bool(np.isfinite(f_new) and f_new < f)
             g_first = gn if g_first is None else g_first
             xi_new = np.asarray(s_new["xi"] if accepted else s["xi"])
             dm = self.dmax(xi_new) if self.dmax else float(np.abs(xi_new).max())
@@ -626,7 +725,8 @@ class Solver:
                     h["reanchor"], h["forced reanchor"] = True, True
                     self.log("    radius collapsed with the boundary moved: re-anchoring")
                     return z, hist, "reanchor"
-                if dec < ftol or share < gn_tol or gn < gtol * g_first:
+                share_stop = share < gn_tol and not getattr(self, "no_share_stop", False)
+                if (dec < ftol and not sig > 0) or share_stop or gn < gtol * g_first:
                     return z, hist, "stationary"
                 fs = [e["f_new"] for e in hist if e["accepted"]]
                 if (flat_tol is not None and len(fs) > flat_window and self.Delta > 1e-8

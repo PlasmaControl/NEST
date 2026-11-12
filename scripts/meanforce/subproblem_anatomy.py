@@ -76,7 +76,7 @@ def tr_at(alpha, beta, gnorm, Delta, k):
     return h, float(mu), bool(hit), float(beta[k - 1] * abs(h[-1]) / gnorm), float(dec)
 
 
-def run(Hv, grad, f0, met, kmax, delta_mults, evaluate, base, log, out_path=None):
+def run(Hv, grad, f0, met, kmax, delta_mults, evaluate, base, log, out_path=None, keep=()):
     """Hv: H v (the step model's Hessian); grad: model gradient; met: metric (back, back_T);
     evaluate(d) -> (f, M_over_eps, phi); base = (f, M/eps, phi) at the state."""
     Bv = lambda v: met.back_T(Hv(met.back(v)))  # noqa: E731
@@ -113,6 +113,8 @@ def run(Hv, grad, f0, met, kmax, delta_mults, evaluate, base, log, out_path=None
         curve = np.array([tr_at(alpha, beta, gnorm, D, int(k))[3:] for k in ks])  # res, dec
         rec[f"D{m:g}_res"], rec[f"D{m:g}_dec"] = curve[:, 0], curve[:, 1]
         hK, muK, hitK, resK, decK = tr_at(alpha, beta, gnorm, D, K)
+        if m in keep:
+            rec.setdefault("steps", {})[m] = Q[:K].T @ jnp.asarray(hK)
         log(f"[anatomy] Delta {m:g} |g| = {D:.3e}: converged (K = {K}) res {resK:.2e}, model dec/f0 {decK / f0:.4e}, "
             f"|y| {np.linalg.norm(hK):.3e}, hit {hitK}, mu {muK:.3e}")
         rows = []
@@ -155,5 +157,5 @@ def run(Hv, grad, f0, met, kmax, delta_mults, evaluate, base, log, out_path=None
         rec[f"D{m:g}_norm_share"] = np.array([r["norm_share"] for r in rows])
         rec[f"D{m:g}_dec_share"] = np.array([r["dec_share"] for r in rows])
         if out_path:
-            np.savez(out_path, **rec)
+            np.savez(out_path, **{k: v for k, v in rec.items() if k != "steps"})
     return rec

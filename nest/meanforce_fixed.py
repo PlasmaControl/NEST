@@ -216,7 +216,7 @@ class FixedAnchor:
         self.info = {}
         self.pnorm = None  # set_pnorm: the force bound on the interior p-norm instead of the mean
 
-    def set_pnorm(self, p, mask, exact_beta=True, edge_ratio=None, q=16.0):
+    def set_pnorm(self, p, mask, exact_beta=True, edge_ratio=None, q=16.0, edge_all=None):
         """Bound the interior p-norm M_p = (sum_int w |F|^p / sum_int w)^(1/p) / norm instead of
         the mean M = sum w |F| / norm. ``mask``: bool per collocation point (the interior).
         state() then reports M_p as s["M"] (so the constraint c_F = M_p / eps - 1) and the mean,
@@ -226,11 +226,14 @@ class FixedAnchor:
         ``edge_ratio`` r (optional): bound the edge mean too, through one smooth composite
         measure s["M"] = (M_p^q + (r M_edge)^q)^(1/q); with r = eps / eps_edge the constraint
         s["M"] <= eps holds M_p <= eps and M_edge <= eps_edge to within 2^(1/q). The edge points
-        then carry mean-type rows (curvature 1/|z|, the model beta)."""
+        then carry mean-type rows (curvature 1/|z|, the model beta).
+        ``edge_all`` (default: self.edge_all, False): the second term is the WHOLE-volume mean
+        instead of the mean outside the mask, so the composite bounds the volume mean too."""
         m = jnp.asarray(np.asarray(mask, bool), dtype=jnp.float64)
         w = self.sw**2
+        ea = bool(getattr(self, "edge_all", False) if edge_all is None else edge_all)
         self.pnorm = {"p": float(p), "mask": m, "W": float(jnp.sum(w * m)), "exact_beta": bool(exact_beta),
-                      "W_edge": float(jnp.sum(w * (1.0 - m))),
+                      "W_edge": float(jnp.sum(w * (1.0 - m))) if not ea else float(jnp.sum(w)), "edge_all": ea,
                       "edge_ratio": None if edge_ratio is None else float(edge_ratio), "q": float(q)}
 
     def state(self, z):
@@ -351,7 +354,8 @@ def pnorm_measures(absF, w, pn, norm):
     Fmax = jnp.max(Fi)
     Q = jnp.sum(w * m * (Fi / Fmax) ** p) / pn["W"]
     Mp = Fmax * Q ** (1.0 / p) / norm
-    M_edge = jnp.sum(w * (1.0 - m) * absF) / max(pn["W_edge"], 1e-300) / norm
+    we = w if pn.get("edge_all") else w * (1.0 - m)
+    M_edge = jnp.sum(we * absF) / max(pn["W_edge"], 1e-300) / norm
     out = {"M": Mp, "M_p": Mp, "M_mean": jnp.sum(w * absF) / norm, "M_max_int": Fmax / norm, "M_edge": M_edge}
     r = pn.get("edge_ratio")
     if r is not None:  # composite (M_p^q + (r M_edge)^q)^(1/q), scaled by its larger part
@@ -373,10 +377,12 @@ def pnorm_kappa(absF, s, norm, pn):
         return k
     q, C = pn["q"], s["M"]
     ke = (r * s["M_edge"] / C) ** (q - 1.0) * r / max(pn["W_edge"], 1e-300)
+    if pn.get("edge_all"):  # the volume mean acts on every point, the band p-norm on the band only
+        return jnp.where(m > 0, k * (s["M_p"] / C) ** (q - 1.0), 0.0) + ke
     return jnp.where(m > 0, k * (s["M_p"] / C) ** (q - 1.0), ke)
 
 
-def desc_pnorm(absF_desc, w, mask, p, norm):
+def desc_pnorm(absF_desc, w, mask, p, norm, edge_all=False):
     """DESC's own interior p-norm, interior max and edge mean of |F| on the same points
     (the normalization of eps for the p-norm bound)."""
     m = np.asarray(mask, bool)
@@ -385,7 +391,8 @@ def desc_pnorm(absF_desc, w, mask, p, norm):
     Fmax = F[m].max()
     Mp = Fmax * (np.sum(w[m] * (F[m] / Fmax) ** p) / w[m].sum()) ** (1.0 / p) / norm
     return {"M_p": float(Mp), "max_int": float(Fmax / norm),
-            "edge": float(np.sum(w[~m] * F[~m]) / max(w[~m].sum(), 1e-300) / norm),
+            "edge": (float(np.sum(w * F) / w.sum() / norm) if edge_all else
+                     float(np.sum(w[~m] * F[~m]) / max(w[~m].sum(), 1e-300) / norm)),
             "mean_int": float(np.sum(w[m] * F[m]) / w[m].sum() / norm)}
 
 def use_fixed_rows():
@@ -1178,13 +1185,68 @@ def toroidal_flux_fn(fields, fr):
     return psi
 
 
+def resonant_b_fn(inp, fields, fr, u_ref, m, k, rho_res=None, log=print):
+    """u -> the resonant harmonic b_mk = <b^rho e^{-i(m theta* + k NFP zeta)}> (complex, as [Re, Im]) of the field
+    change B_ann[J(u) - J(u_ref)] on the resonant surface, as ``start_check_bext`` defines it: b^rho = dB.grad(rho)
+    / B_DESC.grad(zeta), theta* = theta + lambda (PEST), with the flux-surface average in (theta*, zeta).
+
+    Linear in u (DESC's B.grad(zeta) in the denominator). Evaluated on the two collocation shells that bracket the
+    resonance (uniform theta and zeta, as ForceResidual builds them) and interpolated linearly in rho. With a
+    stellarator-symmetric grid (zeta over half a period) the mirror half is supplied by the symmetry of b^rho
+    (odd: b^rho(-theta, -zeta) = -b^rho(theta, zeta))."""
+    NFP = fr.inp.eq.NFP
+    rtz = np.asarray(fr.rtz)
+    rho_pts = rtz[:, 0]
+    if rho_res is None:
+        rg = np.linspace(0.02, 0.99, 4000)
+        io = np.asarray(inp.iota(rg)[0])
+        target = -k / m
+        i0 = np.flatnonzero(np.sign(io[:-1] - target) != np.sign(io[1:] - target))
+        if not len(i0):
+            raise ValueError(f"no iota = {target} surface")
+        i = i0[0]
+        rho_res = float(np.interp(0.0, [io[i] - target, io[i + 1] - target], rg[i : i + 2]))
+    ur = np.unique(rho_pts)
+    j = int(np.searchsorted(ur, rho_res))
+    r_lo, r_hi = ur[j - 1], ur[j]
+    wt = (rho_res - r_lo) / (r_hi - r_lo)
+    sel = np.flatnonzero((rho_pts == r_lo) | (rho_pts == r_hi))
+    d = inp.compute_points(["e^rho", "B^zeta", "lambda", "lambda_t"], rtz[sel])
+    phi = np.asarray(fr.phi)[sel]
+    eR, ep, eZ = d["e^rho"][:, 0], d["e^rho"][:, 1], d["e^rho"][:, 2]
+    ex = np.column_stack([eR * np.cos(phi) - ep * np.sin(phi), eR * np.sin(phi) + ep * np.cos(phi), eZ])
+    th, ze = rtz[sel, 1], rtz[sel, 2]
+    psi = m * (th + d["lambda"]) + k * NFP * ze
+    tpt = 1.0 + d["lambda_t"]
+    sym = bool(fr.sym)
+    # full-surface mean of f e^{-i psi} tpt; on the half grid: mean_half[f tpt (e^{-i psi} + s e^{+i psi})] / 2, s = -1
+    kern = (np.exp(-1j * psi) - np.exp(1j * psi)) / 2 if sym else np.exp(-1j * psi)
+    shell_w = np.where(rho_pts[sel] == r_lo, 1.0 - wt, wt)
+    n_lo, n_hi = int(np.sum(rho_pts[sel] == r_lo)), int(np.sum(rho_pts[sel] == r_hi))
+    cnt = np.where(rho_pts[sel] == r_lo, n_lo, n_hi)
+    coef = 2.0 * shell_w * kern * tpt / cnt / d["B^zeta"]  # b_mk = sum coef * (dB . e^rho)
+    cr, ci = jnp.asarray(coef.real), jnp.asarray(coef.imag)
+    ex_j, sel_j, u_ref = jnp.asarray(ex), jnp.asarray(sel), jnp.asarray(u_ref)
+
+    def b(u):
+        dB = fields.B_plasma(jnp.asarray(u) - u_ref, 0.0)[sel_j]
+        br = jnp.sum(dB * ex_j, axis=1)
+        return jnp.stack([jnp.sum(cr * br), jnp.sum(ci * br)])
+    info = {"rho_res": rho_res, "shells": [float(r_lo), float(r_hi)], "weight hi": float(wt), "points": int(len(sel)),
+            "sym": sym, "m": m, "k": k}
+    log(f"[b{m}{k}] resonance rho {rho_res:.5f} between collocation shells {r_lo:.4f} / {r_hi:.4f} ({len(sel)} points, "
+        f"{'half-period symmetric' if sym else 'full'} grid)")
+    return b, info
+
+
 class LinearConstraints:
     """C u = d for the pinned m = 0 modes of a (``pin_current``) and the toroidal flux
     (``pin_flux``), with the targets taken from u_ref (J_fit). ``Ct`` (n x k) feeds
     ProjectedMetric; ``restore`` maps a state onto C u = d with the smallest metric-norm
     change; ``violation`` reports the residuals (cheap: the flux is affine in u)."""
 
-    def __init__(self, cur, fields, fr, u_ref, pin_current=True, pin_flux=True, log=print):
+    def __init__(self, cur, fields, fr, u_ref, pin_current=True, pin_flux=True, log=print, affine=()):
+        """``affine``: extra rows (name, fn, target) with fn(u) an affine scalar of u, held at ``target``."""
         n = cur.n_free
         self.u_ref = jnp.asarray(u_ref)
         self.idx = m0_a_indices(cur) if pin_current else np.zeros(0, int)
@@ -1202,6 +1264,15 @@ class LinearConstraints:
             cols.append(np.asarray(self.a_psi)[:, None])
             log(f"[constraints] toroidal flux row in {time.time() - t1:.0f} s: Psi_bar(J_fit) {self.psi_ref:.6e} Wb, "
                 f"DESC Psi {float(fr.inp.eq.Psi):.6e} Wb")
+        self.aff = []
+        for name, fn, target in affine:
+            t1 = time.time()
+            fj = jax.jit(fn)
+            v0 = float(fj(self.u_ref))
+            a_ = jax.grad(fj)(self.u_ref)
+            self.aff.append({"name": name, "fn": fj, "a": a_, "v_ref": v0, "target": float(target)})
+            cols.append(np.asarray(a_)[:, None])
+            log(f"[constraints] affine row {name} in {time.time() - t1:.0f} s: value at u_ref {v0:.4e}, target {target:.4e}")
         self.Ct = np.concatenate(cols, axis=1) if cols else np.zeros((n, 0))
         log(f"[constraints] {len(self.idx)} pinned m = 0 coefficients of a (enclosed current I(rho, zeta))"
             + (", 1 flux row" if pin_flux else ""))
@@ -1220,7 +1291,14 @@ class LinearConstraints:
             out["pin max|du|/max|u_ref|"] = float(jnp.max(jnp.abs(du)) / jnp.max(jnp.abs(self.u_ref[self.idx])))
         if self.psi is not None:
             out["dPsi/Psi"] = (self.psi_affine(u) - self.psi_ref) / self.psi_ref
+        for r in self.aff:
+            v = self.aff_value(r, u)
+            out[r["name"]] = v
+            out[r["name"] + " - target"] = v - r["target"]
         return out
+
+    def aff_value(self, r, u):
+        return r["v_ref"] + float(r["a"] @ (jnp.asarray(u) - self.u_ref))
 
     def restore(self, u, L):
         """Set the pinned coefficients to u_ref's, then correct the flux along the
@@ -1229,9 +1307,17 @@ class LinearConstraints:
         u = jnp.asarray(u)
         if len(self.idx):
             u = u.at[self.idx].set(self.u_ref[self.idx])
+        rows = []
         if self.psi is not None:
+            rows.append((self.a_psi, self.psi_ref - self.psi_affine(u)))
+        for r in self.aff:
+            rows.append((r["a"], r["target"] - self.aff_value(r, u)))
+        if rows:  # all affine rows at once: u += D c with D the metric-steepest feasible directions, G c = residuals
             Cp = self.Ct[:, : len(self.idx)] if len(self.idx) else np.zeros((len(u), 0))
             mp = ProjectedMetric(L, Cp)
-            d = mp.back(mp.back_T(self.a_psi))
-            u = u + d * (self.psi_ref - self.psi_affine(u)) / float(self.a_psi @ d)
+            D = [mp.back(mp.back_T(a_)) for a_, _ in rows]
+            G = np.array([[float(a_ @ d_) for d_ in D] for a_, _ in rows])
+            c = np.linalg.solve(G, np.array([r_ for _, r_ in rows]))
+            for c_, d_ in zip(c, D):
+                u = u + c_ * d_
         return u
