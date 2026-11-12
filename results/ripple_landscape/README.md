@@ -78,7 +78,7 @@ The job scripts are in `scripts/modal_fixed/ripple/`.
 | `A40_a0.3.npz` | α = 0.3 end state at a/40 | α continuation from J_fit at a/40 (`job_A32_a03`, earlier work) | 0.300 (a/40) |
 | `A60_a0.3.npz` | α = 0.3 end state re-seated at a/60 | `job_A60_cont.sh`, stage α 0.3 | 0.300 |
 | `shielded_start_A60_a0.1.npz` | **the shielded start** used by every experiment below | `job_A60_cont.sh`, stage α 0.1 (stalled before reaching 0.1) | 0.1243 (0.1274 on the 97-radius grid) |
-| `A48_cont_a0.1.npz` | 48/48/6 state at a/60 (uses the L48 DESC file in `bp2/L48N4/`) | `job_A48.sh` | 0.102 at a/60, but 0.142 at a/80: **not grid converged**, do not use for physics without re-solving at a/100 or finer |
+| `A48_cont_a0.1.npz` | 48/48/6 state at a/60 (same L32 DESC file as all other states; load with `--LMN 48 48 6`) | `job_A48.sh` | 0.102 at a/60, but 0.142 / 0.171 / 0.165 at a/80 / a/100 / a/120 (121 radii): **not grid converged at its solve grid**; re-solve at a/100 or finer before using it for physics |
 | `seed_q2_w0.07.npz` | island seed: J_fit with its helical current removed for \|ρ − 0.6375\| ≤ 0.07 (cos² taper 0.03) | `scripts/meanforce/island_seed.py` | 120.6 (b21 = 18% of vacuum) |
 | `seed_q3_w0.03.npz` | the same at q = 3 (ρ 0.9131, half width 0.03) | `island_seed.py` | 164.1 |
 | `seed_all_helical.npz` | J_fit with all helical current removed (the vacuum drive; defines the island phase) | `island_seed.py --window -1` | 267.3 (b21 = 88% of vacuum) |
