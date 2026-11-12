@@ -1,0 +1,61 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+/work/src/desc/__init__.py:102: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  from pynvml import (
+DESCInput(ripple_L32N4_x1e-3.h5: NFP=1, (L,M,N)=(32, 32, 4), current prescribed, a=1.198 m, R0=3.509 m, <beta>=0.0214, field=None)
+basis 32/32/6, collocation resolution (96, 96, 15) (49, 193, 16); DESC <|F|>_vol / norm 4.9995e-07
+[setup] load + fits + reference: 53.5 s; mem {'in use GB': 0.000256512, 'peak GB': 0.271884544, 'host maxrss GB': 5.518564}
+    locate: planes 1/13, 0 inside, 1 s
+    locate: planes 2/13, 0 inside, 1 s
+    locate: planes 3/13, 0 inside, 2 s
+    locate: planes 4/13, 0 inside, 2 s
+    locate: planes 5/13, 0 inside, 2 s
+    locate: planes 6/13, 0 inside, 2 s
+    locate: planes 7/13, 0 inside, 2 s
+    locate: planes 8/13, 0 inside, 2 s
+    locate: planes 9/13, 0 inside, 2 s
+    locate: planes 10/13, 0 inside, 2 s
+    locate: planes 11/13, 0 inside, 2 s
+    locate: planes 12/13, 0 inside, 2 s
+    locate: planes 13/13, 0 inside, 2 s
+    locate: 728,172 inside, 8 s
+[setup] annulus + locate + ForceResidual: 16.1 s; mem {'in use GB': 0.012463104, 'peak GB': 21.223561216, 'host maxrss GB': 6.958128}
+sizes: {'n_u': 7726, 'n_p': 3655, 'points': 151312, 'annulus': 'CylindricalGrid(r [2.5650, 4.6672] n 222, z [-1.5538, 1.5538] n 327, N_phi 25, NFP 1: 1.81M nodes)', 'annulus nodes': 1814850}
+[setup] Fields: 9.1 s; mem {'in use GB': 0.801812992, 'peak GB': 21.223561216, 'host maxrss GB': 7.987812}
+    G = P^T P: slice 1/49, 1 s
+    G = P^T P: slice 8/49, 4 s
+    G = P^T P: slice 16/49, 7 s
+    G = P^T P: slice 24/49, 10 s
+    G = P^T P: slice 32/49, 14 s
+    G = P^T P: slice 40/49, 17 s
+    G = P^T P: slice 48/49, 20 s
+    G = P^T P: slice 49/49, 20 s
+  G = P^T P Gram (3655 x 3655) by radial slices in 20 s
+[setup] pressure Gram: 20.1 s; mem {'in use GB': 0.916879616, 'peak GB': 21.223561216, 'host maxrss GB': 7.987812}
+[bext] desc-fit: {'kind': 'desc-fit', 'rms |B_ext| / rms |B_DESC|': 0.9992736254958058, 'start rms |B - B_DESC| / rms |B_DESC|': 2.4781005702880348e-17}
+[setup] B_ext (desc-fit): 19.4 s; mem {'in use GB': 0.928238848, 'peak GB': 21.223561216, 'host maxrss GB': 7.987812}
+  pressure space: 3655 columns, Cholesky; cond(G) ~ 2.22e+05 (diag ratio^2; cond(P) ~ 4.71e+02)
+[p-norm] band 0.5675 <= rho <= 0.7075: 12352 points on 4 radii; the 'edge' terms are the mean outside the band
+[p-norm] DESC on the same points, p 16: interior p-norm 1.1926e-06, interior max 1.7226e-06, interior mean 5.3227e-07, edge mean 5.5088e-07 (/ norm); band 0.5675-0.7075: 12352 of 151312 points, volume 0.164
+start: M/M_desc 4.6926, rms|F| 7.837e-06, Galerkin 4.0e-17
+[setup] start state (first compile): 7.3 s; mem {'in use GB': 0.958082048, 'peak GB': 21.223561216, 'host maxrss GB': 7.987812}
+[b21] resonance rho 0.63751 between collocation shells 0.6256 / 0.6560 (6176 points, half-period symmetric grid)
+[setup] b21 functional: 4.2 s; mem {'in use GB': 0.959842048, 'peak GB': 21.223561216, 'host maxrss GB': 9.312616}
+[b21] start (J_fit): |b| 0.0000e+00 (0.00% of vacuum), phase +0.0 deg
+[b21] S: |b| 3.9759e-06 (1.05% of vacuum), phase -90.0 deg
+[b21] b0.2: |b| 7.5549e-05 (20.00% of vacuum), phase +90.0 deg
+[b21] b0.5: |b| 1.8888e-04 (50.00% of vacuum), phase +90.0 deg
+[b21] b1.0: |b| 3.7778e-04 (100.00% of vacuum), phase +90.0 deg
+[b21] rel0.5: |b| 4.4404e-05 (11.75% of vacuum), phase +90.0 deg
+[eval] start (J_fit), p 16: max at rho 0.686; top-20 rho [0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686]; share of |F|^p by rho bin 0.60-0.70: 1.00
+[eval] start (J_fit), p 16: M_p / DESC 4.6926, interior max / DESC 4.9583, edge mean / DESC 6.7058, mean / M_desc 6.8629
+[eval] S, p 16: max at rho 0.626; top-20 rho [0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626]; share of |F|^p by rho bin 0.60-0.70: 0.99
+[eval] S, p 16: M_p / DESC 0.3071, interior max / DESC 0.3315, edge mean / DESC 0.1128, mean / M_desc 0.1225
+[eval] b0.2, p 16: max at rho 0.686; top-20 rho [0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686]; share of |F|^p by rho bin 0.60-0.70: 1.00
+[eval] b0.2, p 16: M_p / DESC 1.1536, interior max / DESC 1.2705, edge mean / DESC 0.1377, mean / M_desc 0.1584
+[eval] b0.5, p 16: max at rho 0.686; top-20 rho [0.626, 0.626, 0.626, 0.626, 0.626, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686]; share of |F|^p by rho bin 0.50-0.60: 0.02, 0.60-0.70: 0.98
+[eval] b0.5, p 16: M_p / DESC 0.1188, interior max / DESC 0.1232, edge mean / DESC 0.1591, mean / M_desc 0.1607
+[eval] b1.0, p 16: max at rho 0.626; top-20 rho [0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.626, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686]; share of |F|^p by rho bin 0.60-0.70: 1.00
+[eval] b1.0, p 16: M_p / DESC 0.2830, interior max / DESC 0.3089, edge mean / DESC 0.1949, mean / M_desc 0.2031
+[eval] rel0.5, p 16: max at rho 0.686; top-20 rho [0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686, 0.686]; share of |F|^p by rho bin 0.60-0.70: 0.99
+[eval] rel0.5, p 16: M_p / DESC 0.0698, interior max / DESC 0.0769, edge mean / DESC 0.1230, mean / M_desc 0.1240
+eval only: done in 171 s

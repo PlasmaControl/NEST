@@ -1,0 +1,86 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+/work/src/desc/__init__.py:102: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  from pynvml import (
+[    54.4 s] DESCInput(ripple_L32N4_x1e-3.h5: NFP=1, (L,M,N)=(32, 32, 4), current prescribed, a=1.198 m, R0=3.509 m, <beta>=0.0214, field=None)
+basis 32/32/6, n_u 7726, collocation (96, 96, 15)
+[    73.5 s] annulus CylindricalGrid(r [2.5550, 4.6771] n 168, z [-1.5638, 1.5638] n 247, N_phi 25, NFP 1: 1.04M nodes); inside rows 202029
+[   366.5 s] fit: {"rms |J_DESC - J_fit| / rms |J_DESC| (annulus nodes)": 0.00054554606885324, "by rho band": {"0-0.3": 3.1824372890322494e-05, "0.3-0.55": 2.1094875082880922e-05, "0.55-0.72": 1.7682974228082783e-05, "0.72-0.9": 2.9170951828709438e-05, "0.9-1.0": 0.0010688360559692192}}
+[   385.9 s] start at the points: {"A": {"rms |B_start - B_DESC| / rms|B|": 2.4970058669016e-17, "max": 2.630897347538345e-16}, "B": {"rms |B_start - B_DESC| / rms|B|": 1.3851373148726029e-06, "max": 1.588118060926557e-05}}
+[   458.8 s] resonance iota = -0.5: rho 0.6375118851834444, iota' 0.23399021316757201
+[   463.1 s] vacuum: |b_21| at q res 3.778e-04, pendulum width 0.1136; max |b^rho| 1.84e-03
+[   463.7 s] R0_S_budget:A: |b_21| at q res 3.905e-06, pendulum width 0.0116; max |b^rho| 6.58e-04
+[   464.3 s] R0_b0.2_budget:A: |b_21| at q res 7.513e-05, pendulum width 0.0507; max |b^rho| 2.54e-03
+[   464.8 s] R0_b0.5_budget:A: |b_21| at q res 1.879e-04, pendulum width 0.0802; max |b^rho| 3.99e-03
+[   465.4 s] R0_b1.0_budget:A: |b_21| at q res 3.760e-04, pendulum width 0.1134; max |b^rho| 4.85e-03
+[   465.9 s] R0_rel0.5_budget:A: |b_21| at q res 4.425e-05, pendulum width 0.0389; max |b^rho| 3.79e-03
+[   469.4 s] J_par DESC: |lambda_21| at q res 2.8210e+02; peak 2.8942e+02 at rho 0.624, half-max band [0.554, 0.684]
+[   469.4 s] J_par J_fit: |lambda_21| at q res 2.8376e+02; peak 2.9113e+02 at rho 0.624, half-max band [0.556, 0.684]
+[   469.5 s] J_par R0_S_budget: |lambda_21| at q res 3.5192e+02; peak 3.5443e+02 at rho 0.632, half-max band [0.570, 0.688]
+[   469.6 s] J_par R0_b0.2_budget: |lambda_21| at q res 2.1970e+02; peak 5.9440e+02 at rho 0.700, half-max band [0.646, 0.760]
+[   469.6 s] J_par R0_b0.5_budget: |lambda_21| at q res 1.1660e+02; peak 6.9315e+02 at rho 0.720, half-max band [0.658, 0.836]
+[   469.7 s] J_par R0_b1.0_budget: |lambda_21| at q res 1.9578e+02; peak 1.0743e+03 at rho 0.736, half-max band [0.676, 0.878]
+[   469.8 s] J_par R0_rel0.5_budget: |lambda_21| at q res 2.1843e+02; peak 2.9385e+02 at rho 0.684, half-max band [0.618, 0.754]
+[   512.3 s] [p] d<p>/drho / DESC's at rho_res +- 0.05 (rho 0.588 .. 0.688, step 0.01); DESC p' at rho_res -1.3547e-01
+[   512.3 s] [p] DESC                     p'/p'_D +1.000 +1.000 +1.000 +1.000 +1.000 +1.000 +1.000 +1.000 +1.000 +1.000 +1.000 | at res: <p> 644.95 Pa, p' -1.355e-01, |p_mk| 1.639e-14 Pa, rms B.grad p 7.18e-18
+[   512.3 s] [p] p_fit                    p'/p'_D +1.000 +1.000 +1.000 +1.000 +1.000 +1.000 +1.000 +1.000 +1.000 +1.000 +1.000 | at res: <p> 644.95 Pa, p' -1.355e-01, |p_mk| 1.716e-14 Pa, rms B.grad p 2.13e-17
+[   512.3 s] [p] R0_S_budget              p'/p'_D +0.812 +0.793 +0.765 +0.713 +0.557 +6.659 +1.133 +1.002 +0.959 +0.940 +0.931 | at res: <p> 638.35 Pa, p' -3.960e+01, |p_mk| 6.826e-02 Pa, rms B.grad p 3.77e-05
+[   512.3 s] [p] R0_b0.2_budget           p'/p'_D +0.298 +0.260 +0.197 +0.068 -0.345 +16.329 +1.253 +0.906 +0.799 +0.756 +0.740 | at res: <p> 616.72 Pa, p' -1.079e+02, |p_mk| 6.826e-01 Pa, rms B.grad p 1.23e-05
+[   512.3 s] [p] R0_b0.5_budget           p'/p'_D +0.084 +0.044 -0.025 -0.170 -0.637 +18.324 +1.182 +0.787 +0.666 +0.617 +0.599 | at res: <p> 602.58 Pa, p' -1.227e+02, |p_mk| 1.108e+00 Pa, rms B.grad p 4.16e-06
+[   512.3 s] [p] R0_b1.0_budget           p'/p'_D +0.051 +0.027 -0.018 -0.116 -0.448 +13.314 +0.887 +0.609 +0.531 +0.506 +0.503 | at res: <p> 596.02 Pa, p' -8.899e+01, |p_mk| 1.483e+00 Pa, rms B.grad p 1.64e-05
+[   512.3 s] [p] R0_rel0.5_budget         p'/p'_D +0.129 +0.068 -0.035 -0.248 -0.929 +26.349 +1.670 +1.090 +0.903 +0.818 +0.776 | at res: <p> 611.79 Pa, p' -1.765e+02, |p_mk| 4.249e-01 Pa, rms B.grad p 1.43e-06
+[   516.5 s] shielding DESC: all helical: b21/b21_vac = -1.0000; helical, |rho - rho_res| < 0.04: b21/b21_vac = -0.1308; helical, |rho - rho_res| < 0.08: b21/b21_vac = -0.1997; helical, |rho - rho_res| < 0.16: b21/b21_vac = -0.1438
+[   519.6 s] shielding J_fit: all helical: b21/b21_vac = -1.0051; helical, |rho - rho_res| < 0.04: b21/b21_vac = -0.1312; helical, |rho - rho_res| < 0.08: b21/b21_vac = -0.1995; helical, |rho - rho_res| < 0.16: b21/b21_vac = -0.1438
+[   522.8 s] shielding R0_S_budget: all helical: b21/b21_vac = -1.0179; helical, |rho - rho_res| < 0.04: b21/b21_vac = -0.1656; helical, |rho - rho_res| < 0.08: b21/b21_vac = -0.2583; helical, |rho - rho_res| < 0.16: b21/b21_vac = -0.3169
+[   525.9 s] shielding R0_b0.2_budget: all helical: b21/b21_vac = -0.7893; helical, |rho - rho_res| < 0.04: b21/b21_vac = -0.0885; helical, |rho - rho_res| < 0.08: b21/b21_vac = -0.1578; helical, |rho - rho_res| < 0.16: b21/b21_vac = -0.2289
+[   529.5 s] shielding R0_b0.5_budget: all helical: b21/b21_vac = -0.4688; helical, |rho - rho_res| < 0.04: b21/b21_vac = -0.0080; helical, |rho - rho_res| < 0.08: b21/b21_vac = -0.0113; helical, |rho - rho_res| < 0.16: b21/b21_vac = -0.0339
+[   532.6 s] shielding R0_b1.0_budget: all helical: b21/b21_vac = +0.0335; helical, |rho - rho_res| < 0.04: b21/b21_vac = +0.1361; helical, |rho - rho_res| < 0.08: b21/b21_vac = +0.2393; helical, |rho - rho_res| < 0.16: b21/b21_vac = +0.3094
+[   535.8 s] shielding R0_rel0.5_budget: all helical: b21/b21_vac = -0.8539; helical, |rho - rho_res| < 0.04: b21/b21_vac = -0.0577; helical, |rho - rho_res| < 0.08: b21/b21_vac = -0.1087; helical, |rho - rho_res| < 0.16: b21/b21_vac = -0.2098
+[   536.1 s] vacuum: turn 0, alive 41/41
+[   537.3 s] vacuum: turn 50, alive 41/41
+[   538.5 s] vacuum: turn 100, alive 41/41
+[   539.8 s] vacuum: turn 150, alive 41/41
+[   541.1 s] vacuum: turn 200, alive 41/41
+[   542.3 s] vacuum: turn 250, alive 41/41
+[   543.5 s] vacuum: Poincare done; max radial spread of a line 0.1073
+[   543.5 s] vacuum: along-line p spread / DESC <p> drop over the line's rho range (lines with rho spread > 0.002: 41): 0.500:0.0092:1.00 0.507:0.0100:1.00 0.514:0.0109:1.00 0.521:0.0120:1.00 0.528:0.0133:1.00 0.535:0.0147:1.00 0.542:0.0165:1.00 0.549:0.0186:1.00 0.556:0.0213:1.00 0.563:0.0248:1.00 0.570:0.0299:1.00 0.577:0.0391:1.00 0.584:0.1058:4.38 0.591:0.0928:4.38 0.598:0.0798:4.28 0.605:0.0665:4.07 0.612:0.0532:3.71 0.619:0.0397:3.16 0.626:0.0260:2.42 0.633:0.0122:1.50 0.640:0.0043:1.03 0.647:0.0185:1.93 0.654:0.0328:2.83 0.661:0.0472:3.51 0.668:0.0620:3.96 0.675:0.0768:4.25 0.682:0.0920:4.36 0.689:0.1073:4.37 0.696:0.0368:1.00 0.703:0.0283:1.00 0.710:0.0234:1.00 0.717:0.0200:1.00 0.724:0.0174:1.00 0.731:0.0153:1.00 0.738:0.0136:1.00 0.745:0.0121:1.00 0.752:0.0109:1.00 0.759:0.0098:1.00 0.766:0.0090:1.00 0.773:0.0082:1.00 0.780:0.0075:1.00 [seed:rho spread:ratio]
+[   543.7 s] R0_S_budget:A: turn 0, alive 41/41
+[   544.9 s] R0_S_budget:A: turn 50, alive 41/41
+[   546.1 s] R0_S_budget:A: turn 100, alive 41/41
+[   547.3 s] R0_S_budget:A: turn 150, alive 41/41
+[   548.5 s] R0_S_budget:A: turn 200, alive 41/41
+[   549.6 s] R0_S_budget:A: turn 250, alive 41/41
+[   550.8 s] R0_S_budget:A: Poincare done; max radial spread of a line 0.0024
+[   550.8 s] R0_S_budget:A: along-line p spread / DESC <p> drop over the line's rho range (lines with rho spread > 0.002: 2): 0.633:0.0020:0.58 0.647:0.0024:0.73 [seed:rho spread:ratio]
+[   551.0 s] R0_b0.2_budget:A: turn 0, alive 41/41
+[   552.2 s] R0_b0.2_budget:A: turn 50, alive 41/41
+[   553.4 s] R0_b0.2_budget:A: turn 100, alive 41/41
+[   554.5 s] R0_b0.2_budget:A: turn 150, alive 41/41
+[   555.7 s] R0_b0.2_budget:A: turn 200, alive 41/41
+[   556.9 s] R0_b0.2_budget:A: turn 250, alive 41/41
+[   558.0 s] R0_b0.2_budget:A: Poincare done; max radial spread of a line 0.0494
+[   558.0 s] R0_b0.2_budget:A: along-line p spread / DESC <p> drop over the line's rho range (lines with rho spread > 0.002: 27): 0.500:0.0062:0.01 0.507:0.0064:0.01 0.514:0.0067:0.02 0.521:0.0069:0.02 0.528:0.0071:0.02 0.535:0.0076:0.03 0.542:0.0080:0.03 0.549:0.0085:0.04 0.556:0.0091:0.04 0.563:0.0099:0.05 0.570:0.0110:0.05 0.577:0.0125:0.05 0.584:0.0148:0.06 0.591:0.0195:0.05 0.598:0.0494:0.04 0.605:0.0351:0.03 0.612:0.0208:0.03 0.619:0.0065:0.03 0.626:0.0136:0.03 0.633:0.0279:0.03 0.640:0.0421:0.03 0.647:0.0204:3.55 0.654:0.0101:0.32 0.661:0.0067:0.25 0.668:0.0047:0.24 0.675:0.0032:0.23 0.682:0.0022:0.25 [seed:rho spread:ratio]
+[   558.3 s] R0_b0.5_budget:A: turn 0, alive 41/41
+[   559.4 s] R0_b0.5_budget:A: turn 50, alive 41/41
+[   560.6 s] R0_b0.5_budget:A: turn 100, alive 41/41
+[   561.8 s] R0_b0.5_budget:A: turn 150, alive 41/41
+[   562.9 s] R0_b0.5_budget:A: turn 200, alive 41/41
+[   564.1 s] R0_b0.5_budget:A: turn 250, alive 41/41
+[   565.3 s] R0_b0.5_budget:A: Poincare done; max radial spread of a line 0.0760
+[   565.3 s] R0_b0.5_budget:A: along-line p spread / DESC <p> drop over the line's rho range (lines with rho spread > 0.002: 37): 0.500:0.0115:0.00 0.507:0.0121:0.00 0.514:0.0127:0.00 0.521:0.0135:0.00 0.528:0.0144:0.00 0.535:0.0156:0.00 0.542:0.0172:0.00 0.549:0.0193:0.00 0.556:0.0225:0.00 0.563:0.0283:0.00 0.570:0.0760:0.00 0.577:0.0616:0.01 0.584:0.0472:0.01 0.591:0.0328:0.02 0.598:0.0184:0.02 0.605:0.0047:0.00 0.612:0.0190:0.02 0.619:0.0333:0.02 0.626:0.0475:0.01 0.633:0.0617:0.01 0.640:0.0758:0.00 0.647:0.0202:0.64 0.654:0.0139:0.04 0.661:0.0102:0.02 0.668:0.0076:0.02 0.675:0.0056:0.02 0.682:0.0041:0.02 0.689:0.0031:0.02 0.696:0.0024:0.02 0.731:0.0022:0.00 0.738:0.0025:0.00 0.745:0.0027:0.00 0.752:0.0029:0.00 0.759:0.0030:0.00 0.766:0.0030:0.00 0.773:0.0030:0.00 0.780:0.0029:0.00 [seed:rho spread:ratio]
+[   565.5 s] R0_b1.0_budget:A: turn 0, alive 41/41
+[   566.7 s] R0_b1.0_budget:A: turn 50, alive 41/41
+[   567.9 s] R0_b1.0_budget:A: turn 100, alive 41/41
+[   569.1 s] R0_b1.0_budget:A: turn 150, alive 41/41
+[   570.2 s] R0_b1.0_budget:A: turn 200, alive 41/41
+[   571.4 s] R0_b1.0_budget:A: turn 250, alive 41/41
+[   572.5 s] R0_b1.0_budget:A: Poincare done; max radial spread of a line 0.1010
+[   572.5 s] R0_b1.0_budget:A: along-line p spread / DESC <p> drop over the line's rho range (lines with rho spread > 0.002: 40): 0.500:0.0208:0.00 0.507:0.0220:0.00 0.514:0.0234:0.00 0.521:0.0252:0.00 0.528:0.0275:0.00 0.535:0.0306:0.00 0.542:0.0350:0.00 0.549:0.0430:0.00 0.556:0.1010:0.01 0.563:0.0871:0.01 0.570:0.0725:0.01 0.577:0.0583:0.02 0.584:0.0439:0.02 0.591:0.0295:0.03 0.598:0.0150:0.02 0.605:0.0090:0.02 0.612:0.0234:0.02 0.619:0.0378:0.02 0.626:0.0521:0.02 0.633:0.0664:0.02 0.640:0.0806:0.01 0.647:0.0948:0.00 0.654:0.0364:0.41 0.661:0.0224:0.04 0.668:0.0163:0.02 0.675:0.0123:0.02 0.682:0.0095:0.02 0.689:0.0075:0.01 0.696:0.0059:0.01 0.703:0.0047:0.01 0.710:0.0037:0.01 0.717:0.0029:0.01 0.724:0.0023:0.01 0.738:0.0021:0.00 0.745:0.0024:0.00 0.752:0.0026:0.00 0.759:0.0028:0.01 0.766:0.0029:0.00 0.773:0.0029:0.00 0.780:0.0029:0.00 [seed:rho spread:ratio]
+[   572.8 s] R0_rel0.5_budget:A: turn 0, alive 41/41
+[   573.9 s] R0_rel0.5_budget:A: turn 50, alive 41/41
+[   575.1 s] R0_rel0.5_budget:A: turn 100, alive 41/41
+[   576.2 s] R0_rel0.5_budget:A: turn 150, alive 41/41
+[   577.4 s] R0_rel0.5_budget:A: turn 200, alive 41/41
+[   578.5 s] R0_rel0.5_budget:A: turn 250, alive 41/41
+[   579.7 s] R0_rel0.5_budget:A: Poincare done; max radial spread of a line 0.0453
+[   579.7 s] R0_rel0.5_budget:A: along-line p spread / DESC <p> drop over the line's rho range (lines with rho spread > 0.002: 30): 0.500:0.0068:0.00 0.507:0.0069:0.00 0.514:0.0070:0.00 0.521:0.0070:0.00 0.528:0.0070:0.00 0.535:0.0071:0.00 0.542:0.0071:0.00 0.549:0.0073:0.00 0.556:0.0075:0.00 0.563:0.0078:0.01 0.570:0.0087:0.01 0.577:0.0106:0.01 0.584:0.0155:0.01 0.591:0.0365:0.02 0.598:0.0221:0.02 0.605:0.0078:0.01 0.612:0.0171:0.02 0.619:0.0313:0.02 0.626:0.0453:0.01 0.633:0.0111:0.02 0.640:0.0080:0.09 0.647:0.0061:0.04 0.654:0.0047:0.03 0.661:0.0037:0.03 0.668:0.0030:0.03 0.675:0.0024:0.03 0.752:0.0020:0.01 0.759:0.0021:0.00 0.766:0.0021:0.00 0.773:0.0020:0.00 [seed:rho spread:ratio]
+[   579.7 s] done

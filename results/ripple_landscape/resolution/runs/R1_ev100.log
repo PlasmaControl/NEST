@@ -1,0 +1,44 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+/work/src/desc/__init__.py:102: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  from pynvml import (
+DESCInput(ripple_L32N4_x1e-3.h5: NFP=1, (L,M,N)=(32, 32, 4), current prescribed, a=1.198 m, R0=3.509 m, <beta>=0.0214, field=None)
+basis 40/40/6, collocation resolution (108, 108, 15) (55, 217, 16); DESC <|F|>_vol / norm 4.9995e-07
+[setup] load + fits + reference: 74.2 s; mem {'in use GB': 0.000314112, 'peak GB': 0.499245312, 'host maxrss GB': 5.604028}
+    locate: planes 1/13, 0 inside, 2 s
+    locate: planes 2/13, 0 inside, 2 s
+    locate: planes 3/13, 0 inside, 2 s
+    locate: planes 4/13, 0 inside, 2 s
+    locate: planes 5/13, 0 inside, 2 s
+    locate: planes 6/13, 0 inside, 3 s
+    locate: planes 7/13, 0 inside, 3 s
+    locate: planes 8/13, 0 inside, 3 s
+    locate: planes 9/13, 0 inside, 3 s
+    locate: planes 10/13, 0 inside, 3 s
+    locate: planes 11/13, 0 inside, 4 s
+    locate: planes 12/13, 0 inside, 4 s
+    locate: planes 13/13, 0 inside, 4 s
+W1112 08:37:57.346135   33324 hlo_rematerialization.cc:3198] Can't reduce memory use below 35.63GiB (38253811478 bytes) by rematerialization; only reduced to 39.52GiB (42429667429 bytes), down from 39.52GiB (42429667429 bytes) originally
+W1112 08:38:09.030155   33324 bfc_allocator.cc:501] Allocator (GPU_0_bfc) ran out of memory trying to allocate 39.47GiB (rounded to 42379272448)requested by op 
+If the cause is memory fragmentation maybe the environment variable 'TF_GPU_ALLOCATOR=cuda_malloc_async' will improve the situation. 
+Current allocation summary follows.
+Current allocation summary follows.
+W1112 08:38:09.030496   33324 bfc_allocator.cc:512] *___________________________________________________________________________________________________
+E1112 08:38:09.030541   33324 pjrt_stream_executor_client.cc:3314] Execution of replica 0 failed: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 42379272232 bytes. [tf-allocator-allocation-error='']
+Traceback (most recent call last):
+  File "/work/src/../gpu_entry.py", line 34, in <module>
+    runpy.run_path(script, run_name="__main__")
+  File "<frozen runpy>", line 291, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "scripts/meanforce/mf_fixed.py", line 1003, in <module>
+    main()
+  File "scripts/meanforce/mf_fixed.py", line 308, in main
+    box.locate_plasma_planes(inp0, sym=bool(eq0.sym), verbose=True)
+  File "/work/src/nest/cylindrical_grid.py", line 234, in locate_plasma_planes
+    flush(final=True)
+  File "/work/src/nest/cylindrical_grid.py", line 210, in flush
+    rho, theta, res = _newton(RZ, jnp.asarray(cat["tgt"][pad]), jnp.asarray(cat["z"][pad]),
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+jaxlib._jax.XlaRuntimeError: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 42379272232 bytes.
+--------------------
+For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.

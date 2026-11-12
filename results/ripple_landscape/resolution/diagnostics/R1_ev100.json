@@ -1,0 +1,146 @@
+{
+ "args": {
+  "eq": "/work/ripple_L32N4_x1e-3.h5",
+  "coils": "/work/src/desc_input/vmec_free_boundary/NCSX/NCSX_coils.h5",
+  "bext": "desc-fit",
+  "factors": [
+   1,
+   1,
+   1
+  ],
+  "LMN": [
+   40,
+   40,
+   6
+  ],
+  "colloc": 1.5,
+  "frac": 100.0,
+  "N_phi": 25,
+  "pad": 0.02,
+  "mode_chunk": 16,
+  "rblock": 32,
+  "interp_order": 8,
+  "alphas": [
+   1.0
+  ],
+  "rho0": 1.0,
+  "band": 0.05,
+  "maxiter": 40,
+  "max_outer": 25,
+  "gtol": 0.001,
+  "cg": 400,
+  "subproblem_test": null,
+  "test_delta": 0.016,
+  "anatomy": null,
+  "stiff_modes": null,
+  "line_scan": null,
+  "line_tmax": 2.0,
+  "chord_study": null,
+  "accel": false,
+  "anatomy_deltas": [
+   3.0,
+   30.0,
+   10000.0
+  ],
+  "test_model": "gn",
+  "precond": "force",
+  "hvp_far": 0.1,
+  "hvp_fallback": 5,
+  "beta": 0.5,
+  "no_mult_ls": false,
+  "refresh_lz": null,
+  "refresh_dM": null,
+  "outer_rebuild_factor": 2.0,
+  "beta_adapt": false,
+  "beta_min": 0.03125,
+  "model": "beta",
+  "cg_tol": 0.01,
+  "geo_accel": false,
+  "accel_amax": 0.75,
+  "accel_tol": 0.0001,
+  "accel_maxiter": 300,
+  "radius_by_delta": false,
+  "f_noise": null,
+  "no_share_stop": false,
+  "keep_start_mult": false,
+  "stat_tol": 0.001,
+  "stat_window": 10,
+  "delta0": 0.001,
+  "no_delta_reset": false,
+  "gram_chunk": 1024,
+  "time_budget": null,
+  "stall_stop": null,
+  "stage_flat": null,
+  "setup_only": false,
+  "cross": null,
+  "cross_factors": null,
+  "cross_LMN": null,
+  "cross_ref": null,
+  "start": null,
+  "start_LMN": null,
+  "lanczos_stop": "tr",
+  "no_lean_metric": false,
+  "force_norm": "p",
+  "p": 8.0,
+  "p_schedule": [
+   16.0
+  ],
+  "rho_cut": 0.95,
+  "edge_alpha": null,
+  "p_band": [
+   0.5675,
+   0.7075
+  ],
+  "mean_whole": false,
+  "ref_start": false,
+  "ref_state": null,
+  "colloc_rho": null,
+  "snap_outer": false,
+  "shell_max": null,
+  "eval_save": false,
+  "p_model_beta": false,
+  "eval_only": true,
+  "rho_bins": null,
+  "eval_blend": [],
+  "eval_state": [
+   "S=/work/out/R1_S_a0.1.npz",
+   "b0.2=/work/out/R1_b0.2_budget.npz",
+   "b0.5=/work/out/R1_b0.5_a0.1.npz",
+   "b1.0=/work/out/R1_b1.0_a0.1.npz",
+   "rel0.5=/work/out/R1_rel0.5_a0.1.npz"
+  ],
+  "out": "/work/out/R1_ev100",
+  "mirror": "/results/fxr/res/R1",
+  "pin_b21": null,
+  "b21_mk": [
+   2,
+   1
+  ],
+  "b21_vac": 0.0003778,
+  "b21_phase_state": null,
+  "b21_report": true,
+  "plane": [],
+  "pin_current": false,
+  "pin_flux": false,
+  "hvp": true
+ },
+ "setup": {
+  "load + fits + reference": 74.23539018630981
+ },
+ "alphas": [],
+ "memory": [
+  {
+   "phase": "load + fits + reference",
+   "t": 74.23760867118835,
+   "in use GB": 0.000314112,
+   "peak GB": 0.499245312,
+   "host maxrss GB": 5.604028
+  }
+ ],
+ "basis": [
+  40,
+  40,
+  6
+ ],
+ "hvp diag": []
+}
