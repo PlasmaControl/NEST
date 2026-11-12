@@ -1,0 +1,12 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+/work/src/desc/__init__.py:102: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  from pynvml import (
+[    98.7 s] DESCInput(ripple_L32N4_x1e-3.h5: NFP=1, (L,M,N)=(32, 32, 4), current prescribed, a=1.198 m, R0=3.509 m, <beta>=0.0214, field=None); basis 40/40/6; annulus CylindricalGrid(r [2.5710, 4.6612] n 275, z [-1.5478, 1.5478] n 407, N_phi 25, NFP 1: 2.80M nodes); M_DESC 4.9995e-07
+[   195.4 s] DESC tensor quantities done
+[   196.3 s] DESC: grid volume-mean |F| / M_DESC 1.0487
+[   871.3 s] vacuum done
+[   883.7 s] S: grid volume-mean |F| / M_DESC 0.0676
+[   883.7 s] S done
+[   891.5 s] b1: grid volume-mean |F| / M_DESC 0.0884
+[   891.5 s] b1 done
+[   891.5 s] all done
