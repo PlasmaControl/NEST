@@ -1,0 +1,43 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+/work/src/desc/__init__.py:102: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  from pynvml import (
+[    86.7 s] DESCInput(ripple_L32N4_x1e-3.h5: NFP=1, (L,M,N)=(32, 32, 4), current prescribed, a=1.198 m, R0=3.509 m, <beta>=0.0214, field=None); basis 32/32/6; annulus CylindricalGrid(r [2.5650, 4.6672] n 222, z [-1.5538, 1.5538] n 327, N_phi 25, NFP 1: 1.81M nodes)
+[   110.4 s] field modes for 14 states
+[   161.9 s] chunk rho 0.0010-0.0497 done
+[   180.7 s] chunk rho 0.0510-0.0997 done
+[   200.1 s] chunk rho 0.1009-0.1496 done
+[   220.3 s] chunk rho 0.1509-0.1996 done
+[   241.0 s] chunk rho 0.2008-0.2495 done
+[   261.5 s] chunk rho 0.2508-0.2995 done
+[   281.2 s] chunk rho 0.3007-0.3494 done
+[   300.7 s] chunk rho 0.3507-0.3994 done
+[   321.4 s] chunk rho 0.4006-0.4493 done
+[   342.7 s] chunk rho 0.4506-0.4993 done
+[   364.2 s] chunk rho 0.5005-0.5492 done
+[   384.6 s] chunk rho 0.5504-0.5992 done
+[   404.4 s] chunk rho 0.6004-0.6491 done
+[   424.1 s] chunk rho 0.6504-0.6991 done
+[   443.4 s] chunk rho 0.7003-0.7490 done
+[   463.0 s] chunk rho 0.7503-0.7990 done
+[   483.2 s] chunk rho 0.8002-0.8489 done
+[   503.5 s] chunk rho 0.8502-0.8989 done
+[   523.9 s] chunk rho 0.9001-0.9488 done
+[   543.9 s] chunk rho 0.9501-0.9988 done
+[   569.2 s] chunk rho 1.0000-1.0000 done
+[   571.6 s] DESC compute: W_B 1.927471336e+06 J, V 99.457055 m^3; this grid V 99.456926
+[   572.9 s] DESC: W_B 1.927469378e+06 J, W_th 6.201580255e+04 J, K 6.592689082e-02 Wb^2, Phi_tor 9.999990000e-01, Phi_pol -4.663671622e-01, B.n 2.24e-17, div 8.15e-15
+[   574.2 s] start: W_B 1.927465945e+06 J, W_th 6.201507990e+04 J, K 6.599760172e-02 Wb^2, Phi_tor 9.999982307e-01, Phi_pol -4.664059701e-01, B.n 8.16e-05, div 1.63e-07
+[   575.5 s] bs0.02: W_B 1.927497336e+06 J, W_th 6.199992865e+04 J, K 6.649015188e-02 Wb^2, Phi_tor 1.000001355e+00, Phi_pol -4.670627774e-01, B.n 1.04e-04, div 1.58e-07
+[   576.7 s] bs0.05: W_B 1.927509094e+06 J, W_th 6.199503445e+04 J, K 6.694702237e-02 Wb^2, Phi_tor 1.000002491e+00, Phi_pol -4.675802514e-01, B.n 1.11e-04, div 1.52e-07
+[   577.9 s] bs0.1: W_B 1.927502015e+06 J, W_th 6.200066859e+04 J, K 6.711021737e-02 Wb^2, Phi_tor 1.000001655e+00, Phi_pol -4.677093617e-01, B.n 1.07e-04, div 1.48e-07
+[   579.2 s] bs0.2: W_B 1.927473653e+06 J, W_th 6.202987602e+04 J, K 6.709469502e-02 Wb^2, Phi_tor 9.999981094e-01, Phi_pol -4.675737704e-01, B.n 1.20e-04, div 1.43e-07
+[   580.4 s] bs0.35: W_B 1.927430213e+06 J, W_th 6.207446235e+04 J, K 6.628254179e-02 Wb^2, Phi_tor 9.999931959e-01, Phi_pol -4.666053055e-01, B.n 1.91e-04, div 1.43e-07
+[   581.6 s] bs0.5: W_B 1.927386099e+06 J, W_th 6.212794211e+04 J, K 6.570126786e-02 Wb^2, Phi_tor 9.999883435e-01, Phi_pol -4.658888433e-01, B.n 3.03e-04, div 1.49e-07
+[   582.8 s] bs0.75: W_B 1.927360874e+06 J, W_th 6.215871675e+04 J, K 6.589391252e-02 Wb^2, Phi_tor 9.999858088e-01, Phi_pol -4.660107859e-01, B.n 3.93e-04, div 1.65e-07
+[   584.0 s] bs1.0: W_B 1.927321727e+06 J, W_th 6.221024870e+04 J, K 6.579667874e-02 Wb^2, Phi_tor 9.999818065e-01, Phi_pol -4.658095204e-01, B.n 5.29e-04, div 1.78e-07
+[   585.2 s] R0_S: W_B 1.927474075e+06 J, W_th 6.201143367e+04 J, K 6.614768966e-02 Wb^2, Phi_tor 9.999990962e-01, Phi_pol -4.666022520e-01, B.n 8.36e-05, div 1.62e-07
+[   586.2 s] R0_b0.2: W_B 1.927475890e+06 J, W_th 6.203799604e+04 J, K 6.697186488e-02 Wb^2, Phi_tor 9.999986158e-01, Phi_pol -4.674973315e-01, B.n 1.28e-04, div 1.43e-07
+[   587.2 s] R0_b0.5: W_B 1.927362628e+06 J, W_th 6.217385018e+04 J, K 6.536757753e-02 Wb^2, Phi_tor 9.999865754e-01, Phi_pol -4.655530621e-01, B.n 4.34e-04, div 1.47e-07
+[   588.2 s] R0_b1.0: W_B 1.927338155e+06 J, W_th 6.221412240e+04 J, K 6.557404504e-02 Wb^2, Phi_tor 9.999846563e-01, Phi_pol -4.657499536e-01, B.n 5.86e-04, div 1.81e-07
+[   589.3 s] R0_rel0.5: W_B 1.927431873e+06 J, W_th 6.209340446e+04 J, K 6.535445173e-02 Wb^2, Phi_tor 9.999932813e-01, Phi_pol -4.657706859e-01, B.n 2.36e-04, div 1.44e-07
+[   589.3 s] done
