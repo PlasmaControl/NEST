@@ -178,7 +178,7 @@ We call this state the **shielded start** (`states/shielded_start_A60_a0.1.npz`)
 every experiment below. Its properties:
 
 - *Shielded, slightly over-shielded.* |b21| = 1.24% of vacuum, in the anti-island phase (−90°). The pendulum width
-  is 0.0126 and the traced spread is 0.005–0.007, against 0.11 for the vacuum field (Fig. 6, second panel).
+  is 0.0126 and the largest traced radial spread is 0.0045, against 0.11 for the vacuum field (Fig. 6, second panel).
 - *Shielding current.* λ21 peaks at 360 at ρ = 0.630 (DESC: 289), with half maximum over ρ ∈ [0.565, 0.685].
 - *Residual force.* The residual force is not at q = 2. Per unit volume it is concentrated about 3.5× at
   ρ = 0.90–0.95, near the tearing-unstable q = 3 surface, and toward the edge (Fig. 1, blue curves).
