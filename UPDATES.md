@@ -2,6 +2,18 @@
 
 One entry per commit, newest first.
 
+## 2026-11-12: (2,1) ripple landscape: band-max runs, noise-aware trust region, b21 pin and beta scan (branch ripple-landscape)
+- Report: `docs/ripple_landscape_report.md` (self-contained; figures in `figures/ripple_landscape/`). Data: `results/ripple_landscape/{states,runs,diagnostics}` with a manifest `README.md`; DESC inputs in `desc_input/tokamak_boundary_perturbed/` (bp2 ripple family, L24/L32/L48, xi/a 1e-4..3e-3); Modal job scripts in `scripts/modal_fixed/ripple/`.
+- Case: candidate-C DSHAPE tokamak (hollow p, dp/ds = 0 at q = 2), boundary (2,1) ripple xi/a = 1e-3, fixed boundary, option A (B_ext = B_DESC - B_ann[J_fit]), 32/32/6, a/60, N_phi 25. All forces below are volume-mean |F| / M_DESC.
+- Shielded start (`shielded_start_A60_a0.1.npz`): 0.1243, |b21| 1.24% of vacuum in the anti-island phase.
+- Q2b band-max run (q = 2 band p16 <= alpha x start's, whole mean <= start's): band p16 reached 0.103 x start's (0.032 x DESC's) but the mean rose to 1.104 x; force moved to rho 0.40-0.57 and > 0.95; no island.
+- Stall anatomy: the merit is noisy at 2-4e-8 relative (J x B - grad p cancellation); trust-radius collapse on noise-level ratios. `nest/meanforce.py`: `--f-noise auto` (sigma_f re-measured every inner solve, noise-tolerant ratio and acceptance), `--radius-by-delta`, `--no-share-stop`, `--geo-accel` (geodesic acceleration; no effect on short floor steps). Push-through from the stall then descends steadily (M/eps 1.1242 -> 1.1194 in 25 min), along the valley, no island.
+- Exact quadratic plane maps (`scripts/meanforce/plane_map.py`, `mf_fixed.py --plane`): the shielded start is the minimum on every plane; a straight move to 18% of vacuum b21 costs 119 M_DESC.
+- New b21 pin (`nest/meanforce_fixed.resonant_b_fn`, affine rows in `LinearConstraints`; `mf_fixed.py --pin-b21 BETA --b21-phase-state`): beta scan 0.02-1.0 (30 min each, upper bounds): 0.126 / 0.132 / 0.150 / 0.180 / 0.211 / 0.214 / 0.244 / 0.247 at beta 0.02 / 0.05 / 0.1 / 0.2 / 0.35 / 0.5 / 0.75 / 1.0, against 4.35-135 for the straight projections.
+- The pinned states are real islands (traced width = pendulum width, 0.107 vs 0.113 at beta 1) with p constant along lines (along-line / DESC ratio 0.01-0.07); resonant current moves off q = 2 to both flanks. Release tests: the islands close (beta 0.05 -> 0.83% at 0.1228; beta 0.5 -> 9.6% at 0.151, still closing).
+- Conclusion at this resolution: one valley; islands lie on a monotone wall with no barrier; a vacuum-size island costs about 2x the shielded force. Next: resolution dependence of the gap (48/48/6 at a/100, or a/80), per-shell force of beta = 1.
+- Tests not re-run; new paths are opt-in flags.
+
 ## 2026-10-30: line scans from the net-current-only state; a/80 grid check of alpha 0.001 (branch fixed-boundary)
 - J_I (u = 0, I fixed; M = 21.7 M_DESC, not an equilibrium) -> alpha 0.05 / 0.005 / 0.001 states (`diagnostics/fxLS2.npz`, `runs/fxLS2.log`): M falls almost linearly (~21.7 (1 - t)) to a sharp minimum at each state (t = 1), then rises steeply (~12 M_DESC at t = 1.5). The three rays coincide until t ~ 0.9, so the states differ from each other far less than from J_I. Each state is the optimal scaling of its own free current along this ray.
 - Grid check, no solve (`runs/fxG80a001.log`), mean M / M_DESC: the alpha 0.001 checkpoint is 0.0037 / 0.0016 / 0.0015 at a/40 / a/60 / a/80, and alpha 0.005 is 0.0050 / 0.0045 / 0.0044. So a/60 is converged to ~6% at alpha 0.001 and a/40 is not. The alpha 0.001 interior max is 0.0044 x DESC's, entirely at rho 0.845 (3/5 region).
