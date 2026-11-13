@@ -1,0 +1,54 @@
+log,gpu,LMN,frac,oom,n_u,n_p,points,nR,nZ,Nphi,ann,peak_GB,inuse_end,rss_max,peak_phase
+compare/eh_R0.log,,,,False,,,,,,,,,,,
+compare/eh_R1.log,,,,False,,,,,,,,,,,
+compare/tables.log,,,,False,,,,,,,,,,,
+resolution/runs/R0_S.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,10.611972096,1.517170176,14.830944,[setup] annulus + locate + ForceResidual: 12.9 s
+resolution/runs/R0_b0.2.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,10.611972096,1.522210816,17.048264,[setup] annulus + locate + ForceResidual: 12.4 s
+resolution/runs/R0_b0.5.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,10.611972096,1.514889984,16.331784,[setup] annulus + locate + ForceResidual: 14.2 s
+resolution/runs/R0_b1.0.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,10.611972096,1.518180352,16.655828,[setup] annulus + locate + ForceResidual: 13.7 s
+resolution/runs/R0_diag.log,,,,False,,,,,,,,,,,
+resolution/runs/R0_ev60.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,10.611972096,0.934464768,9.20092,[setup] annulus + locate + ForceResidual: 11.8 s
+resolution/runs/R0_ev80.log,,,,False,7726.0,3655.0,151312.0,222.0,327.0,25.0,1814850.0,21.223561216,0.959842048,9.312616,[setup] annulus + locate + ForceResidual: 16.1 s
+resolution/runs/R0_rel0.5.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,10.611972096,1.5168128,14.701092,[setup] annulus + locate + ForceResidual: 13.1 s
+resolution/runs/R1_S.log,,,,False,11734.0,5607.0,190960.0,222.0,327.0,25.0,1814850.0,21.223598336,3.116219904,12.718636,[setup] annulus + locate + ForceResidual: 21.9 s
+resolution/runs/R1_b0.2.log,,,,False,11734.0,5607.0,190960.0,222.0,327.0,25.0,1814850.0,21.223598336,3.206183424,22.39814,[setup] annulus + locate + ForceResidual: 19.4 s
+resolution/runs/R1_b0.5.log,,,,False,11734.0,5607.0,190960.0,222.0,327.0,25.0,1814850.0,21.223598336,3.223498752,22.208412,[setup] annulus + locate + ForceResidual: 20.1 s
+resolution/runs/R1_b1.0.log,,,,False,11734.0,5607.0,190960.0,222.0,327.0,25.0,1814850.0,21.223598336,3.162328832,26.76758,[setup] annulus + locate + ForceResidual: 18.8 s
+resolution/runs/R1_diag.log,,,,False,,,,,,,,,,,
+resolution/runs/R1_ev100.log,,,,True,,,,,,,,0.499245312,0.000314112,5.604028,[setup] load + fits + reference: 74.2 s
+resolution/runs/R1_ev80.log,,,,False,11734.0,5607.0,190960.0,222.0,327.0,25.0,1814850.0,21.223598336,1.908753664,9.5745,[setup] annulus + locate + ForceResidual: 18.0 s
+resolution/runs/R1_rel0.5.log,,,,False,11734.0,5607.0,190960.0,222.0,327.0,25.0,1814850.0,21.223598336,3.216470784,16.586908,[setup] annulus + locate + ForceResidual: 17.7 s
+resolution/runs/R1b_S.log,,,,False,11734.0,5607.0,190960.0,222.0,327.0,25.0,1814850.0,21.223598336,3.100637184,14.202064,[setup] annulus + locate + ForceResidual: 16.7 s
+resolution/runs/R1b_b1.0.log,,,,False,11734.0,5607.0,190960.0,222.0,327.0,25.0,1814850.0,21.223598336,3.163474432,26.530476,[setup] annulus + locate + ForceResidual: 16.2 s
+resolution/runs/R1b_ev2_100.log,,,,False,11734.0,5607.0,190960.0,275.0,407.0,25.0,2798125.0,42.446776576,1.936456704,10.775404,[setup] annulus + locate + ForceResidual: 21.1 s
+resolution/runs/R1b_ev2_80.log,,,,False,11734.0,5607.0,190960.0,222.0,327.0,25.0,1814850.0,21.223598336,1.908753664,10.056164,[setup] annulus + locate + ForceResidual: 15.6 s
+resolution/runs/R1c_S.log,,,,False,11734.0,5607.0,340256.0,222.0,327.0,25.0,1814850.0,21.223598336,3.77874304,15.932972,[setup] annulus + locate + ForceResidual: 14.2 s
+resolution/runs/R1c_b1.0.log,,,,False,11734.0,5607.0,340256.0,222.0,327.0,25.0,1814850.0,21.223598336,3.743120384,26.93268,[setup] annulus + locate + ForceResidual: 14.9 s
+resolution/runs/R1f_S.log,,,,False,11734.0,5607.0,340256.0,275.0,407.0,25.0,2798125.0,42.446776576,3.799504896,16.80386,[setup] annulus + locate + ForceResidual: 18.9 s
+resolution/runs/R1f_b1.0.log,,,,False,11734.0,5607.0,340256.0,275.0,407.0,25.0,2798125.0,42.446776576,3.782381056,28.574844,[setup] annulus + locate + ForceResidual: 19.8 s
+resolution/runs/R1g_ev120.log,,,,False,11734.0,5607.0,416640.0,329.0,487.0,25.0,4005575.0,42.446776576,2.64280064,11.486504,[setup] annulus + locate + ForceResidual: 21.3 s
+runs/A48_cont.log,,,,False,16574.0,7975.0,235216.0,168.0,247.0,25.0,1037400.0,11.939905792,5.890604288,16.677004,[metric] force metric built in 204 s
+runs/A60_cont.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,10.611972096,1.528488192,14.761352,[setup] annulus + locate + ForceResidual: 22.7 s
+runs/Q2b.log,,,,False,7726.0,3655.0,299536.0,168.0,247.0,25.0,1037400.0,10.611972096,2.034541824,16.444196,[setup] annulus + locate + ForceResidual: 15.0 s
+runs/bd_b21.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,10.611972096,0.934464768,8.629384,[setup] annulus + locate + ForceResidual: 16.0 s
+runs/bd_m2.log,,,,False,,,,,,,,,,,
+runs/bs0.02.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,8.258958592,1.52516864,17.02674,[setup] annulus + locate + ForceResidual: 10.6 s
+runs/bs0.05.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,8.258958592,1.526765824,16.903396,[setup] annulus + locate + ForceResidual: 9.8 s
+runs/bs0.1.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,8.258958592,1.528638464,16.916364,[setup] annulus + locate + ForceResidual: 10.3 s
+runs/bs0.2.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,8.258958592,1.52321024,17.459468,[setup] annulus + locate + ForceResidual: 8.6 s
+runs/bs0.35.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,8.258958592,1.543127552,18.316468,[setup] annulus + locate + ForceResidual: 10.7 s
+runs/bs0.5.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,8.258958592,1.534732288,17.65576,[setup] annulus + locate + ForceResidual: 8.2 s
+runs/bs0.75.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,8.258958592,1.553923072,18.813644,[setup] annulus + locate + ForceResidual: 10.7 s
+runs/bs1.0.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,8.258958592,1.53108608,17.710024,[setup] annulus + locate + ForceResidual: 8.3 s
+runs/bsdiag1.log,,,,False,,,,,,,,,,,
+runs/bsdiag2.log,,,,False,,,,,,,,,,,
+runs/dqb_ev60.log,,,,False,7726.0,3655.0,299536.0,168.0,247.0,25.0,1037400.0,10.611972096,1.282723072,7.660508,[setup] annulus + locate + ForceResidual: 14.1 s
+runs/dqb_ev80.log,,,,False,7726.0,3655.0,299536.0,222.0,327.0,25.0,1814850.0,21.223561216,1.309931776,9.081184,[setup] annulus + locate + ForceResidual: 16.2 s
+runs/dqb_m2.log,,,,False,,,,,,,,,,,
+runs/pm_ev60.log,,,,False,7726.0,3655.0,299536.0,168.0,247.0,25.0,1037400.0,8.258958592,1.287570944,9.198952,[setup] annulus + locate + ForceResidual: 11.2 s
+runs/pm_pin.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,8.258958592,1.470596352,15.658956,[setup] annulus + locate + ForceResidual: 10.7 s
+runs/pushthrough_v3.log,,,,False,7726.0,3655.0,299536.0,168.0,247.0,25.0,1037400.0,8.258958592,1.997192192,16.10534,[setup] annulus + locate + ForceResidual: 12.1 s
+runs/pv_ev60.log,,,,False,7726.0,3655.0,299536.0,168.0,247.0,25.0,1037400.0,8.258958592,1.280156672,7.843896,[setup] annulus + locate + ForceResidual: 9.7 s
+runs/pv_m2.log,,,,False,,,,,,,,,,,
+runs/rel0.05.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,10.611972096,1.462067456,11.530664,[setup] annulus + locate + ForceResidual: 15.9 s
+runs/rel0.5.log,,,,False,7726.0,3655.0,151312.0,168.0,247.0,25.0,1037400.0,10.611972096,1.465673472,11.254928,[setup] annulus + locate + ForceResidual: 15.4 s

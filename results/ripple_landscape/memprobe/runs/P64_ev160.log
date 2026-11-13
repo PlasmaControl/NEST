@@ -1,0 +1,63 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+/work/src/desc/__init__.py:102: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  from pynvml import (
+DESCInput(ripple_L32N4_x1e-3.h5: NFP=1, (L,M,N)=(32, 32, 4), current prescribed, a=1.198 m, R0=3.509 m, <beta>=0.0214, field=None)
+basis 64/64/6, collocation resolution (144, 144, 15) (73, 289, 16); DESC <|F|>_vol / norm 4.9995e-07
+[setup] load + fits + reference: 67.1 s; mem {'in use GB': 0.00056704, 'peak GB': 1.840059648, 'host maxrss GB': 5.845628}
+    locate: planes 1/13, 118,705 inside, 4 s
+    locate: planes 2/13, 237,421 inside, 5 s
+    locate: planes 3/13, 356,147 inside, 7 s
+    locate: planes 4/13, 474,866 inside, 8 s
+    locate: planes 5/13, 593,571 inside, 10 s
+    locate: planes 6/13, 712,289 inside, 11 s
+    locate: planes 7/13, 830,999 inside, 12 s
+    locate: planes 8/13, 949,685 inside, 14 s
+    locate: planes 9/13, 1,068,363 inside, 15 s
+    locate: planes 10/13, 1,187,020 inside, 17 s
+    locate: planes 11/13, 1,305,661 inside, 18 s
+    locate: planes 12/13, 1,424,304 inside, 19 s
+    locate: planes 13/13, 1,542,939 inside, 21 s
+    locate: 2,967,173 inside, 21 s
+[setup] annulus + locate + ForceResidual: 32.9 s; mem {'in use GB': 0.028822528, 'peak GB': 5.306847744, 'host maxrss GB': 6.561452}
+sizes: {'n_u': 28750, 'n_p': 13959, 'points': 337552, 'annulus': 'CylindricalGrid(r [2.5800, 4.6522] n 436, z [-1.5389, 1.5389] n 647, N_phi 25, NFP 1: 7.05M nodes)', 'annulus nodes': 7052300}
+[setup] Fields: 17.7 s; mem {'in use GB': 8.199134464, 'peak GB': 16.921081344, 'host maxrss GB': 8.872012}
+    G = P^T P: slice 1/73, 3 s
+    G = P^T P: slice 8/73, 9 s
+    G = P^T P: slice 16/73, 16 s
+    G = P^T P: slice 24/73, 23 s
+    G = P^T P: slice 32/73, 30 s
+    G = P^T P: slice 40/73, 37 s
+    G = P^T P: slice 48/73, 43 s
+    G = P^T P: slice 56/73, 50 s
+    G = P^T P: slice 64/73, 57 s
+    G = P^T P: slice 72/73, 64 s
+    G = P^T P: slice 73/73, 65 s
+  G = P^T P Gram (13959 x 13959) by radial slices in 65 s
+[setup] pressure Gram: 65.4 s; mem {'in use GB': 9.778937088, 'peak GB': 16.921081344, 'host maxrss GB': 8.872012}
+[bext] desc-fit: {'kind': 'desc-fit', 'rms |B_ext| / rms |B_DESC|': 0.9992736717519032, 'start rms |B - B_DESC| / rms |B_DESC|': 2.4962516120167885e-17}
+[setup] B_ext (desc-fit): 34.6 s; mem {'in use GB': 9.81535616, 'peak GB': 16.921081344, 'host maxrss GB': 8.872012}
+  pressure space: 13959 columns, Cholesky; cond(G) ~ 4.96e+06 (diag ratio^2; cond(P) ~ 2.23e+03)
+[p-norm] band 0.5675 <= rho <= 0.7075: 32368 points on 7 radii; the 'edge' terms are the mean outside the band
+[p-norm] DESC on the same points, p 16: interior p-norm 1.1915e-06, interior max 1.8108e-06, interior mean 4.9102e-07, edge mean 5.6210e-07 (/ norm); band 0.5675-0.7075: 32368 of 337552 points, volume 0.194
+start: M/M_desc 9.9289, rms|F| 1.651e-05, Galerkin 9.8e-16
+[setup] start state (first compile): 2.3 s; mem {'in use GB': 9.891307264, 'peak GB': 16.921081344, 'host maxrss GB': 8.872012}
+[b21] resonance rho 0.63751 between collocation shells 0.6268 / 0.6474 (9248 points, half-period symmetric grid)
+[setup] b21 functional: 4.1 s; mem {'in use GB': 9.889126912, 'peak GB': 16.921081344, 'host maxrss GB': 10.520268}
+/opt/conda/lib/python3.11/site-packages/jax/_src/interpreters/mlir.py:1233: UserWarning: A large amount of constants were captured during lowering (5.68GB total). If this is intentional, disable this warning by setting JAX_CAPTURED_CONSTANTS_WARN_BYTES=-1. To obtain a report of where these constants were encountered, set JAX_CAPTURED_CONSTANTS_REPORT_FRAMES=-1.
+  warnings.warn(message)
+E1113 17:53:45.770269    6451 message_lite.cc:592] xla.gpu.CompilationResultProto exceeded maximum protobuf size of 2GB: 5685263496
+/opt/conda/lib/python3.11/site-packages/jax/_src/compiler.py:850: UserWarning: Error writing persistent compilation cache entry for 'jit_b': XlaRuntimeError: INTERNAL: PjRtStreamExecutorClient::SerializeExecutable proto serialization failed
+  warnings.warn(
+[b21] start (J_fit): |b| 0.0000e+00 (0.00% of vacuum), phase +0.0 deg
+[b21] st40.npz: |b| 4.8398e-06 (1.28% of vacuum), phase -90.0 deg
+[b21] P64end: |b| 6.4143e-06 (1.70% of vacuum), phase -90.0 deg
+[dump] start (J_fit): M/M_desc 9.6766
+[dump] st40.npz: M/M_desc 0.3850
+[dump] P64end: M/M_desc 0.0500
+[eval] start (J_fit), p 16: max at rho 0.707; top-20 rho [0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707]; share of |F|^p by rho bin 0.60-0.70: 0.04, 0.70-0.75: 0.96
+[eval] start (J_fit), p 16: M_p / DESC 9.9289, interior max / DESC 10.4716, edge mean / DESC 9.5692, mean / M_desc 9.6766
+[eval] st40.npz, p 16: max at rho 0.707; top-20 rho [0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707, 0.707]; share of |F|^p by rho bin 0.60-0.70: 0.43, 0.70-0.75: 0.57
+[eval] st40.npz, p 16: M_p / DESC 0.3896, interior max / DESC 0.4051, edge mean / DESC 0.3379, mean / M_desc 0.3850
+[eval] P64end, p 16: max at rho 0.627; top-20 rho [0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627, 0.627]; share of |F|^p by rho bin 0.60-0.70: 1.00
+[eval] P64end, p 16: M_p / DESC 0.1598, interior max / DESC 0.1735, edge mean / DESC 0.0424, mean / M_desc 0.0500
+eval only: done in 301 s

@@ -1,0 +1,206 @@
+{
+ "args": {
+  "eq": "/work/ripple_L32N4_x1e-3.h5",
+  "coils": "/work/src/desc_input/vmec_free_boundary/NCSX/NCSX_coils.h5",
+  "bext": "desc-fit",
+  "factors": [
+   1,
+   1,
+   1
+  ],
+  "LMN": [
+   80,
+   80,
+   6
+  ],
+  "colloc": 1.5,
+  "frac": 200.0,
+  "N_phi": 25,
+  "pad": 0.02,
+  "mode_chunk": 16,
+  "rblock": 32,
+  "interp_order": 8,
+  "alphas": [
+   0.05
+  ],
+  "rho0": 1.0,
+  "band": 0.05,
+  "maxiter": 10,
+  "max_outer": 1,
+  "gtol": 0.001,
+  "cg": 400,
+  "subproblem_test": null,
+  "test_delta": 0.016,
+  "anatomy": null,
+  "stiff_modes": null,
+  "line_scan": null,
+  "line_tmax": 2.0,
+  "chord_study": null,
+  "accel": false,
+  "anatomy_deltas": [
+   3.0,
+   30.0,
+   10000.0
+  ],
+  "test_model": "gn",
+  "precond": "force",
+  "hvp_far": 0.1,
+  "hvp_fallback": 5,
+  "beta": 0.5,
+  "no_mult_ls": false,
+  "refresh_lz": null,
+  "refresh_dM": null,
+  "outer_rebuild_factor": 2.0,
+  "beta_adapt": false,
+  "beta_min": 0.03125,
+  "model": "beta",
+  "cg_tol": 0.01,
+  "geo_accel": false,
+  "accel_amax": 0.75,
+  "accel_tol": 0.0001,
+  "accel_maxiter": 300,
+  "radius_by_delta": true,
+  "f_noise": "auto",
+  "no_share_stop": true,
+  "keep_start_mult": false,
+  "stat_tol": 0.001,
+  "stat_window": 10,
+  "delta0": 0.001,
+  "no_delta_reset": false,
+  "gram_chunk": 1024,
+  "time_budget": 6000.0,
+  "stall_stop": null,
+  "stage_flat": null,
+  "setup_only": false,
+  "cross": null,
+  "cross_factors": null,
+  "cross_LMN": null,
+  "cross_ref": null,
+  "start": "/work/st40.npz",
+  "start_LMN": [
+   40,
+   40,
+   6
+  ],
+  "lanczos_stop": "tr",
+  "no_lean_metric": false,
+  "force_norm": "mean",
+  "p": 8.0,
+  "p_schedule": null,
+  "rho_cut": 0.95,
+  "edge_alpha": null,
+  "p_band": null,
+  "mean_whole": false,
+  "ref_start": false,
+  "ref_state": null,
+  "colloc_rho": null,
+  "snap_outer": false,
+  "shell_max": null,
+  "eval_save": false,
+  "p_model_beta": false,
+  "eval_dump": false,
+  "locate_chunk": 131072,
+  "mem_every": 1,
+  "eval_only": false,
+  "rho_bins": null,
+  "eval_blend": [],
+  "eval_state": [],
+  "out": "/work/out/P80",
+  "mirror": "/results/fxr/mem/P80",
+  "pin_b21": null,
+  "b21_mk": [
+   2,
+   1
+  ],
+  "b21_vac": 0.0003778,
+  "b21_phase_state": null,
+  "b21_report": false,
+  "plane": [],
+  "pin_current": false,
+  "pin_flux": false,
+  "hvp": true
+ },
+ "setup": {
+  "load + fits + reference": 161.83149981498718,
+  "annulus + locate + ForceResidual": 46.668110847473145,
+  "Fields": 24.417820692062378,
+  "pressure Gram": 125.7491991519928,
+  "B_ext (desc-fit)": 32.25233197212219,
+  "start state (first compile)": 6.048588037490845
+ },
+ "alphas": [],
+ "memory": [
+  {
+   "phase": "load + fits + reference",
+   "t": 161.83279824256897,
+   "in use GB": 0.0010624,
+   "peak GB": 3.847910144,
+   "host maxrss GB": 8.55026
+  },
+  {
+   "phase": "annulus + locate + ForceResidual",
+   "t": 208.50216269493103,
+   "in use GB": 0.04112,
+   "peak GB": 5.307799552,
+   "host maxrss GB": 8.55026
+  },
+  {
+   "phase": "Fields",
+   "t": 232.9215817451477,
+   "in use GB": 18.17279488,
+   "peak GB": 27.492274176,
+   "host maxrss GB": 11.597944
+  },
+  {
+   "phase": "pressure Gram",
+   "t": 358.67201471328735,
+   "in use GB": 21.942394112,
+   "peak GB": 28.886906112,
+   "host maxrss GB": 11.597944
+  },
+  {
+   "phase": "B_ext (desc-fit)",
+   "t": 390.9261643886566,
+   "in use GB": 21.975227392,
+   "peak GB": 28.886906112,
+   "host maxrss GB": 11.597944
+  },
+  {
+   "phase": "start state (first compile)",
+   "t": 407.34131932258606,
+   "in use GB": 22.07896832,
+   "peak GB": 33.657962496,
+   "host maxrss GB": 11.597944
+  }
+ ],
+ "basis": [
+  80,
+  80,
+  6
+ ],
+ "hvp diag": [],
+ "sizes": {
+  "n_u": 44254,
+  "n_p": 21607,
+  "points": 458320,
+  "annulus": "CylindricalGrid(r [2.5830, 4.6492] n 543, z [-1.5359, 1.5359] n 807, N_phi 25, NFP 1: 10.96M nodes)",
+  "annulus nodes": 10955025
+ },
+ "bext": {
+  "kind": "desc-fit",
+  "rms |B_ext| / rms |B_DESC|": 0.9992736667441264,
+  "start rms |B - B_DESC| / rms |B_DESC|": 2.5047427368763164e-17
+ },
+ "pressure space": {
+  "rank": 21607,
+  "cond(G)": 14078768.584853815
+ },
+ "start": {
+  "M": 5.559830279749039e-06,
+  "M/M_desc": 11.120768974556414,
+  "rms|F|": 2.1384552365712256e-05,
+  "galerkin": 1.3851371304107449e-14,
+  "rms J_fit": 45533.67228982162,
+  "M_desc": 4.999501646396543e-07
+ }
+}

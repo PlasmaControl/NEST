@@ -222,6 +222,13 @@ def main():
                     help="--eval-only: save each evaluated state (u and its least-squares pressure c_p) as <out>_eval_<name>.npz")
     ap.add_argument("--p-model-beta", action="store_true",
                     help="--force-norm p: use --beta along F_i instead of the exact p - 1")
+    ap.add_argument("--eval-dump", action="store_true",
+                    help="--eval-only: save J, B, F (cylindrical-point arrays) of every evaluated state, with the points' "
+                         "rtz, weights and norm, as <out>_dump.npz (same collocation on every --frac: diff across grids)")
+    ap.add_argument("--locate-chunk", type=int, default=1 << 20,
+                    help="points per Newton batch in locate_plasma_planes (its transient is chunk x DESC modes x 8 B)")
+    ap.add_argument("--mem-every", type=int, default=0,
+                    help="append JAX in-use/peak memory to every K-th inner-step log line (0: off)")
     ap.add_argument("--eval-only", action="store_true",
                     help="--force-norm p: report the start (J_fit) and --start states' p-norms, interior max, "
                          "edge and mean against DESC's, for each p of the schedule, then exit (no metric build)")
@@ -254,6 +261,18 @@ def main():
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     if a.mirror:
         os.makedirs(a.mirror, exist_ok=True)
+    if a.mem_every:  # memory on every K-th inner-step line ("    it  K ...")
+        import re as _re
+        _plain = globals()["log"]
+
+        def _log_mem(msg="", *args_, **kw_):
+            m_ = _re.match(r"\s+it\s+(\d+) ", str(msg))
+            if m_ and int(m_.group(1)) % a.mem_every == 0:
+                mm_ = mem()
+                msg = (f"{msg} | mem in-use {mm_.get('in use GB', 0):.2f} peak {mm_.get('peak GB', 0):.2f} GB "
+                       f"rss {mm_.get('host maxrss GB', 0):.1f}")
+            _plain(msg, *args_, **kw_)
+        globals()["log"] = _log_mem
     t0 = time.time()
     run = {"args": vars(a), "setup": {}, "alphas": [], "memory": []}
 
@@ -305,7 +324,7 @@ def main():
 
     t1 = time.time()
     box = annulus(inp0, inp0.a / a.frac, a.pad, a.N_phi)
-    box.locate_plasma_planes(inp0, sym=bool(eq0.sym), verbose=True)
+    box.locate_plasma_planes(inp0, sym=bool(eq0.sym), verbose=True, chunk=a.locate_chunk)
     fr = ForceResidual(inp0, box, resolution=res)
     fr.norm, fr.F_desc_vol = norm, ref["F_desc_vol"]
     if a.bext != "coils":
@@ -511,6 +530,16 @@ def main():
                              c_p=np.asarray(se_["c"]), nu=np.zeros(3), rho=1.0, eps=0.0)
                 log(f"[eval] saved {nm_}: M/M_desc {float(se_['M_mean']) / M_desc_mean:.4f}, |J - J_fit|/rms "
                     f"{float(jnp.sqrt(jnp.sum(se_['g'] ** 2))):.5f}")
+        if a.eval_dump:
+            dd_ = {"rtz": np.asarray(fr.rtz), "w": np.asarray(w_pts), "norm": float(norm),
+                   "M_desc": float(M_desc_mean), "frac": float(a.frac), "names": np.array([c_[0] for c_ in cases])}
+            for k_, (nm_, zz) in enumerate(cases):
+                se_ = A.state(zz)
+                for key_ in ("J", "B", "F"):
+                    dd_[f"{key_}_{k_}"] = np.asarray(se_[key_])
+                log(f"[dump] {nm_}: M/M_desc {float(se_['M_mean']) / M_desc_mean:.4f}")
+            for d_ in [os.path.dirname(a.out) or "."] + ([a.mirror] if a.mirror else []):
+                np.savez(os.path.join(d_, os.path.basename(a.out) + "_dump.npz"), **dd_)
         if a.shell_max:
             ur = np.unique(rho_pts)
             ur = ur[(ur >= a.shell_max[0]) & (ur <= a.shell_max[1])]

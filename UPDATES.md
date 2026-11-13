@@ -2,6 +2,13 @@
 
 One entry per commit, newest first.
 
+## 2026-11-13: GPU memory census and model, memory/timing probe at 64/64/6 and 80/80/6, Biot-Savart grid check (branch ripple-landscape)
+- Census of 54 runs: every ripple peak up to now except A48_cont (force-metric rebuild, 11.94 GB) came from `locate_plasma_planes`' last Newton batch (chunk x DESC modes x 8 B; 10.61/21.22/42.45 GB, older bs/pm/pv runs 8.26 GB). New `--locate-chunk` (5.3 GB at 131072).
+- Probe (`job_mem.sh`, `results/ripple_landscape/memprobe/`): 64/64/6 a/160: fields 16.8, H_J phase 29.5, force metric 32.4 GB JAX peak (nvidia-smi 66 GB); setup 15 min; steps 3-20 s. 80/80/6 a/200 OOMs on 80 GB in the H_J Cholesky (31.3 GB = 2 x 8 n_u^2 request on 22 GB resident + 15.7 GB H_J).
+- Memory model: H_J phase = resident + 3 x 8 n_u^2; force metric ~1.075 x lean formula; resident ~0.93 GB per 1e9 (points x n_u).
+- Grid check of the 64/64/6 end state (alpha 0.05 met in 6 steps from the embedded R1f shielded state): mean |F|/M_DESC 0.0500 / 0.0488 / 0.0485 at a/160 / a/200 / a/240; pointwise mean |dF| 0.0080 (200-160) and 0.0043 (240-200), about second order in h, largest at rho > 0.9. b21 1.70% of vacuum, phase -90 deg (still shielded) on all grids.
+- New `mf_fixed.py` flags `--eval-dump`, `--mem-every` (the latter does not reach the solver's step log).
+
 ## 2026-11-12: resolution rungs, R1 grid convergence, beta=0 vs beta=1 characterization, energy and helicity; hand-off (branch ripple-landscape)
 - Hand-off for the next agent: `docs/handoff_ripple_landscape_2026-11-12.md` (questions, chronology, confidence table, next experiments, run recipes, standards).
 - Resolution rungs (`job_res.sh`; `results/ripple_landscape/resolution/`). Fresh multipliers, <= 400 steps. R0 32/32/6 a/60: shielded 0.1235, beta 1 0.215 M_DESC. R1 40/40/6 a/80: every state meets alpha 0.1 (0.100).

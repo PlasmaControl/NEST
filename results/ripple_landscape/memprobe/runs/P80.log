@@ -1,0 +1,78 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+/work/src/desc/__init__.py:102: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  from pynvml import (
+DESCInput(ripple_L32N4_x1e-3.h5: NFP=1, (L,M,N)=(32, 32, 4), current prescribed, a=1.198 m, R0=3.509 m, <beta>=0.0214, field=None)
+basis 80/80/6, collocation resolution (168, 168, 15) (85, 337, 16); DESC <|F|>_vol / norm 4.9995e-07
+[setup] load + fits + reference: 161.8 s; mem {'in use GB': 0.0010624, 'peak GB': 3.847910144, 'host maxrss GB': 8.55026}
+    locate: planes 1/13, 186,288 inside, 5 s
+    locate: planes 2/13, 372,567 inside, 8 s
+    locate: planes 3/13, 558,846 inside, 10 s
+    locate: planes 4/13, 745,119 inside, 12 s
+    locate: planes 5/13, 931,384 inside, 15 s
+    locate: planes 6/13, 1,117,626 inside, 17 s
+    locate: planes 7/13, 1,303,856 inside, 19 s
+    locate: planes 8/13, 1,490,075 inside, 22 s
+    locate: planes 9/13, 1,676,247 inside, 24 s
+    locate: planes 10/13, 1,862,419 inside, 26 s
+    locate: planes 11/13, 2,048,575 inside, 29 s
+    locate: planes 12/13, 2,234,717 inside, 31 s
+    locate: planes 13/13, 2,420,857 inside, 34 s
+    locate: 4,655,426 inside, 34 s
+[setup] annulus + locate + ForceResidual: 46.7 s; mem {'in use GB': 0.04112, 'peak GB': 5.307799552, 'host maxrss GB': 8.55026}
+sizes: {'n_u': 44254, 'n_p': 21607, 'points': 458320, 'annulus': 'CylindricalGrid(r [2.5830, 4.6492] n 543, z [-1.5359, 1.5359] n 807, N_phi 25, NFP 1: 10.96M nodes)', 'annulus nodes': 10955025}
+[setup] Fields: 24.4 s; mem {'in use GB': 18.17279488, 'peak GB': 27.492274176, 'host maxrss GB': 11.597944}
+    G = P^T P: slice 1/85, 3 s
+    G = P^T P: slice 8/85, 13 s
+    G = P^T P: slice 16/85, 25 s
+    G = P^T P: slice 24/85, 37 s
+    G = P^T P: slice 32/85, 48 s
+    G = P^T P: slice 40/85, 60 s
+    G = P^T P: slice 48/85, 71 s
+    G = P^T P: slice 56/85, 83 s
+    G = P^T P: slice 64/85, 94 s
+    G = P^T P: slice 72/85, 106 s
+    G = P^T P: slice 80/85, 118 s
+    G = P^T P: slice 85/85, 125 s
+  G = P^T P Gram (21607 x 21607) by radial slices in 126 s
+[setup] pressure Gram: 125.7 s; mem {'in use GB': 21.942394112, 'peak GB': 28.886906112, 'host maxrss GB': 11.597944}
+[bext] desc-fit: {'kind': 'desc-fit', 'rms |B_ext| / rms |B_DESC|': 0.9992736667441264, 'start rms |B - B_DESC| / rms |B_DESC|': 2.5047427368763164e-17}
+[setup] B_ext (desc-fit): 32.3 s; mem {'in use GB': 21.975227392, 'peak GB': 28.886906112, 'host maxrss GB': 11.597944}
+  pressure space: 21607 columns, Cholesky; cond(G) ~ 1.41e+07 (diag ratio^2; cond(P) ~ 3.75e+03)
+start: M/M_desc 11.1208, rms|F| 2.138e-05, Galerkin 1.4e-14
+[setup] start state (first compile): 6.0 s; mem {'in use GB': 22.07896832, 'peak GB': 33.657962496, 'host maxrss GB': 11.597944}
+    H_J: slice 1/85, 6 s
+    H_J: slice 8/85, 37 s
+    H_J: slice 16/85, 74 s
+    H_J: slice 24/85, 112 s
+    H_J: slice 32/85, 149 s
+    H_J: slice 40/85, 187 s
+    H_J: slice 48/85, 224 s
+    H_J: slice 56/85, 262 s
+    H_J: slice 64/85, 299 s
+    H_J: slice 72/85, 337 s
+    H_J: slice 80/85, 374 s
+    H_J: slice 85/85, 398 s
+  H_J Gram (44254 x 44254) by radial slices (lean) in 398 s
+W1113 18:32:57.481823      71 bfc_allocator.cc:501] Allocator (GPU_0_bfc) ran out of memory trying to allocate 29.18GiB (rounded to 31334665216)requested by op 
+If the cause is memory fragmentation maybe the environment variable 'TF_GPU_ALLOCATOR=cuda_malloc_async' will improve the situation. 
+Current allocation summary follows.
+Current allocation summary follows.
+W1113 18:32:57.482375      71 bfc_allocator.cc:512] **__*********_____******_******************_______***********************___________________________
+E1113 18:32:57.482573      71 pjrt_stream_executor_client.cc:3314] Execution of replica 0 failed: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 31334664984 bytes. [tf-allocator-allocation-error='']
+Traceback (most recent call last):
+  File "/work/src/../gpu_entry.py", line 34, in <module>
+    runpy.run_path(script, run_name="__main__")
+  File "<frozen runpy>", line 291, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "scripts/meanforce/mf_fixed.py", line 1032, in <module>
+    main()
+  File "scripts/meanforce/mf_fixed.py", line 611, in main
+    L = mff.metric_L_lean(HJ)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "/work/src/nest/meanforce_fixed.py", line 1012, in metric_L_lean
+    return _chol_donated(H, reg)
+           ^^^^^^^^^^^^^^^^^^^^^
+jaxlib._jax.XlaRuntimeError: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 31334664984 bytes.
+--------------------
+For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.

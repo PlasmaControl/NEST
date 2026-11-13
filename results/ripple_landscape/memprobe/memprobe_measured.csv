@@ -1,0 +1,3 @@
+run,n_u,n_p,points,nodes,locate,fields_peak,resident_before_metric,HJ_phase_peak,fmetric_peak,final_peak,nvsmi_max_MiB,setup_s,status
+P64 64/64/6 a/160 (A100-80GB),28750,13959,337552,7052300,5.31,16.77,9.68,29.52,32.42,32.42,66207,883.0,alpha 0.05 met in 6 steps
+P80 80/80/6 a/200 (A100-80GB),44254,21607,458320,10955025,5.31,27.49,22.08,,,33.66,66189,,OOM in H_J Cholesky (31.3 GB request)
