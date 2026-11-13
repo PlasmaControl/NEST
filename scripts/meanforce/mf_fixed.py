@@ -225,6 +225,9 @@ def main():
     ap.add_argument("--eval-dump", action="store_true",
                     help="--eval-only: save J, B, F (cylindrical-point arrays) of every evaluated state, with the points' "
                          "rtz, weights and norm, as <out>_dump.npz (same collocation on every --frac: diff across grids)")
+    ap.add_argument("--no-rebuild-on-hit", action="store_true",
+                    help="force metric: no inner rebuild after a subproblem whose step hit the trust-region boundary "
+                         "(no cap trigger, no rent-or-buy time); interior cap hits still rebuild")
     ap.add_argument("--locate-chunk", type=int, default=1 << 20,
                     help="points per Newton batch in locate_plasma_planes (its transient is chunk x DESC modes x 8 B)")
     ap.add_argument("--mem-every", type=int, default=0,
@@ -800,7 +803,8 @@ def main():
     mff.use_models(a.model, far=a.hvp_far, fallback=a.hvp_fallback, beta=a.beta, solver=solver,
                    refresh=refresh_rows if a.precond == "force" else None,
                    refresh_lz=a.refresh_lz, refresh_dM=a.refresh_dM, beta_adapt=a.beta_adapt,
-                   beta_min=a.beta_min, log=log, lz_stop=a.lanczos_stop)
+                   beta_min=a.beta_min, log=log, lz_stop=a.lanczos_stop,
+                   skip_hit=a.no_rebuild_on_hit)
     log(f"[model] {a.model}" + (f" (beta {a.beta})" if a.model == "beta" else "")
         + (f" (GN while |c_F| > {a.hvp_far}, GN x{a.hvp_fallback} after a radius cut)" if a.model == "hybrid" else "")
         + (" adaptive" if a.beta_adapt else "")

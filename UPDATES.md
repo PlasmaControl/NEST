@@ -2,6 +2,11 @@
 
 One entry per commit, newest first.
 
+## 2026-11-13: alpha 0.001 floor run at 64/64/6 a/200; --no-rebuild-on-hit (branch ripple-landscape)
+- `job_floor.sh` (Modal 200995f5, cancelled after 30 steps): from P64_a0.05, alpha 0.001, no pin. M/eps 25.8 -> 17.34 (M ~0.0173 M_DESC on a/200). Every trust-region boundary step hit the 400 Lanczos cap and triggered a 335 s inner metric rebuild; ~3/4 of wall time was rebuilds, each followed by a ~0.1% step. Step-29 state frozen on the Volume as /results/fxr/floor/F64/F64_restart_src.npz.
+- New `--no-rebuild-on-hit` (`use_models(skip_hit=True)`): a subproblem whose step hit the trust-region boundary triggers no inner rebuild (cap or rent-or-buy) and adds no rent-or-buy time. Interior cap hits and outer rebuilds unchanged.
+- `job_floor2.sh`: restart from step 29 with `--cg 1500 --no-rebuild-on-hit`, outputs /results/fxr/floor/F64b.
+
 ## 2026-11-13: GPU memory census and model, memory/timing probe at 64/64/6 and 80/80/6, Biot-Savart grid check (branch ripple-landscape)
 - Census of 54 runs: every ripple peak up to now except A48_cont (force-metric rebuild, 11.94 GB) came from `locate_plasma_planes`' last Newton batch (chunk x DESC modes x 8 B; 10.61/21.22/42.45 GB, older bs/pm/pv runs 8.26 GB). New `--locate-chunk` (5.3 GB at 131072).
 - Probe (`job_mem.sh`, `results/ripple_landscape/memprobe/`): 64/64/6 a/160: fields 16.8, H_J phase 29.5, force metric 32.4 GB JAX peak (nvidia-smi 66 GB); setup 15 min; steps 3-20 s. 80/80/6 a/200 OOMs on 80 GB in the H_J Cholesky (31.3 GB = 2 x 8 n_u^2 request on 22 GB resident + 15.7 GB H_J).

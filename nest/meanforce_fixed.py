@@ -648,7 +648,7 @@ def use_exact_hvp(hybrid=False, far=0.1, fallback=5, **kw):
 
 def use_models(mode, far=0.1, fallback=5, beta=0.5, solver=None, refresh=None, refresh_lz=None,
                refresh_dM=None, beta_adapt=False, beta_min=1.0 / 32, beta_hi=1.5, beta_lo=0.5, log=print,
-               lz_stop="both"):
+               lz_stop="both", skip_hit=False):
     """Install the step model for ``meanforce.Solver`` (GLTR) and, optionally, a state-
     triggered rebuild of the trust-region metric.
 
@@ -673,7 +673,11 @@ def use_models(mode, far=0.1, fallback=5, beta=0.5, solver=None, refresh=None, r
     lz_stop (models gn / beta): "both" (pointwise.lanczos_tr_step: stop when the trust-region
     step AND the unconstrained Gauss-Newton minimizer have converged; the latter only feeds the
     GN share and converges slowly in the soft directions) or "tr" (lanczos_tr_step_H on
-    H = J^T J: stop on the trust-region residual alone; the share is the Krylov estimate)."""
+    H = J^T J: stop on the trust-region residual alone; the share is the Krylov estimate).
+
+    skip_hit: a subproblem whose step hit the trust-region boundary triggers no rebuild (its
+    Lanczos cap hit is a truncated boundary step, not a stale metric) and adds nothing to the
+    rent-or-buy time; interior cap hits and the other triggers are unchanged."""
     import types
     rows_cls = {"gn": FixedRows, "hvp": FixedRowsH, "hybrid": FixedRowsH}.get(mode)
     if mode == "beta":
@@ -682,7 +686,7 @@ def use_models(mode, far=0.1, fallback=5, beta=0.5, solver=None, refresh=None, r
     gn_step = mf.pw.lanczos_tr_step
     shim = types.SimpleNamespace(**{k: getattr(mf.pw, k) for k in dir(mf.pw) if not k.startswith("__")})
     st = {"prev_Delta": None, "prev_model": None, "gn_left": 0, "met_id": None, "k_ref": None,
-          "M_ref": None, "last_k": None, "extra_t": 0.0, "n_hist": 0}
+          "M_ref": None, "last_k": None, "extra_t": 0.0, "n_hist": 0, "last_hit": False}
 
     def step(J, JT, r, met, Delta, tol=1e-2, maxiter=100):
         rows = J.__self__
@@ -707,7 +711,7 @@ def use_models(mode, far=0.1, fallback=5, beta=0.5, solver=None, refresh=None, r
             st.update(met_id=id(met), k_ref=None, M_ref=M_now, last_k=None, extra_t=0.0)
         if refresh is not None and st["last_k"] is not None and st["k_ref"] is not None:
             why = None
-            if st["last_k"] >= maxiter:
+            if st["last_k"] >= maxiter and not (skip_hit and st["last_hit"]):
                 why = f"Lanczos hit the cap ({maxiter})"
             elif st["extra_t"] >= METRIC_BUILD_T[0]:
                 why = (f"extra Lanczos time {st['extra_t']:.0f} s since the rebuild >= one rebuild "
@@ -769,9 +773,10 @@ def use_models(mode, far=0.1, fallback=5, beta=0.5, solver=None, refresh=None, r
         DIAG_H.append(d)
         k_now = max(int(out[3]), 1)
         st["last_k"] = k_now
+        st["last_hit"] = bool(out[2])
         if st["k_ref"] is None:
             st["k_ref"] = k_now
-        else:
+        elif not (skip_hit and st["last_hit"]):
             st["extra_t"] += max(0, k_now - st["k_ref"]) * (d["t_sub"] / k_now)
         return out
 
