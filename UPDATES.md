@@ -2,6 +2,12 @@
 
 One entry per commit, newest first.
 
+## 2026-11-13: valley-navigation options (exact subspace search; geodesic acceleration test), alpha 0.001 floor restart result (branch ripple-landscape)
+- Floor restart F64b (Modal 591768a4; --cg 1500 --no-rebuild-on-hit; stopped by CONTROL at step 46): M/eps 17.34 -> 16.66 in ~1.8 h of solve. No inner rebuilds, but no faster per minute: boundary steps take 400-1100 Lanczos (up to 900 s) and some are rejected at Delta 1.7e3. End state F64b_budget at a/240: mean 0.0167 M_DESC (= solve grid, no exploitation); q=2 band p16 0.180 x DESC (0.159 at alpha 0.05), outside-band mean 0.013 (0.041), b21 2.17% of vacuum, phase -90 deg.
+- New `--subspace {prev,accel,prev+accel}` (`Solver._subspace`, `Solver._accel_dir` in nest/meanforce.py): on each trust-region boundary step, exact reconstruction of F (quadratic) and g (affine) on span{d, previous step, acceleration direction} from 2K + K(K-1)/2 state evaluations, minimization of the true merit (grid then Nelder-Mead, straight step included), one real evaluation as a check, radius from the taken step's metric length. Opt-in; default path unchanged.
+- `tests/valley/smoke_valley.sh` (local CPU, 8/8/4 a/20): default path bit-identical to HEAD; subspace prediction vs real evaluation <= 8e-12, straight reconstruction <= 4e-16; all arms 12 steps.
+- `scripts/modal_fixed/ripple/job_valley.sh`: GPU A/B from F64b_budget (arms SA, S, G, C on one container, matched time budget, a/240 eval).
+
 ## 2026-11-13: alpha 0.001 floor run at 64/64/6 a/200; --no-rebuild-on-hit (branch ripple-landscape)
 - `job_floor.sh` (Modal 200995f5, cancelled after 30 steps): from P64_a0.05, alpha 0.001, no pin. M/eps 25.8 -> 17.34 (M ~0.0173 M_DESC on a/200). Every trust-region boundary step hit the 400 Lanczos cap and triggered a 335 s inner metric rebuild; ~3/4 of wall time was rebuilds, each followed by a ~0.1% step. Step-29 state frozen on the Volume as /results/fxr/floor/F64/F64_restart_src.npz.
 - New `--no-rebuild-on-hit` (`use_models(skip_hit=True)`): a subproblem whose step hit the trust-region boundary triggers no inner rebuild (cap or rent-or-buy) and adds no rent-or-buy time. Interior cap hits and outer rebuilds unchanged.

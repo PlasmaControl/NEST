@@ -225,6 +225,13 @@ def main():
     ap.add_argument("--eval-dump", action="store_true",
                     help="--eval-only: save J, B, F (cylindrical-point arrays) of every evaluated state, with the points' "
                          "rtz, weights and norm, as <out>_dump.npz (same collocation on every --frac: diff across grids)")
+    ap.add_argument("--subspace", default=None,
+                    help="exact merit search on each trust-region boundary step over span{d, ...}: 'prev' (previous "
+                         "accepted step), 'accel' (geodesic-acceleration direction), or 'prev,accel'")
+    ap.add_argument("--subspace-smax", type=float, default=4.0, help="--subspace: grid of the d coefficient, [0, smax]")
+    ap.add_argument("--subspace-tmax", type=float, default=2.0,
+                    help="--subspace: grid of the other coefficients, [-tmax, tmax] (directions scaled to |d|)")
+    ap.add_argument("--subspace-all", action="store_true", help="--subspace: also on interior steps")
     ap.add_argument("--no-rebuild-on-hit", action="store_true",
                     help="force metric: no inner rebuild after a subproblem whose step hit the trust-region boundary "
                          "(no cap trigger, no rent-or-buy time); interior cap hits still rebuild")
@@ -748,6 +755,12 @@ def main():
     solver.f_sigma = None if a.f_noise is None else ("auto" if a.f_noise == "auto" else float(a.f_noise))
     solver.geo_accel = ({"amax": a.accel_amax, "tol": a.accel_tol, "maxiter": a.accel_maxiter}
                         if a.geo_accel else None)
+    solver.subspace = ({"dirs": [x.strip() for x in a.subspace.split(",") if x.strip()], "smax": a.subspace_smax,
+                        "tmax": a.subspace_tmax, "all": a.subspace_all,
+                        "accel": {"amax": a.accel_amax, "tol": a.accel_tol, "maxiter": a.accel_maxiter}}
+                       if a.subspace else None)
+    if solver.subspace is not None:
+        log(f"[solver] subspace search {solver.subspace}")
     if a.geo_accel or a.radius_by_delta or a.no_share_stop or a.f_noise:
         log(f"[solver] geodesic acceleration {solver.geo_accel}; radius-by-delta {a.radius_by_delta}; f-noise {a.f_noise}; "
             f"share stop {'off' if a.no_share_stop else 'on'}")

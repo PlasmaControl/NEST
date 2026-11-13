@@ -561,6 +561,130 @@ class Solver:
                  f"{'curved' if f_a < f_new else 'straight'}; {time.time() - t1:.1f}s")
         return {"z": z_a, "s": s_a, "f": f_a, "phi": phi_a, "c": c_a, "info": info}
 
+    def _accel_dir(self, F_dd, ny, rows, met, cfg):
+        """The geodesic-acceleration direction a = -(J^T J)^-1 J^T q for the exact second-order force
+        term F_dd along the step (as ``_geodesic``), without evaluating a trial state."""
+        import meanforce_fixed as mff
+        w = jnp.asarray(self.A.sw) ** 2
+        q = jnp.concatenate([jnp.zeros(rows.n3), rows.sF3 * (w[:, None] * F_dd).ravel(), jnp.zeros(1)])
+        Hv = lambda v: rows.JT(rows.J(v))  # noqa: E731
+        saved = dict(mff.LAST_H)
+        try:
+            ya, _, ahit, k, _, _, _ = mff.lanczos_tr_step_H(Hv, rows.JT(q), 0.5 * float(q @ q), met,
+                                                             cfg["amax"] * ny, cfg["tol"], cfg["maxiter"])
+        finally:
+            mff.LAST_H.clear()
+            mff.LAST_H.update(saved)
+        return met.back(ya), {"|a|/|y|": float(jnp.linalg.norm(ya)) / max(ny, 1e-300), "lanczos": int(k),
+                              "hit": bool(ahit)}
+
+    def _subspace(self, z, s, f, d, ny, rows, met, s_new, f_new, cfg, d_prev):
+        """Exact search of the merit on a low-dimensional subspace around z (fixed boundary, mean bound).
+
+        F(z) is exactly quadratic and the misfit g affine in z, so on z(c) = z + sum_i c_i e_i
+            F(c) = F0 + sum_i c_i F_i + sum_i c_i^2 F_ii + sum_{i<j} c_i c_j F_ij,   g(c) = g0 + sum_i c_i g_i,
+        from 2K + K(K-1)/2 state evaluations (z + d is the trial already evaluated). The merit
+        W.merit(M(c), g(c)) with M = sum w |F| / norm is then exact for every c. Directions: e_1 = d (the
+        trust-region step); 'prev': the previous accepted step, scaled to d's metric length; 'accel': the
+        geodesic-acceleration direction of d, scaled likewise. The minimizer (grid over c_1 in [0, smax],
+        the others in [-tmax, tmax]; then Nelder-Mead) is checked by one real evaluation.
+        Returns None when no direction besides d is available and cfg['dirs'] needs one."""
+        import scipy.optimize
+        t1 = time.time()
+        W, A = self.W, self.A
+        metric_len = lambda v: float(jnp.linalg.norm(jnp.asarray(met.L).T @ v))  # noqa: E731  |L^T v|
+        sm = A.state(z - d)
+        F0, Fp, Fm = jnp.asarray(s["F"]), jnp.asarray(s_new["F"]), jnp.asarray(sm["F"])
+        g0, gp = jnp.asarray(s["g"]), jnp.asarray(s_new["g"])
+        E, info = [d], {"dirs": ["d"]}
+        Fi, Fii, gi = [(Fp - Fm) / 2], [(Fp + Fm) / 2 - F0], [gp - g0]
+        plus = {0: (Fp, gp)}
+        del sm
+        for name in cfg["dirs"]:
+            if name == "prev":
+                if d_prev is None:
+                    continue
+                e = d_prev * (ny / max(metric_len(d_prev), 1e-300))
+            elif name == "accel":
+                a_dir, ainfo = self._accel_dir(Fii[0], ny, rows, met, cfg["accel"])
+                info["accel"] = ainfo
+                na = metric_len(a_dir)
+                if not np.isfinite(na) or na == 0.0:
+                    continue
+                e = a_dir * (ny / na)
+            else:
+                raise ValueError(f"unknown subspace direction {name!r}")
+            sp, smn = A.state(z + e), A.state(z - e)
+            Fpe, Fme = jnp.asarray(sp["F"]), jnp.asarray(smn["F"])
+            Fi.append((Fpe - Fme) / 2)
+            Fii.append((Fpe + Fme) / 2 - F0)
+            gi.append(jnp.asarray(sp["g"]) - g0)
+            plus[len(E)] = (Fpe, jnp.asarray(sp["g"]))
+            E.append(e)
+            info["dirs"].append(name)
+            del sp, smn
+        K = len(E)
+        if K == 1:
+            return None
+        Fij = {}
+        for i in range(K):
+            for j in range(i + 1, K):
+                sij = A.state(z + E[i] + E[j])
+                Fij[(i, j)] = jnp.asarray(sij["F"]) - F0 - Fi[i] - Fi[j] - Fii[i] - Fii[j]
+                del sij
+        n_eval = 1 + 2 * (K - 1) + K * (K - 1) // 2
+        w = jnp.asarray(A.sw) ** 2
+        norm = self.norm
+
+        @jax.jit
+        def M_of(cs):  # cs: (B, K) -> (B,) volume means; F(c) for every row of cs
+            Fc = F0[None] + sum(cs[:, i, None, None] * Fi[i][None] + cs[:, i, None, None] ** 2 * Fii[i][None]
+                                for i in range(K))
+            for (i, j), Fx in Fij.items():
+                Fc = Fc + (cs[:, i] * cs[:, j])[:, None, None] * Fx[None]
+            return jnp.sum(w[None] * jnp.linalg.norm(Fc, axis=2), axis=1) / norm
+
+        G = jnp.stack(gi)  # (K, n_g)
+
+        def merit_batch(cs):
+            cs = jnp.atleast_2d(jnp.asarray(cs, dtype=F0.dtype))
+            Ms = np.asarray(M_of(cs))
+            gs = np.asarray(g0[None] + cs @ G)
+            return np.array([W.merit({"M": Ms[b], "g": gs[b], "Bn_rms": 0.0, "Psi": 1.0})[0]
+                             for b in range(len(Ms))])
+        n1, n2 = int(cfg.get("n1", 33)), int(cfg.get("n2", 17))
+        ax = [np.linspace(0.0, cfg["smax"], n1)] + [np.linspace(-cfg["tmax"], cfg["tmax"], n2)] * (K - 1)
+        grid = np.stack(np.meshgrid(*ax, indexing="ij"), -1).reshape(-1, K)
+        straight = np.eye(K)[0]
+        grid = np.vstack([grid, straight, np.zeros(K)])
+        nb = int(cfg.get("batch", 64))
+        n_g = len(grid)
+        gpad = np.vstack([grid, np.repeat(grid[-1:], (-n_g) % nb, axis=0)])  # one compiled batch shape
+        fv = np.concatenate([merit_batch(gpad[b:b + nb]) for b in range(0, len(gpad), nb)])[:n_g]
+        c0 = grid[int(np.argmin(fv))]
+        res = scipy.optimize.minimize(lambda c: float(merit_batch(c)[0]), c0, method="Nelder-Mead",
+                                      options={"xatol": 1e-4, "fatol": 1e-12 * max(abs(f), 1.0), "maxfev": 400})
+        c_star = res.x if res.fun < fv.min() else c0
+        f_pred = float(merit_batch(c_star)[0])
+        z_s = z + sum(float(c_star[i]) * E[i] for i in range(K))
+        s_s, f_s, phi_s, c_s = self.evaluate(z_s)
+        rel = abs(f_s - f_pred) / max(abs(f_s), 1e-300)
+        f_straight_check = float(merit_batch(straight)[0])
+        info.update({"c": [float(x) for x in c_star], "f straight": float(f_new), "f subspace": float(f_s),
+                     "f predicted": f_pred, "predicted vs actual": rel,
+                     "straight reconstruction": abs(f_straight_check - f_new) / max(abs(f_new), 1e-300),
+                     "evals": n_eval + 1, "grid": int(len(grid)), "time": time.time() - t1})
+        ny_s = metric_len(z_s - z)
+        info["|y| subspace"] = ny_s
+        self.log(f"      [subspace] dirs {'+'.join(info['dirs'])}, c* = ({', '.join(f'{x:+.3f}' for x in c_star)}), "
+                 f"|y| {ny:.3e} -> {ny_s:.3e}; f straight {f_new:.6e}, subspace {f_s:.6e} (predicted {f_pred:.6e}, "
+                 f"rel {rel:.1e}; straight recon {info['straight reconstruction']:.1e}); {n_eval + 1} evals, "
+                 f"{time.time() - t1:.1f}s")
+        if not (np.isfinite(f_s) and rel < cfg.get("check_tol", 1e-6)):
+            self.log(f"      [subspace] rejected: prediction check {rel:.1e}")
+            return None
+        return {"z": z_s, "s": s_s, "f": f_s, "phi": phi_s, "c": c_s, "ny": ny_s, "info": info}
+
     def inner(self, z, maxiter=40, ftol=1e-12, gn_tol=1e-8, gtol=1e-3, hist=None,
               flat_tol=None, flat_window=10):
         """Trust-region steps on L_A at fixed multipliers. Stops on its own tests
@@ -575,6 +699,7 @@ class Solver:
             self.Delta = self.delta0
         tiny_run, rej_run = 0, 0
         rows, qr_cache = None, None
+        d_prev = None  # the last accepted step (subspace search)
         if getattr(self, "f_sigma", None) == "auto" or getattr(self, "f_sigma_auto", False):
             # the merit (and its noise) changes with nu and rho: measure sigma_f at every inner solve
             self.f_sigma_auto = True
@@ -627,6 +752,7 @@ class Solver:
             ny = float(jnp.linalg.norm(y))
             z_new = z + d
             s_new, f_new, phi_new, c_new = self.evaluate(z_new)
+            d_straight, s_straight, f_straight = d, s_new, f_new
             pred = f_model0 - m_step
             acc_cfg = getattr(self, "geo_accel", None)
             if acc_cfg is not None and hit and self.step == "gltr" and hasattr(rows, "aF"):
@@ -643,6 +769,23 @@ class Solver:
                     # the per-step callback reads the anchor's last evaluated state as the accepted one
                     if hasattr(self.A, "last_s"):
                         self.A.last_z, self.A.last_s = jnp.asarray(z_new), s_new
+            sub_cfg = getattr(self, "subspace", None)
+            sub_taken = None
+            if (sub_cfg is not None and (hit or sub_cfg.get("all")) and self.step == "gltr" and hasattr(rows, "aF")
+                    and getattr(self.A, "pnorm", None) is None):
+                try:
+                    sinfo = self._subspace(z, s, f, d_straight, ny, rows, met, s_straight, f_straight, sub_cfg, d_prev)
+                except Exception as e:  # the search must not stop the run
+                    sinfo = None
+                    self.log(f"      [subspace] failed: {e!r}")
+                if sinfo is not None:
+                    extra["subspace"] = sinfo["info"]
+                    if sinfo["f"] < f and sinfo["f"] <= f_new:
+                        z_new, s_new, f_new, phi_new, c_new = sinfo["z"], sinfo["s"], sinfo["f"], sinfo["phi"], sinfo["c"]
+                        d = z_new - z
+                        sub_taken = sinfo["ny"]
+                        if hasattr(self.A, "last_s"):
+                            self.A.last_z, self.A.last_s = jnp.asarray(z_new), s_new
             sig = float(getattr(self, "f_sigma", 0.0) or 0.0)
             if sig > 0 and np.isfinite(f_new):
                 # noise-tolerant ratio (Sun & Nocedal): f is known only to +- sig, so a step whose
@@ -675,6 +818,10 @@ class Solver:
                         self.Delta = 0.25 * min(ny, Delta_old)
             else:
                 accepted = bool(np.isfinite(f_new) and f_new < f)
+            if sub_taken is not None:
+                # the exact subspace minimizer decreased the merit: take it; the radius follows its length
+                accepted = True
+                self.Delta = 2.0 * sub_taken if sub_taken >= 0.9 * Delta_old else max(sub_taken, 0.25 * Delta_old)
             g_first = gn if g_first is None else g_first
             xi_new = np.asarray(s_new["xi"] if accepted else s["xi"])
             dm = self.dmax(xi_new) if self.dmax else float(np.abs(xi_new).max())
@@ -709,6 +856,7 @@ class Solver:
                 tiny_run, rej_run = 0, 0
             if accepted:
                 dec = (f - f_new) / max(abs(f), 1e-300)
+                d_prev = z_new - z
                 z, s, f, phi, c = z_new, s_new, f_new, phi_new, c_new
                 rows = None
                 if mu is not None:
