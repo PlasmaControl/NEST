@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-11-15: subspace search fix (prediction check is diagnostic only; cached evaluator) (branch ripple-landscape)
+- First valley A/B dispatch (Modal 2c07b2d0) cancelled after 4 steps of the first arm: at 64/64/6 every subspace minimizer was a real improvement (actual merit below the straight step by 5-10x the straight decrease, e.g. 122.4970 vs 122.6014), but the 1e-6 prediction check rejected all of them. The predicted-vs-actual error (1.4e-6 -> 4.9e-5) grows ~c^2 with the step multiple c (3 -> 14): rounding in the difference coefficients amplified by long extrapolation. The step is now judged only by its real evaluation (f_s < f and <= f straight); the error is logged.
+- `_subspace_M`: module-level jitted batch evaluator (no recompilation per step); K = 3 grid 33x9x9; Nelder-Mead maxfev 200.
+
 ## 2026-11-13: valley-navigation options (exact subspace search; geodesic acceleration test), alpha 0.001 floor restart result (branch ripple-landscape)
 - Floor restart F64b (Modal 591768a4; --cg 1500 --no-rebuild-on-hit; stopped by CONTROL at step 46): M/eps 17.34 -> 16.66 in ~1.8 h of solve. No inner rebuilds, but no faster per minute: boundary steps take 400-1100 Lanczos (up to 900 s) and some are rejected at Delta 1.7e3. End state F64b_budget at a/240: mean 0.0167 M_DESC (= solve grid, no exploitation); q=2 band p16 0.180 x DESC (0.159 at alpha 0.05), outside-band mean 0.013 (0.041), b21 2.17% of vacuum, phase -90 deg.
 - New `--subspace {prev,accel,prev+accel}` (`Solver._subspace`, `Solver._accel_dir` in nest/meanforce.py): on each trust-region boundary step, exact reconstruction of F (quadratic) and g (affine) on span{d, previous step, acceleration direction} from 2K + K(K-1)/2 state evaluations, minimization of the true merit (grid then Nelder-Mead, straight step included), one real evaluation as a check, radius from the taken step's metric length. Opt-in; default path unchanged.

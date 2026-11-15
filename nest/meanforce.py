@@ -48,6 +48,7 @@ or ``pointwise.qr_tr_step`` on the QR of the stacked Jacobian in the metric vari
 (u columns from this anchor's tables, xi columns by Jacobian-vector products).
 """
 
+import functools
 import json
 import time
 
@@ -468,6 +469,17 @@ def metric(A_u, sw, rmsJ, G_xi, kappa, reg=1e-10, pblock=20000):
     return L, HJ
 
 
+@functools.partial(jax.jit, static_argnums=(5,))
+def _subspace_M(cs, F0, Fi, Fii, Fij, pairs, w, norm):
+    """Volume means sum w |F(c)| / norm for a batch of coefficient rows cs (B, K) of the exact quadratic
+    F(c) = F0 + sum_i c_i Fi[i] + c_i^2 Fii[i] + sum_p c_i c_j Fij[p], pairs[p] = (i, j)."""
+    Fc = F0[None] + jnp.einsum("bk,knd->bnd", cs, Fi) + jnp.einsum("bk,knd->bnd", cs**2, Fii)
+    if pairs:
+        cc = jnp.stack([cs[:, i] * cs[:, j] for i, j in pairs], axis=1)
+        Fc = Fc + jnp.einsum("bp,pnd->bnd", cc, Fij)
+    return jnp.sum(w[None] * jnp.linalg.norm(Fc, axis=2), axis=1) / norm
+
+
 # ------------------------------------------------------------- the solver
 class Solver:
     """AL outer loop with trust-region inner steps (``step``: "gltr" or "qr"), across
@@ -634,15 +646,13 @@ class Solver:
                 del sij
         n_eval = 1 + 2 * (K - 1) + K * (K - 1) // 2
         w = jnp.asarray(A.sw) ** 2
-        norm = self.norm
+        pairs = tuple(sorted(Fij))
+        Fi_a, Fii_a = jnp.stack(Fi), jnp.stack(Fii)
+        Fij_a = jnp.stack([Fij[p_] for p_ in pairs]) if pairs else jnp.zeros((0,) + F0.shape, F0.dtype)
+        norm = jnp.asarray(self.norm, F0.dtype)
 
-        @jax.jit
-        def M_of(cs):  # cs: (B, K) -> (B,) volume means; F(c) for every row of cs
-            Fc = F0[None] + sum(cs[:, i, None, None] * Fi[i][None] + cs[:, i, None, None] ** 2 * Fii[i][None]
-                                for i in range(K))
-            for (i, j), Fx in Fij.items():
-                Fc = Fc + (cs[:, i] * cs[:, j])[:, None, None] * Fx[None]
-            return jnp.sum(w[None] * jnp.linalg.norm(Fc, axis=2), axis=1) / norm
+        def M_of(cs):
+            return _subspace_M(cs, F0, Fi_a, Fii_a, Fij_a, pairs, w, norm)
 
         G = jnp.stack(gi)  # (K, n_g)
 
@@ -652,7 +662,7 @@ class Solver:
             gs = np.asarray(g0[None] + cs @ G)
             return np.array([W.merit({"M": Ms[b], "g": gs[b], "Bn_rms": 0.0, "Psi": 1.0})[0]
                              for b in range(len(Ms))])
-        n1, n2 = int(cfg.get("n1", 33)), int(cfg.get("n2", 17))
+        n1, n2 = int(cfg.get("n1", 33)), int(cfg.get("n2", 17 if K == 2 else 9))
         ax = [np.linspace(0.0, cfg["smax"], n1)] + [np.linspace(-cfg["tmax"], cfg["tmax"], n2)] * (K - 1)
         grid = np.stack(np.meshgrid(*ax, indexing="ij"), -1).reshape(-1, K)
         straight = np.eye(K)[0]
@@ -663,7 +673,7 @@ class Solver:
         fv = np.concatenate([merit_batch(gpad[b:b + nb]) for b in range(0, len(gpad), nb)])[:n_g]
         c0 = grid[int(np.argmin(fv))]
         res = scipy.optimize.minimize(lambda c: float(merit_batch(c)[0]), c0, method="Nelder-Mead",
-                                      options={"xatol": 1e-4, "fatol": 1e-12 * max(abs(f), 1.0), "maxfev": 400})
+                                      options={"xatol": 1e-4, "fatol": 1e-12 * max(abs(f), 1.0), "maxfev": int(cfg.get("maxfev", 200))})
         c_star = res.x if res.fun < fv.min() else c0
         f_pred = float(merit_batch(c_star)[0])
         z_s = z + sum(float(c_star[i]) * E[i] for i in range(K))
@@ -680,8 +690,10 @@ class Solver:
                  f"|y| {ny:.3e} -> {ny_s:.3e}; f straight {f_new:.6e}, subspace {f_s:.6e} (predicted {f_pred:.6e}, "
                  f"rel {rel:.1e}; straight recon {info['straight reconstruction']:.1e}); {n_eval + 1} evals, "
                  f"{time.time() - t1:.1f}s")
-        if not (np.isfinite(f_s) and rel < cfg.get("check_tol", 1e-6)):
-            self.log(f"      [subspace] rejected: prediction check {rel:.1e}")
+        # the taken point is judged by its real evaluation (the caller requires f_s < f and <= f straight); the
+        # prediction error is a diagnostic: rounding in the difference coefficients grows ~ |c|^2 on long steps
+        if not np.isfinite(f_s):
+            self.log("      [subspace] rejected: non-finite merit at the minimizer")
             return None
         return {"z": z_s, "s": s_s, "f": f_s, "phi": phi_s, "c": c_s, "ny": ny_s, "info": info}
 
