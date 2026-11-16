@@ -2,6 +2,10 @@
 
 One entry per commit, newest first.
 
+## 2026-11-16: docs/optimizer_overview.md revised after a deep review; A/B Lanczos-count correction (branch ripple-landscape)
+- `docs/optimizer_overview.md` rewritten for a first-year graduate reader, after two rounds of independent review (a reader pass for self-containedness and an audit against the code). It now has a background section, one-symbol-per-object notation, the representation of J = curl T with derivations of its three guarantees, the exact n_u count, the weak-Poisson derivation and projected-Gram identity, the PHR form from a slack variable, the explicit row vector with the exact-gradient derivation, the beta-model rescaling and the beta >= 1/2 bound, the secular equation and hard case, the Lanczos residual identity, the acceleration expansion and the subproblem actually solved, the subspace coefficient formulas, a corrected 1-D example, a flag table, a background appendix and references. Fixed in review: the p-norm bound's differences (row weights, beta, no subspace search); the noise-rule worked examples (precedence: small-prediction rule first); one majorizer table entry; the 1-D example now shows the default beta = 1/2 step (t = 2/3, overshoot); a state evaluation is 0.11 s, not ~1 s; the Lanczos near-singular threshold (1e-14 theta_max) that sets 'hit' on long valley steps; --N-phi/--delta0/--eval-only defaults and requirements; B_ext's curl includes the basis-fit residual. Added the test-case parameters (B0 0.214 T, |I_tor| 0.169 MA, <beta> 0.0214, |q| 1.37-4.22, q = 2 at rho ~0.63) and the b21 shielding diagnostic. Historical measurements in section 8 were not re-run.
+- Correction to the valley A/B: the Lanczos iterations of the acceleration solves inside `--subspace ...accel` were not logged and had been left out of the count (617 iterations in the window). At equal Lanczos iterations (6185, the smallest arm total, all solves counted) prev+accel gives 2.83x the control's decrease, not 2.99x. Matched-time factors (2.03 / 1.49 / 0.79) are unchanged. No arm rejected a step within the 2280 s window (a step first counted as a prev+accel rejection was an accepted noise-level step; the only rejection in any arm is the control's step 30 at 2458 s). Corrected `results/ripple_landscape/valley/valley_ab_{summary,steps}.csv` and the figure.
+
 ## 2026-11-16: recommended solver flags (fixed boundary, mf_fixed.py) (branch ripple-landscape)
 Recommended combination for tight-bound / long-valley runs, from the 64/64/6 valley A/B (`results/ripple_landscape/valley/`):
 
@@ -14,13 +18,13 @@ Recommended combination for tight-bound / long-valley runs, from the 64/64/6 val
 ```
 Defaults that stay as they are: `--model beta --precond force --lanczos-stop tr` (lean metric build), `--accel-amax 0.75 --accel-tol 1e-4 --accel-maxiter 300` (also used for the subspace acceleration direction).
 
-- Evidence: at matched solve time (2280 s, A100-80GB) the M/eps drop was 2.03x the control's with `--subspace prev,accel` (2.99x per Lanczos iteration), 1.49x with `--subspace prev`, and 0.79x with `--geo-accel` alone. One run per arm, so the factor is indicative.
+- Evidence: at matched solve time (2280 s, A100-80GB) the M/eps drop was 2.03x the control's with `--subspace prev,accel` (2.83x at equal Lanczos iterations; first reported as 2.99x, see the correction entry above), 1.49x with `--subspace prev`, and 0.79x with `--geo-accel` alone. One run per arm, so the factor is indicative.
 - Do not combine `--geo-accel` with `--subspace ...accel` (the subspace search already uses the acceleration direction); `--geo-accel` alone is not recommended.
 - Explanation of the optimizer: `docs/optimizer_overview.md`.
 
 ## 2026-11-16: valley-navigation A/B result (branch ripple-landscape)
 - Modal dda0c12e (A100-80GB, 4.0 h): four arms from F64b_budget (M/eps 16.6615), 64/64/6 a/200, alpha 0.001, --cg 1500 --no-rebuild-on-hit, one container, control last. Matched solve time T = 2280 s (the shortest arm):
-  - subspace prev+accel: M/eps 16.3101 at T (drop 0.351 = 2.03x control); end 16.1438 after 34 steps; per Lanczos iteration 2.99x.
+  - subspace prev+accel: M/eps 16.3101 at T (drop 0.351 = 2.03x control); end 16.1438 after 34 steps; at equal Lanczos iterations 2.83x (first reported as 2.99x; corrected 2026-11-16).
   - subspace prev: 16.4032 at T (0.258 = 1.49x); end 16.3063; per Lanczos 1.49x.
   - geodesic acceleration: 16.5246 at T (0.137 = 0.79x); |a|/|y| ~0.001 on boundary steps, small gain per step, costs an extra Lanczos solve.
   - control: 16.4886 at T (0.173); end 16.4572.
