@@ -1,0 +1,155 @@
+gpu_entry: nvgpu.gpu_info() failed (IndexError); using nvidia-smi --query-gpu
+/work/src/desc/__init__.py:102: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  from pynvml import (
+DESCInput(ripple_L32N4_x1e-3.h5: NFP=1, (L,M,N)=(32, 32, 4), current prescribed, a=1.198 m, R0=3.509 m, <beta>=0.0214, field=None)
+basis 64/64/6, collocation resolution (144, 144, 15) (73, 289, 16); DESC <|F|>_vol / norm 4.9995e-07
+[setup] load + fits + reference: 77.2 s; mem {'in use GB': 0.00056704, 'peak GB': 1.840059648, 'host maxrss GB': 5.717596}
+    locate: planes 1/13, 186,288 inside, 5 s
+    locate: planes 2/13, 372,567 inside, 7 s
+    locate: planes 3/13, 558,846 inside, 9 s
+    locate: planes 4/13, 745,119 inside, 12 s
+    locate: planes 5/13, 931,384 inside, 14 s
+    locate: planes 6/13, 1,117,626 inside, 17 s
+    locate: planes 7/13, 1,303,856 inside, 19 s
+    locate: planes 8/13, 1,490,075 inside, 22 s
+    locate: planes 9/13, 1,676,247 inside, 24 s
+    locate: planes 10/13, 1,862,419 inside, 26 s
+    locate: planes 11/13, 2,048,575 inside, 29 s
+    locate: planes 12/13, 2,234,717 inside, 31 s
+    locate: planes 13/13, 2,420,857 inside, 34 s
+    locate: 4,655,426 inside, 34 s
+[setup] annulus + locate + ForceResidual: 53.5 s; mem {'in use GB': 0.028822528, 'peak GB': 5.306847744, 'host maxrss GB': 6.42052}
+sizes: {'n_u': 28750, 'n_p': 13959, 'points': 337552, 'annulus': 'CylindricalGrid(r [2.5830, 4.6492] n 543, z [-1.5359, 1.5359] n 807, N_phi 25, NFP 1: 10.96M nodes)', 'annulus nodes': 10955025}
+[setup] Fields: 24.0 s; mem {'in use GB': 8.2754112, 'peak GB': 17.680212224, 'host maxrss GB': 9.763204}
+    G = P^T P: slice 1/73, 3 s
+    G = P^T P: slice 8/73, 8 s
+    G = P^T P: slice 16/73, 15 s
+    G = P^T P: slice 24/73, 21 s
+    G = P^T P: slice 32/73, 28 s
+    G = P^T P: slice 40/73, 34 s
+    G = P^T P: slice 48/73, 40 s
+    G = P^T P: slice 56/73, 47 s
+    G = P^T P: slice 64/73, 53 s
+    G = P^T P: slice 72/73, 60 s
+    G = P^T P: slice 73/73, 61 s
+  G = P^T P Gram (13959 x 13959) by radial slices in 61 s
+[setup] pressure Gram: 61.0 s; mem {'in use GB': 9.854685696, 'peak GB': 17.680212224, 'host maxrss GB': 9.763204}
+[bext] desc-fit: {'kind': 'desc-fit', 'rms |B_ext| / rms |B_DESC|': 0.999273671514965, 'start rms |B - B_DESC| / rms |B_DESC|': 2.4883817622295596e-17}
+[setup] B_ext (desc-fit): 38.0 s; mem {'in use GB': 9.883843072, 'peak GB': 17.680212224, 'host maxrss GB': 9.763204}
+  pressure space: 13959 columns, Cholesky; cond(G) ~ 4.96e+06 (diag ratio^2; cond(P) ~ 2.23e+03)
+start: M/M_desc 9.6766, rms|F| 1.651e-05, Galerkin 1.0e-15
+[setup] start state (first compile): 3.1 s; mem {'in use GB': 9.957092864, 'peak GB': 17.680212224, 'host maxrss GB': 9.763204}
+    H_J: slice 1/73, 3 s
+    H_J: slice 8/73, 15 s
+    H_J: slice 16/73, 30 s
+    H_J: slice 24/73, 44 s
+    H_J: slice 32/73, 60 s
+    H_J: slice 40/73, 74 s
+    H_J: slice 48/73, 89 s
+    H_J: slice 56/73, 104 s
+    H_J: slice 64/73, 119 s
+    H_J: slice 72/73, 134 s
+    H_J: slice 73/73, 136 s
+  H_J Gram (28750 x 28750) by radial slices (lean) in 136 s
+[setup] metric (H_J by slices, Cholesky): 139.5 s; mem {'in use GB': 16.568223744, 'peak GB': 29.79322496, 'host maxrss GB': 16.219228}
+start from /work/st.npz: nu [6.932364636480543e-14, 0.0, 0.0], rho 1.0
+products: J v 0.093 s, J^T w 0.111 s
+[setup] products: 0.0 s; mem {'in use GB': 16.599068416, 'peak GB': 29.79322496, 'host maxrss GB': 16.226624}
+[solver] subspace search {'dirs': ['prev', 'accel'], 'smax': 4.0, 'tmax': 2.0, 'all': False, 'accel': {'amax': 0.75, 'tol': 0.0001, 'maxiter': 300}}
+[solver] geodesic acceleration None; radius-by-delta True; f-noise auto; share stop off
+[model] beta (beta 0.5); metric force (rebuild: Lanczos cap or rent-or-buy; outer if psi' changed > x2); LS multiplier on; Lanczos stop tr
+alpha 0.001: eps 4.9995e-10
+  [multiplier] least-squares nu_F 9.256e-12 (was 6.932e-14) at the start of the bound
+    H_F(local, lean): slice 1/73, 6 s
+    H_F(local, lean): slice 8/73, 32 s
+    H_F(local, lean): slice 16/73, 62 s
+    H_F(local, lean): slice 24/73, 93 s
+    H_F(local, lean): slice 32/73, 123 s
+    H_F(local, lean): slice 40/73, 154 s
+    H_F(local, lean): slice 48/73, 185 s
+    H_F(local, lean): slice 56/73, 215 s
+    H_F(local, lean): slice 64/73, 246 s
+    H_F(local, lean): slice 72/73, 276 s
+    H_F(local, lean): slice 73/73, 280 s
+  H_F(local) Gram (28750 x 28750, lean) in 286 s
+  metric: trace H_J 2.932e-03, trace H_F(local) 1.814e+14 (lean build)
+[metric] force metric built in 288 s; mem {'in use GB': 16.671833344, 'peak GB': 32.803205376, 'host maxrss GB': 17.266236}
+  [metric] refreshed at outer 0; Delta None -> 1.496e+00 (|L^-1 grad|)
+    [noise] merit at 6 points 1e-10 away (metric): spread 4.240e-06, sigma_f 1.436e-06 (1.2e-08 of f)
+      [beta] lanczos 111 (TR stop; theta [1.88e-03, 2.85e+07], hit True) t 66.3s
+      [subspace] dirs d+accel, c* = (+3.175, +0.001), |y| 1.496e+00 -> 4.751e+00; f straight 1.226414e+02, subspace 1.226358e+02 (predicted 1.226359e+02, rel 1.6e-07; straight recon 0.0e+00); 5 evals, 24.3s
+    it   0 f 1.226477e+02 -> 1.226358e+02 ratio +2.75 |y| 1.50e+00 Delta 9.50e+00 |g| 1.5e+00 GN 0.000 hit M/eps 16.6611 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 91.4s
+      [beta] lanczos 87 (TR stop; theta [1.65e-02, 2.76e+07], hit False) t 21.2s
+    it   1 f 1.226358e+02 -> 1.226308e+02 ratio +1.23 |y| 5.22e-01 Delta 9.50e+00 |g| 2.2e+00 GN 0.000 M/eps 16.6608 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 21.5s
+      [beta] lanczos 64 (TR stop; theta [9.55e-02, 2.78e+07], hit False) t 15.6s
+    it   2 f 1.226308e+02 -> 1.226297e+02 ratio +1.58 |y| 8.85e-02 Delta 9.50e+00 |g| 1.6e+00 GN 0.000 M/eps 16.6608 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 15.8s
+      [beta] lanczos 289 (TR stop; theta [1.81e-05, 3.03e+07], hit True) t 136.8s
+      [subspace] dirs d+prev+accel, c* = (+7.467, +0.007, +0.128), |y| 9.502e+00 -> 7.114e+01; f straight 1.226115e+02, subspace 1.225552e+02 (predicted 1.225554e+02, rel 9.3e-07; straight recon 0.0e+00); 9 evals, 100.7s
+    it   3 f 1.226297e+02 -> 1.225552e+02 ratio +4.40 |y| 9.50e+00 Delta 1.42e+02 |g| 2.2e-01 GN 0.000 hit M/eps 16.6560 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 237.7s
+      [beta] lanczos 121 (TR stop; theta [3.09e-03, 2.77e+07], hit False) t 29.8s
+    it   4 f 1.225552e+02 -> 1.225322e+02 ratio +1.20 |y| 2.85e+00 Delta 1.42e+02 |g| 2.3e+00 GN 0.000 M/eps 16.6545 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 30.1s
+      [beta] lanczos 44 (TR stop; theta [4.82e-01, 2.76e+07], hit False) t 10.7s
+    it   5 f 1.225322e+02 -> 1.225309e+02 ratio +1.44 |y| 5.86e-02 Delta 1.42e+02 |g| 2.8e+00 GN 0.000 M/eps 16.6544 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 10.9s
+      [beta] lanczos 634 (TR stop; theta [5.65e-07, 2.83e+07], hit True) t 294.2s
+      [subspace] dirs d+prev+accel, c* = (+4.025, -0.000, +0.013), |y| 1.423e+02 -> 5.727e+02; f straight 1.223235e+02, subspace 1.219626e+02 (predicted 1.219627e+02, rel 9.1e-07; straight recon 0.0e+00); 9 evals, 40.1s
+    it   6 f 1.225309e+02 -> 1.219626e+02 ratio +2.72 |y| 1.42e+02 Delta 1.15e+03 |g| 2.9e-01 GN 0.007 hit M/eps 16.6181 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 334.6s
+      [beta] lanczos 38 (TR stop; theta [7.51e-01, 2.65e+07], hit False) t 9.2s
+    it   7 f 1.219626e+02 -> 1.219396e+02 ratio +1.25 |y| 2.17e-01 Delta 1.15e+03 |g| 1.5e+01 GN 0.000 M/eps 16.6166 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 9.4s
+      [beta] lanczos 222 (TR stop; theta [2.39e-04, 2.66e+07], hit False) t 56.2s
+    it   8 f 1.219396e+02 -> 1.217543e+02 ratio +1.14 |y| 2.81e+01 Delta 1.15e+03 |g| 2.6e+00 GN 0.001 M/eps 16.6048 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 56.4s
+      [beta] lanczos 5 (TR stop; theta [2.22e+04, 2.66e+07], hit False) t 1.3s
+    it   9 f 1.217543e+02 -> 1.217543e+02 ratio +1.17 |y| 3.58e-05 Delta 1.15e+03 |g| 2.9e+01 GN 0.000 M/eps 16.6048 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 1.5s
+      [beta] lanczos 44 (TR stop; theta [7.28e-01, 2.66e+07], hit False) t 10.7s
+    it  10 f 1.217543e+02 -> 1.217486e+02 ratio +1.23 |y| 1.04e-01 Delta 1.15e+03 |g| 6.7e+00 GN 0.000 M/eps 16.6044 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 10.9s
+      [beta] lanczos 1102 (TR stop; theta [1.95e-07, 2.73e+07], hit True) t 529.9s
+      [subspace] dirs d+prev+accel, c* = (+3.140, -0.000, +0.013), |y| 1.145e+03 -> 3.596e+03; f straight 1.211770e+02, subspace 1.182437e+02 (predicted 1.182438e+02, rel 4.6e-07; straight recon 0.0e+00); 9 evals, 34.8s
+    it  11 f 1.217486e+02 -> 1.182437e+02 ratio +2.38 |y| 1.15e+03 Delta 7.19e+03 |g| 9.0e-01 GN 0.006 hit M/eps 16.3781 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 565.0s
+      [beta] lanczos 34 (TR stop; theta [9.37e-01, 2.40e+07], hit False) t 8.2s
+    it  12 f 1.182437e+02 -> 1.176975e+02 ratio +1.16 |y| 9.74e-01 Delta 7.19e+03 |g| 1.4e+02 GN 0.002 M/eps 16.3426 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.5s
+      [beta] lanczos 32 (TR stop; theta [9.38e-01, 2.44e+07], hit False) t 7.7s
+    it  13 f 1.176975e+02 -> 1.175886e+02 ratio +1.20 |y| 4.13e-01 Delta 7.19e+03 |g| 1.1e+02 GN 0.000 M/eps 16.3355 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.0s
+      [beta] lanczos 42 (TR stop; theta [3.29e-01, 2.47e+07], hit False) t 10.1s
+    it  14 f 1.175886e+02 -> 1.174788e+02 ratio +1.30 |y| 6.67e-01 Delta 7.19e+03 |g| 4.8e+01 GN 0.000 M/eps 16.3283 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 10.4s
+      [beta] lanczos 30 (TR stop; theta [1.21e+00, 2.51e+07], hit False) t 7.3s
+    it  15 f 1.174788e+02 -> 1.174627e+02 ratio +1.19 |y| 1.41e-01 Delta 7.19e+03 |g| 4.5e+01 GN 0.000 M/eps 16.3273 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 7.5s
+      [beta] lanczos 85 (TR stop; theta [1.80e-02, 2.52e+07], hit False) t 20.7s
+    it  16 f 1.174627e+02 -> 1.173134e+02 ratio +1.21 |y| 3.17e+00 Delta 7.19e+03 |g| 1.0e+01 GN 0.000 M/eps 16.3175 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 21.0s
+      [beta] lanczos 97 (TR stop; theta [6.15e-03, 2.57e+07], hit False) t 23.7s
+    it  17 f 1.173134e+02 -> 1.172656e+02 ratio +1.30 |y| 2.99e+00 Delta 7.19e+03 |g| 5.1e+00 GN 0.000 M/eps 16.3144 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 24.0s
+      [beta] lanczos 59 (TR stop; theta [1.09e-01, 2.67e+07], hit False) t 14.3s
+    it  18 f 1.172656e+02 -> 1.172586e+02 ratio +1.48 |y| 2.23e-01 Delta 7.19e+03 |g| 5.7e+00 GN 0.000 M/eps 16.3140 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 14.6s
+      [beta] lanczos 180 (TR stop; theta [5.77e-04, 2.68e+07], hit False) t 45.0s
+    it  19 f 1.172586e+02 -> 1.172046e+02 ratio +1.31 |y| 1.11e+01 Delta 7.19e+03 |g| 3.2e+00 GN 0.000 M/eps 16.3104 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 45.3s
+      [beta] lanczos 70 (TR stop; theta [5.22e-02, 2.66e+07], hit False) t 17.1s
+    it  20 f 1.172046e+02 -> 1.172003e+02 ratio +1.43 |y| 2.26e-01 Delta 7.19e+03 |g| 3.2e+00 GN 0.000 M/eps 16.3101 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 17.3s
+      [beta] lanczos 1500 (TR stop; theta [1.73e-07, 2.69e+07], hit True) t 713.1s
+      [subspace] dirs d+prev+accel, c* = (-0.510, +0.000, +0.003), |y| 3.971e+03 -> 2.024e+03; f straight 2.558005e+02, subspace 1.154769e+02 (predicted 1.154769e+02, rel 4.0e-08; straight recon 0.0e+00); 9 evals, 40.7s
+    it  21 f 1.172003e+02 -> 1.154769e+02 ratio +0.00 |y| 3.97e+03 Delta 2.02e+03 |g| 2.1e+00 GN 0.000 hit M/eps 16.1972 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 754.0s
+      [beta] lanczos 32 (TR stop; theta [1.92e+00, 2.42e+07], hit False) t 7.7s
+    it  22 f 1.154769e+02 -> 1.152546e+02 ratio +1.19 |y| 3.84e-01 Delta 2.02e+03 |g| 1.3e+02 GN 0.001 M/eps 16.1825 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.0s
+      [beta] lanczos 95 (TR stop; theta [1.17e-02, 2.53e+07], hit False) t 23.2s
+    it  23 f 1.152546e+02 -> 1.151015e+02 ratio +1.21 |y| 3.12e+00 Delta 2.02e+03 |g| 6.7e+00 GN 0.001 M/eps 16.1724 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 23.4s
+      [beta] lanczos 34 (TR stop; theta [8.94e-01, 2.58e+07], hit False) t 8.2s
+    it  24 f 1.151015e+02 -> 1.150942e+02 ratio +1.33 |y| 1.07e-01 Delta 2.02e+03 |g| 1.6e+01 GN 0.000 M/eps 16.1720 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 8.5s
+      [beta] lanczos 41 (TR stop; theta [5.19e-01, 2.60e+07], hit False) t 9.9s
+    it  25 f 1.150942e+02 -> 1.150898e+02 ratio +1.42 |y| 1.04e-01 Delta 2.02e+03 |g| 8.8e+00 GN 0.000 M/eps 16.1717 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 10.2s
+      [beta] lanczos 49 (TR stop; theta [2.24e-01, 2.65e+07], hit False) t 11.9s
+    it  26 f 1.150898e+02 -> 1.150863e+02 ratio +1.61 |y| 1.29e-01 Delta 2.02e+03 |g| 6.9e+00 GN 0.000 M/eps 16.1714 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 12.1s
+      [beta] lanczos 541 (TR stop; theta [1.34e-05, 2.72e+07], hit False) t 150.6s
+    it  27 f 1.150863e+02 -> 1.149531e+02 ratio +0.45 |y| 1.89e+02 Delta 2.02e+03 |g| 3.0e+00 GN 0.001 M/eps 16.1627 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 150.8s
+      [beta] lanczos 27 (TR stop; theta [2.18e+00, 2.44e+07], hit False) t 6.6s
+    it  28 f 1.149531e+02 -> 1.148056e+02 ratio +1.18 |y| 3.26e-01 Delta 2.02e+03 |g| 1.7e+02 GN 0.001 M/eps 16.1529 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 6.8s
+      [beta] lanczos 49 (TR stop; theta [5.16e-01, 2.52e+07], hit False) t 11.9s
+    it  29 f 1.148056e+02 -> 1.147011e+02 ratio +1.17 |y| 4.98e-01 Delta 2.02e+03 |g| 1.4e+01 GN 0.000 M/eps 16.1460 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 12.1s
+      [beta] lanczos 62 (TR stop; theta [8.54e-02, 2.60e+07], hit False) t 15.1s
+    it  30 f 1.147011e+02 -> 1.146844e+02 ratio +1.33 |y| 4.47e-01 Delta 2.02e+03 |g| 7.1e+00 GN 0.000 M/eps 16.1449 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 15.3s
+      [beta] lanczos 39 (TR stop; theta [6.90e-01, 2.63e+07], hit False) t 9.5s
+    it  31 f 1.146844e+02 -> 1.146822e+02 ratio +1.37 |y| 6.50e-02 Delta 2.02e+03 |g| 6.9e+00 GN 0.000 M/eps 16.1448 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 9.7s
+      [beta] lanczos 121 (TR stop; theta [3.86e-03, 2.70e+07], hit False) t 29.9s
+    it  32 f 1.146822e+02 -> 1.146682e+02 ratio +1.37 |y| 2.07e+00 Delta 2.02e+03 |g| 3.2e+00 GN 0.000 M/eps 16.1438 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 30.1s
+      [beta] lanczos 36 (TR stop; theta [7.99e-01, 2.71e+07], hit False) t 8.7s
+    it  33 f 1.146682e+02 -> 1.146673e+02 ratio +1.25 |y| 3.91e-02 Delta 2.02e+03 |g| 5.8e+00 GN 0.000 M/eps 16.1438 Bn/beta 0.000 dPsi +0.0e+00 |D| 0.00e+00 9.0s
+      [beta] lanczos 1035 (TR stop; theta [5.90e-07, 2.72e+07], hit True) t 336.6s
+      [subspace] dirs d+prev+accel, c* = (-0.484, +0.000, +0.000), |y| 9.020e+01 -> 4.367e+01; f straight 1.147159e+02, subspace 1.146619e+02 (predicted 1.146619e+02, rel 8.7e-08; straight recon 0.0e+00); 9 evals, 48.3s
+time budget reached: state saved
+saved /work/out/V_SA.json; total 3672 s; mem {'in use GB': 16.649795584, 'peak GB': 32.803205376, 'host maxrss GB': 19.496584}

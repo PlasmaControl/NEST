@@ -2,6 +2,16 @@
 
 One entry per commit, newest first.
 
+## 2026-11-16: valley-navigation A/B result (branch ripple-landscape)
+- Modal dda0c12e (A100-80GB, 4.0 h): four arms from F64b_budget (M/eps 16.6615), 64/64/6 a/200, alpha 0.001, --cg 1500 --no-rebuild-on-hit, one container, control last. Matched solve time T = 2280 s (the shortest arm):
+  - subspace prev+accel: M/eps 16.3101 at T (drop 0.351 = 2.03x control); end 16.1438 after 34 steps; per Lanczos iteration 2.99x.
+  - subspace prev: 16.4032 at T (0.258 = 1.49x); end 16.3063; per Lanczos 1.49x.
+  - geodesic acceleration: 16.5246 at T (0.137 = 0.79x); |a|/|y| ~0.001 on boundary steps, small gain per step, costs an extra Lanczos solve.
+  - control: 16.4886 at T (0.173); end 16.4572.
+- Pre-registered criterion (>= 1.5x control): met by subspace prev+accel only (one run per arm; the lead comes from a few large steps, incl. one rescue with c* = -0.51 along a straight step whose merit was 255.8 vs 117.2).
+- a/240 eval of the end states matches the solve grid (0.0162-0.0165 M_DESC); b21 2.08-2.14% of vacuum, phase -90 deg (shielded) in all arms.
+- Data: results/ripple_landscape/valley/ (summary, per-step table, eval, logs, JSON, end states); figure figures/ripple_landscape/valley/valley_ab.png.
+
 ## 2026-11-15: subspace search fix (prediction check is diagnostic only; cached evaluator) (branch ripple-landscape)
 - First valley A/B dispatch (Modal 2c07b2d0) cancelled after 4 steps of the first arm: at 64/64/6 every subspace minimizer was a real improvement (actual merit below the straight step by 5-10x the straight decrease, e.g. 122.4970 vs 122.6014), but the 1e-6 prediction check rejected all of them. The predicted-vs-actual error (1.4e-6 -> 4.9e-5) grows ~c^2 with the step multiple c (3 -> 14): rounding in the difference coefficients amplified by long extrapolation. The step is now judged only by its real evaluation (f_s < f and <= f straight); the error is logged.
 - `_subspace_M`: module-level jitted batch evaluator (no recompilation per step); K = 3 grid 33x9x9; Nelder-Mead maxfev 200.
