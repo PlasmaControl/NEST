@@ -2,6 +2,22 @@
 
 One entry per commit, newest first.
 
+## 2026-11-16: recommended solver flags (fixed boundary, mf_fixed.py) (branch ripple-landscape)
+Recommended combination for tight-bound / long-valley runs, from the 64/64/6 valley A/B (`results/ripple_landscape/valley/`):
+
+```
+--subspace prev,accel      # exact merit search on every trust-region boundary step over span{d, previous step, acceleration dir}
+--cg 1500                  # Lanczos cap per subproblem (was 400); boundary steps need 400-1100 iterations in the valley
+--no-rebuild-on-hit        # no inner metric rebuild after a boundary step (a cap hit there is a truncated step, not a stale metric)
+--f-noise auto --radius-by-delta --no-share-stop   # noise-tolerant acceptance and radius rules (stall fixes, 2026-11-11)
+--locate-chunk 131072      # locate transient ~5 GB instead of up to 42 GB (L32 DESC file)
+```
+Defaults that stay as they are: `--model beta --precond force --lanczos-stop tr` (lean metric build), `--accel-amax 0.75 --accel-tol 1e-4 --accel-maxiter 300` (also used for the subspace acceleration direction).
+
+- Evidence: at matched solve time (2280 s, A100-80GB) the M/eps drop was 2.03x the control's with `--subspace prev,accel` (2.99x per Lanczos iteration), 1.49x with `--subspace prev`, and 0.79x with `--geo-accel` alone. One run per arm, so the factor is indicative.
+- Do not combine `--geo-accel` with `--subspace ...accel` (the subspace search already uses the acceleration direction); `--geo-accel` alone is not recommended.
+- Explanation of the optimizer: `docs/optimizer_overview.md`.
+
 ## 2026-11-16: valley-navigation A/B result (branch ripple-landscape)
 - Modal dda0c12e (A100-80GB, 4.0 h): four arms from F64b_budget (M/eps 16.6615), 64/64/6 a/200, alpha 0.001, --cg 1500 --no-rebuild-on-hit, one container, control last. Matched solve time T = 2280 s (the shortest arm):
   - subspace prev+accel: M/eps 16.3101 at T (drop 0.351 = 2.03x control); end 16.1438 after 34 steps; per Lanczos iteration 2.99x.
