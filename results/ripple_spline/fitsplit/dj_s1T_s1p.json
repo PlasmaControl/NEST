@@ -1,0 +1,540 @@
+{
+ "args": {
+  "eq": "desc_input/tokamak_boundary_perturbed/bp2/L32N4/tokamak_ripple_C_L32M32N4_x0.001.h5",
+  "coils": "/scratch/gpfs/EKOLEMEN/lk1158/NEST_rspl/desc_input/vmec_free_boundary/NCSX/NCSX_coils.h5",
+  "bext": "desc-fit",
+  "factors": [
+   1,
+   1,
+   1
+  ],
+  "LMN": [
+   32,
+   32,
+   6
+  ],
+  "colloc": 1.5,
+  "frac": 100.0,
+  "N_phi": 25,
+  "pad": 0.02,
+  "mode_chunk": 16,
+  "rblock": 32,
+  "interp_order": 8,
+  "alphas": [
+   1.0
+  ],
+  "rho0": 1.0,
+  "band": 0.05,
+  "maxiter": 40,
+  "max_outer": 25,
+  "gtol": 0.001,
+  "cg": 400,
+  "subproblem_test": null,
+  "test_delta": 0.016,
+  "anatomy": null,
+  "stiff_modes": null,
+  "line_scan": null,
+  "line_tmax": 2.0,
+  "chord_study": null,
+  "accel": false,
+  "anatomy_deltas": [
+   3.0,
+   30.0,
+   10000.0
+  ],
+  "test_model": "gn",
+  "precond": "force",
+  "hvp_far": 0.1,
+  "hvp_fallback": 5,
+  "beta": 0.5,
+  "no_mult_ls": false,
+  "refresh_lz": null,
+  "cap_rebuild": "always",
+  "refresh_dM": null,
+  "outer_rebuild_factor": 2.0,
+  "beta_adapt": false,
+  "beta_min": 0.03125,
+  "model": "beta",
+  "cg_tol": 0.01,
+  "geo_accel": false,
+  "accel_amax": 0.75,
+  "accel_tol": 0.0001,
+  "accel_maxiter": 300,
+  "radius_by_delta": false,
+  "f_noise": null,
+  "no_share_stop": false,
+  "keep_start_mult": false,
+  "stat_tol": 0.001,
+  "stat_window": 10,
+  "delta0": 0.001,
+  "no_delta_reset": false,
+  "gram_chunk": 1024,
+  "time_budget": null,
+  "stall_stop": null,
+  "stage_flat": null,
+  "setup_only": false,
+  "cross": null,
+  "cross_factors": null,
+  "cross_LMN": null,
+  "cross_ref": null,
+  "start": null,
+  "start_LMN": null,
+  "lanczos_stop": "tr",
+  "no_lean_metric": false,
+  "force_norm": "p",
+  "p": 8.0,
+  "p_schedule": [
+   16.0
+  ],
+  "rho_cut": 0.95,
+  "edge_alpha": null,
+  "p_band": [
+   0.5675,
+   0.7075
+  ],
+  "mean_whole": false,
+  "ref_start": false,
+  "ref_state": null,
+  "colloc_rho": null,
+  "snap_outer": false,
+  "shell_max": null,
+  "eval_save": false,
+  "p_model_beta": false,
+  "eval_only": true,
+  "rho_bins": null,
+  "eval_blend": [],
+  "eval_state": [],
+  "out": "out/fitsplit/dj_s1T_s1p",
+  "mirror": null,
+  "pin_b21": null,
+  "b21_mk": [
+   2,
+   1
+  ],
+  "b21_vac": 0.0003778,
+  "b21_phase_state": null,
+  "b21_report": false,
+  "plane": [],
+  "pin_current": false,
+  "pin_flux": false,
+  "jw_rho0": null,
+  "jw_edge": 0.01,
+  "alpha_ref": "desc",
+  "pert_eps": 0.0,
+  "pert_mn": [
+   2,
+   -1
+  ],
+  "pressure": "spline",
+  "p_MN": null,
+  "p_knots": [
+   0.05,
+   0.01,
+   0.08
+  ],
+  "current": "spline",
+  "j_knots": [
+   0.05,
+   0.01,
+   0.08
+  ],
+  "spl_mtol": 0.0,
+  "spl_mmax": null,
+  "spl_mfz": 32,
+  "knots_fz": [
+   32.0,
+   0.6
+  ],
+  "spl_band": [
+   [
+    0.45,
+    0.76,
+    0.015
+   ],
+   [
+    0.86,
+    0.95,
+    0.02
+   ]
+  ],
+  "spl_reg": "rhom",
+  "spl_qcap": 6,
+  "colloc_knots": false,
+  "fit_split": true,
+  "force_split": false,
+  "p_colloc": 4,
+  "p_rationals": [
+   "2/1"
+  ],
+  "dense_qr": null,
+  "hvp": true
+ },
+ "setup": {
+  "load + fits + reference": 60.44892859458923,
+  "annulus + locate + ForceResidual": 14.201168298721313,
+  "Fields": 11.472678661346436,
+  "pressure Gram": 81.17969083786011,
+  "B_ext (desc-fit)": 39.43558096885681,
+  "start state (first compile)": 6.222113609313965,
+  "state eval [s]": 0.02211165428161621,
+  "b21 functional": 3.457258939743042
+ },
+ "alphas": [],
+ "memory": [
+  {
+   "phase": "load + fits + reference",
+   "t": 60.44932794570923,
+   "in use GB": 0.0,
+   "peak GB": 0.0,
+   "host maxrss GB": 3.36904
+  },
+  {
+   "phase": "annulus + locate + ForceResidual",
+   "t": 74.65202212333679,
+   "in use GB": 0.0,
+   "peak GB": 0.0,
+   "host maxrss GB": 3.761908
+  },
+  {
+   "phase": "Fields",
+   "t": 86.12618565559387,
+   "in use GB": 0.0,
+   "peak GB": 0.0,
+   "host maxrss GB": 4.191084
+  },
+  {
+   "phase": "pressure Gram",
+   "t": 167.30762672424316,
+   "in use GB": 0.0,
+   "peak GB": 0.0,
+   "host maxrss GB": 4.247212
+  },
+  {
+   "phase": "B_ext (desc-fit)",
+   "t": 206.7450671195984,
+   "in use GB": 0.0,
+   "peak GB": 0.0,
+   "host maxrss GB": 4.51996
+  },
+  {
+   "phase": "start state (first compile)",
+   "t": 241.06965947151184,
+   "in use GB": 0.0,
+   "peak GB": 0.0,
+   "host maxrss GB": 4.701916
+  },
+  {
+   "phase": "b21 functional",
+   "t": 244.55073142051697,
+   "in use GB": 0.0,
+   "peak GB": 0.0,
+   "host maxrss GB": 6.085964
+  }
+ ],
+ "current basis": {
+  "kind": "spline",
+  "n_s": 47,
+  "M": 32,
+  "N": 6,
+  "num_modes": 11639,
+  "breakpoints": 45,
+  "min spacing": 0.0015731849821833954,
+  "centres": [
+   0.6375091011730831
+  ],
+  "effective L": 100,
+  "m_tol": 0.0,
+  "m_max": null,
+  "m_fz": 32,
+  "max spacing": 0.05607044723719179,
+  "reg": "rhom",
+  "q_cap": 6,
+  "inside": null,
+  "n_u": 23694
+ },
+ "pressure basis": {
+  "kind": "spline",
+  "n": 11639,
+  "n_s": 47,
+  "M": 32,
+  "N": 6,
+  "sym": true,
+  "m_tol": 0.0,
+  "m_max": null,
+  "m_fz": 32,
+  "reg": "rhom",
+  "q_cap": 6,
+  "breakpoints": 45,
+  "centres": [
+   0.6375091011730831
+  ],
+  "min spacing": 0.0015731849821833954,
+  "max spacing": 0.05607044723719179,
+  "FZ at the current basis (approx.)": 18011
+ },
+ "rho nodes": 176,
+ "basis": [
+  100,
+  32,
+  6
+ ],
+ "hvp diag": [],
+ "sizes": {
+  "n_u": 23694,
+  "n_p": 11639,
+  "points": 543488,
+  "annulus": "CylindricalGrid(r [2.5710, 4.6612] n 275, z [-1.5478, 1.5478] n 407, N_phi 25, NFP 1: 2.80M nodes)",
+  "annulus nodes": 2798125
+ },
+ "bext": {
+  "kind": "desc-fit",
+  "rms |B_ext| / rms |B_DESC|": 0.9992736732192797,
+  "start rms |B - B_DESC| / rms |B_DESC|": 2.4938392281191048e-17
+ },
+ "pressure space": {
+  "rank": 11639,
+  "cond(G)": 1.78152449681598e+16
+ },
+ "pnorm": {
+  "rho_cut": 0.95,
+  "interior points": 117344,
+  "points": 543488,
+  "interior volume": 0.1889538411234708,
+  "DESC": {
+   "16.0": {
+    "M_p": 1.192738403906317e-06,
+    "max_int": 1.8258261598634098e-06,
+    "edge": 5.59295727207207e-07,
+    "mean_int": 5.034207652560353e-07
+   }
+  },
+  "M_desc (mean)": 4.999501646404131e-07
+ },
+ "start": {
+  "M": 2.314428891821129e-06,
+  "M/M_desc": 1.9404329434192633,
+  "rms|F|": 3.865895852511092e-05,
+  "galerkin": 1.562722831578415e-16,
+  "rms J_fit": 45533.672996963745,
+  "M_desc": 1.192738403906317e-06
+ },
+ "alpha reference": {
+  "kind": "desc",
+  "M_ref": 1.192738403906317e-06,
+  "M_DESC (DESC own)": 1.192738403906317e-06
+ },
+ "b_mk": {
+  "rho_res": 0.6375124823546369,
+  "shells": [
+   0.6370331934169359,
+   0.6408798156331943
+  ],
+  "weight hi": 0.12459995049037985,
+  "points": 6176,
+  "sym": true,
+  "m": 2,
+  "k": 1
+ },
+ "fit split": {
+  "|B - B_DESC| / |B_DESC| (rms)": 2.4938392281191048e-17,
+  "rms dJ / rms J_DESC": 0.00019468321511966933,
+  "rms dJ_par / rms J_DESC": 0.0001733723156399192,
+  "rms dJ_perp / rms J_DESC": 8.856406957103799e-05,
+  "dJ_perp share of dJ^2": 0.20694651114794357,
+  "dJ_par by bin": [
+   5.353308033673852e-06,
+   8.785129779539159e-06,
+   6.280533230024871e-06,
+   2.054219276630514e-05,
+   1.0926591184337983e-05,
+   6.847206046556152e-06,
+   3.2191959721133447e-06,
+   1.903990230849086e-06,
+   3.5034081077074212e-06,
+   1.4763172685180221e-05,
+   2.7475285282464353e-05,
+   1.8778599449845362e-05,
+   3.178291643334694e-05,
+   0.0005987116186749186
+  ],
+  "dJ_perp by bin": [
+   7.232018474027029e-07,
+   4.072248748781449e-06,
+   1.0308135335696985e-05,
+   1.1009159808397546e-05,
+   1.4782474844660079e-06,
+   1.0595262944992015e-06,
+   9.695058422072927e-07,
+   8.570477210624526e-07,
+   8.404022960689776e-07,
+   3.63233052040439e-06,
+   5.871859584132192e-06,
+   3.3574731945843773e-06,
+   2.1639073013044616e-06,
+   0.0003066020548938381
+  ],
+  "rms |B_DESC|": 0.2206968301384074,
+  "dG = dJ x B_DESC": {
+   "mean": 11.23094434529731,
+   "rms": 149.63068045221024
+  },
+  "grad dp (absorbed)": {
+   "mean": 7.945242434440661,
+   "rms": 128.1235025547098
+  },
+  "R (not absorbed)": {
+   "mean": 7.716868038068134,
+   "rms": 77.289770511399
+  },
+  "R parallel": {
+   "mean": 0.12142036384147324,
+   "rms": 0.1777537469819627
+  },
+  "R perpendicular": {
+   "mean": 7.711249172830753,
+   "rms": 77.2895661089526
+  },
+  "rms R / rms dG": 0.5165369179490177,
+  "DESC's own force F_D": {
+   "mean": 1.0975852741614707,
+   "R(F_D) mean": 0.8953539149579248
+  },
+  "total force at J_fit (check)": {
+   "mean": 7.875498359562135,
+   "rms": 77.32562415077001
+  },
+  "rho bins": [
+   0.0,
+   0.2,
+   0.3,
+   0.4,
+   0.5,
+   0.55,
+   0.6,
+   0.65,
+   0.7,
+   0.75,
+   0.8,
+   0.85,
+   0.9,
+   0.95,
+   1.0
+  ],
+  "dG by bin": [
+   0.8611496624659176,
+   6.394892761993224,
+   17.034642046511202,
+   15.649296873044849,
+   2.0177646738583133,
+   1.5248341072050884,
+   1.5475080728985022,
+   1.4093288783461435,
+   1.2008196067199575,
+   4.31089341895183,
+   6.913698940789947,
+   3.508970787332089,
+   2.462670812406833,
+   74.32430525244202
+  ],
+  "R by bin": [
+   1.341265021023818,
+   6.594220199811079,
+   17.72415836254028,
+   12.046229964570776,
+   1.6955823250399376,
+   1.75306451092524,
+   1.8642489217469724,
+   1.828335590215194,
+   1.7269756344685163,
+   4.224577656127527,
+   7.529992230511806,
+   4.389487530141226,
+   3.989587185391329,
+   31.03869726903896
+  ],
+  "grad dp by bin": [
+   0.8926915473424719,
+   0.9939009463592051,
+   2.239481994266772,
+   6.300101997797968,
+   1.8496920755581148,
+   1.284220826811149,
+   1.179927066902477,
+   1.2219393297227672,
+   1.530346071395324,
+   1.910360920652774,
+   1.9157897945248685,
+   2.2710976129385885,
+   3.1690699854544038,
+   70.93572780786081
+  ],
+  "R parallel by bin": [
+   0.030217968297316152,
+   0.03613679966576839,
+   0.04610899737128049,
+   0.07645218820548863,
+   0.08021605896676438,
+   0.08281567598727876,
+   0.09043129491239099,
+   0.10215934259964014,
+   0.11688955014637717,
+   0.13493294923276744,
+   0.15644528647260947,
+   0.18194180974390178,
+   0.21226576995382657,
+   0.24892037392369656
+  ]
+ },
+ "eval": {
+  "start (J_fit)": [
+   {
+    "p": 16.0,
+    "M_p/DESC": 1.9404329434192633,
+    "max_int/DESC": 1.9853083232251059,
+    "edge/DESC": 8.23720691140392,
+    "mean/M_desc": 7.875498359637076,
+    "rho of max": 0.5927474791312215,
+    "theta, zeta of max": [
+     3.1253149714468407,
+     0.09817477042468103
+    ],
+    "rho of top-20 points": [
+     0.5779855743693167,
+     0.5927474791312215,
+     0.5927474791312215,
+     0.5927474791312215,
+     0.5927474791312215,
+     0.5927474791312215,
+     0.5927474791312215,
+     0.5927474791312215,
+     0.5927474791312215,
+     0.5927474791312215,
+     0.6075093838931263,
+     0.6075093838931263,
+     0.6222712886550311,
+     0.6222712886550311,
+     0.6222712886550311,
+     0.6222712886550311,
+     0.6222712886550311,
+     0.6222712886550311,
+     0.6467763303925881,
+     0.6467763303925881
+    ],
+    "share of |F|^p by rho bin": {
+     "0.00-0.50": 0.0,
+     "0.50-0.60": 0.1746404149304518,
+     "0.60-0.70": 0.8207528394908424,
+     "0.70-0.75": 0.004606745578680702,
+     "0.75-0.78": 0.0,
+     "0.78-0.81": 0.0,
+     "0.81-0.84": 0.0,
+     "0.84-0.87": 0.0,
+     "0.87-0.90": 0.0,
+     "0.90-0.93": 0.0,
+     "0.93-0.95": 0.0
+    }
+   }
+  ]
+ },
+ "stage": "eval only"
+}

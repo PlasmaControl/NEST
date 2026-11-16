@@ -3,7 +3,8 @@
 G1 slice-built G = P^T P against the explicit columns;  G2 slice-built H_J against the
 explicit J table;  G3 implicit projection f against the explicit thin-QR projection, and the
 Galerkin identity;  G4 J v against central differences of (g, z);  G5 adjoint;  G6 the
-majorizer gradient: grad c_F from J^T against differences of M.
+majorizer gradient: grad c_F from J^T against differences of M. JW_RHO0 (and JW_EDGE) turn on
+the edge weight of |J - J_fit|^2 (``edge_weight``) in G2, G4, G5.
 """
 
 import os
@@ -38,6 +39,14 @@ from pressure import Pressure  # noqa: E402
 D = os.path.join(ROOT, "desc_input", "vmec_free_boundary", "NCSX")
 FAC = tuple(float(x) for x in os.environ.get("FAC", "0.5 0.5 0.5").split())
 FRAC = float(os.environ.get("FRAC", "8"))
+JW = (float(os.environ["JW_RHO0"]), float(os.environ.get("JW_EDGE", "0.01"))) if "JW_RHO0" in os.environ else None
+
+
+def edge_gw(fr):
+    """sqrt of the edge weight per slice and per point (ones without JW_RHO0)."""
+    rho_sl = np.asarray(fr.tgrid.rho)
+    gw_sl = np.sqrt(mff.edge_weight(rho_sl, *(JW or (None,))))
+    return gw_sl, gw_sl[np.searchsorted(rho_sl, np.asarray(fr.rtz[:, 0]))]
 
 
 def rel(a, b):
@@ -81,14 +90,17 @@ def main():
     u0 = jnp.asarray(cur.u)
     Jfit = mff._J(fields, u0, fields.I)
     rmsJ = float(jnp.sqrt(jnp.sum(sw[:, None] ** 2 * Jfit**2)))
-    HJ = mff.gram_J(fields, cur, pre, rmsJ, chunk=128)
-    Acols = jax.vmap(lambda e: (sw[:, None] * mff._J(fields, e, 0.0)).ravel() / rmsJ)(
+    gw_sl, gw = edge_gw(fr)
+    print(f"  edge weight {JW}: weight range {gw.min() ** 2:.3g}-{gw.max() ** 2:.3g}", flush=True)
+    HJ = mff.gram_J(fields, cur, pre, rmsJ, chunk=128, slice_gw=gw_sl)
+    swg = sw * jnp.asarray(gw)
+    Acols = jax.vmap(lambda e: (swg[:, None] * mff._J(fields, e, 0.0)).ravel() / rmsJ)(
         jnp.eye(n_u))
     ok["G2 H_J slices vs explicit"] = rel(HJ, Acols @ Acols.T)
     del Acols
 
     # G3: projection vs thin QR
-    A = mff.FixedAnchor(fields, cur, pre, u0, rmsJ, norm, G)
+    A = mff.FixedAnchor(fields, cur, pre, u0, rmsJ, norm, G, gw=gw)
     rng = np.random.default_rng(0)
     z = u0 * (1 + 0.01 * jnp.asarray(rng.normal(size=n_u)))
     s = A.state(z)

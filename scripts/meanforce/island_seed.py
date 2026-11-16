@@ -44,6 +44,7 @@ from free_boundary import reference  # noqa: E402
 from objective import VECTOR_PARITY, Fields  # noqa: E402
 from optimize_fb import annulus  # noqa: E402
 from pressure import Pressure  # noqa: E402
+import basis_args as BA  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--eq", required=True)
@@ -57,6 +58,7 @@ ap.add_argument("--window", type=float, nargs=3, action="append", required=True,
 ap.add_argument("--cg", type=int, default=600)
 ap.add_argument("--cg-tol", type=float, default=1e-10)
 ap.add_argument("--out", required=True)
+BA.add_basis_args(ap)
 a = ap.parse_args()
 t0 = time.time()
 
@@ -67,14 +69,12 @@ def log(*s):
 
 inp = DESCInput.load(a.eq, field=None)
 eq = inp.eq
-cur = fit_cache.fit(BoundaryPotential, inp, L=a.LMN[0], M=a.LMN[1], N=a.LMN[2])
-pre = fit_cache.fit(Pressure, inp, edge_order=2, L=a.LMN[0], M=a.LMN[1], N=a.LMN[2])
+cur, pre, res, rho_nodes = BA.build(inp, a, a.LMN, a.colloc, log=log)
 b = cur.basis
-res = tuple(int(round(a.colloc * (u + v))) for u, v in ((b.L, eq.L), (b.M, eq.M), (b.N, eq.N)))
-ref = reference(inp, res, current=cur)
+ref = reference(inp, res, current=cur, rho_nodes=rho_nodes)
 box = annulus(inp, inp.a / a.frac, a.pad, a.N_phi)
 box.locate_plasma_planes(inp, sym=bool(eq.sym), verbose=False)
-fr = ForceResidual(inp, box, resolution=res)
+fr = ForceResidual(inp, box, resolution=res, rho_nodes=rho_nodes)
 fr.norm, fr.F_desc_vol = ref["norm"], ref["F_desc_vol"]
 fr.B_ext = np.zeros((len(fr.x), 3))
 fields = Fields(fr, cur, pre, dtype=jnp.float64, cyl_stencil=True)

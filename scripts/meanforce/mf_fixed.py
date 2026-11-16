@@ -68,6 +68,130 @@ def mem():
     return out
 
 
+class LiveLog:
+    """Live convergence files of a running job (flushed every trial; read them while it runs):
+
+    <out>_live.tsv: one line per trust-region trial (``scripts/meanforce/tr_live.py`` formats and follows it):
+      eta = actual / predicted decrease of the merit (noise-tolerant when sigma_f > 0); pred = m(0) - m(s);
+      |s|/Delta (1 = on the boundary); Delta -> Delta_next (the radius update); kind = boundary / interior / noise
+      (a noise-level step accepted with the radius kept); sigma_f and sigma_f/|f| (measured merit noise);
+      |g| = |L^-1 grad| (metric norm of the merit gradient) and |g|/|g_0| (relative to the outer's first trial);
+      GN = Gauss-Newton share of the model decrease; lanczos, cap, res, tol, conv (GLTR subproblem); theta_min /
+      theta_2,3 / theta_max / cond / n_neg (Ritz values of the metric-scaled model Hessian); M/eps; M/M_ref (the
+      volume-mean force over DESC's); phi (|J - J_fit|^2 / rms^2 objective); rho (penalty kappa), nu_F
+      (multiplier); dJ (rms change of J); b21% and b21_deg (resonant field at q = 2, accepted steps, when the
+      functional is built); galerkin; accel (geodesic acceleration taken); mem_GB (device memory in use);
+      t_trial; rebuild (why the metric was rebuilt before this subproblem).
+      '# outer ...' lines close each outer iteration.
+
+    <out>_status.json: rewritten every trial: the stage, the last trial, and over the last ``window`` trials the
+      accept rate, median eta, boundary share, noise-accept share, consecutive rejections, the decade change of
+      Delta and of M/eps, seconds since the last accepted step, and warnings (radius collapse, long rejection
+      runs, noise-dominated steps, M/eps not decreasing).
+    """
+
+    COLS = ["t_run", "alpha", "outer", "it", "acc", "kind", "f", "f_new", "actual", "pred", "eta", "|s|", "Delta",
+            "Delta_next", "|s|/Delta", "hit", "sigma_f", "sigma_f/|f|", "|g|", "|g|/|g0|", "GN", "lanczos", "cap",
+            "res", "tol", "conv", "theta_min", "theta_2", "theta_3", "theta_max", "cond", "n_neg", "M/eps",
+            "M/M_ref", "phi", "rho", "nu_F", "dJ", "b21%", "b21_deg", "galerkin", "accel", "mem_GB", "t_trial",
+            "rebuild"]
+
+    def __init__(self, path, t0, m_ref=None, bfn=None, b_vac=None, window=20):
+        self.path, self.t0, self.g0 = path, t0, None
+        self.m_ref, self.bfn, self.b_vac, self.window = m_ref, bfn, b_vac, window
+        self.status_path = path.replace("_live.tsv", "") + "_status.json"
+        self.rows, self.last_acc_t, self.outers = [], time.time(), []
+        new = not os.path.exists(path)
+        self.fh = open(path, "a", buffering=1)
+        if new:
+            self.fh.write("\t".join(self.COLS) + "\n")
+
+    def _b21(self, z):
+        if self.bfn is None or z is None:
+            return float("nan"), float("nan")
+        try:
+            v = np.asarray(self.bfn(jnp.asarray(z)[: self.n_u] if getattr(self, "n_u", None) else jnp.asarray(z)))
+            b = complex(v[0], v[1])
+            return 100 * abs(b) / self.b_vac, float(np.degrees(np.angle(b)))
+        except Exception:
+            return float("nan"), float("nan")
+
+    def trial(self, alpha, outer, it, h, d, eps, z=None):
+        if it == 0:
+            self.g0 = h.get("|grad|")
+        nan = float("nan")
+        th = (d.get("theta_low") or []) + [nan] * 3
+        tmin, tmax = d.get("theta_min", nan), d.get("theta_max", nan)
+        g, g0 = h.get("|grad|", nan), self.g0 or nan
+        acc = bool(h["accepted"])
+        if acc:
+            self.last_acc_t = time.time()
+        b21, bdeg = self._b21(z) if acc else (nan, nan)
+        try:
+            mem_gb = jax.devices()[0].memory_stats().get("bytes_in_use", 0) / 1e9
+        except Exception:
+            mem_gb = nan
+        sig = float(h.get("sigma_f", 0.0) or 0.0)
+        row = [time.time() - self.t0, alpha, outer, it, int(acc), h.get("kind", ""), h["f"], h["f_new"],
+               h["f"] - h["f_new"], h["pred"], h["ratio"], h["|y|"], h["Delta"], h.get("Delta_next", nan),
+               h["|y|"] / h["Delta"] if h["Delta"] else nan, int(bool(h["hit"])), sig,
+               sig / abs(h["f"]) if h["f"] else nan, g, g / g0, h.get("GN share", nan),
+               d.get("lanczos", h.get("lanczos", -1)), int(bool(d.get("cap", False))), d.get("res", nan),
+               d.get("tol", nan), int(bool(d.get("converged", False))), tmin, th[1], th[2], tmax,
+               tmax / tmin if tmin and tmin > 0 else nan, d.get("n_neg", -1), 1 + h["c"][0],
+               h["M"] / self.m_ref if self.m_ref else nan, h.get("phi", nan), h["rho"], h["nu"][0],
+               h.get("dJ_rms", nan), b21, bdeg, h.get("galerkin", nan), int("accel" in h), mem_gb, h["time"],
+               (d.get("rebuild") or "").replace("\t", " ")]
+        self.fh.write("\t".join(v if isinstance(v, str) else (f"{v:.6g}" if isinstance(v, float) else str(v))
+                                for v in row) + "\n")
+        self.rows.append(dict(zip(self.COLS, row)))
+        self.rows = self.rows[-max(self.window, 50):]
+        self._status(alpha, outer, eps)
+
+    def _status(self, alpha, outer, eps):
+        W = self.rows[-self.window:]
+        if not W:
+            return
+        f = lambda k: np.array([r[k] for r in W], float)  # noqa: E731
+        acc, eta, Dl, me = f("acc"), f("eta"), f("Delta"), f("M/eps")
+        run_rej = 0
+        for r in reversed(self.rows):
+            if r["acc"]:
+                break
+            run_rej += 1
+        st = {"t_run": time.time() - self.t0, "alpha": alpha, "outer": outer, "eps": eps, "last": self.rows[-1],
+              "window": len(W), "accept rate": float(acc.mean()),
+              "median eta": float(np.nanmedian(eta)) if np.isfinite(eta).any() else None,
+              "boundary share": float(np.mean([r["kind"] == "boundary" for r in W])),
+              "noise-accept share": float(np.mean([r["kind"] == "noise" for r in W])),
+              "consecutive rejections": run_rej,
+              "Delta decades over window": float(np.log10(Dl[-1] / Dl[0])) if Dl[0] > 0 and Dl[-1] > 0 else None,
+              "M/eps first -> last": [float(me[0]), float(me[-1])],
+              "s since last accept": time.time() - self.last_acc_t, "outers": self.outers[-5:]}
+        warn = []
+        if st["Delta decades over window"] is not None and st["Delta decades over window"] < -3:
+            warn.append("trust radius fell > 3 decades over the window (collapse)")
+        if run_rej >= 8:
+            warn.append(f"{run_rej} consecutive rejections")
+        if st["noise-accept share"] > 0.5:
+            warn.append("most steps are noise-level (pred < 10 sigma_f): progress is at the merit's noise floor")
+        if len(W) >= self.window and acc.sum() > 0 and me[-1] > 1.01 and me[-1] >= me[0] * (1 - 1e-4):
+            warn.append("M/eps not decreasing over the window (bound not met)")
+        st["warnings"] = warn
+        tmp = self.status_path + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(st, fh, indent=1, default=float)
+        os.replace(tmp, self.status_path)
+
+    def outer(self, alpha, o, eps):
+        rec = {"alpha": alpha, "outer": o.get("outer"), "stop": o.get("inner stop"), "M/eps": o["M"] / eps,
+               "rho": o["rho"], "nu_F": o["nu"][0] if o.get("nu") else None, "t_run": time.time() - self.t0}
+        self.outers.append(rec)
+        self.fh.write(f"# outer done: alpha {alpha} outer {o.get('outer')} stop {o.get('inner stop')} "
+                      f"M/eps {o['M'] / eps:.5f} rho {o['rho']:.1e} nu_F {o['nu'][0] if o.get('nu') else float('nan'):.3e} "
+                      f"t_run {time.time() - self.t0:.0f}\n")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--eq", default=os.path.join(D, "NCSX_fb_L16M16N12.h5"))
@@ -88,6 +212,10 @@ def main():
     ap.add_argument("--interp-order", type=int, default=8)
     ap.add_argument("--alphas", type=float, nargs="+", default=[0.7])
     ap.add_argument("--rho0", type=float, default=1.0)
+    ap.add_argument("--rho-max", type=float, default=1e8,
+                    help="cap of the augmented-Lagrangian penalty (also applied to a resumed state's penalty): with a "
+                         "bound that is never met the penalty otherwise climbs to 1e8 and kappa c^2 swamps the merit, "
+                         "so every step sinks below the merit's noise")
     ap.add_argument("--band", type=float, default=0.05)
     ap.add_argument("--maxiter", type=int, default=40)
     ap.add_argument("--max-outer", type=int, default=25)
@@ -129,6 +257,10 @@ def main():
     ap.add_argument("--no-mult-ls", action="store_true", help="disable the least-squares multiplier estimate")
     ap.add_argument("--refresh-lz", type=float, default=None,
                     help="force metric: also rebuild when Lanczos >= this x the count after the last rebuild")
+    ap.add_argument("--cap-rebuild", choices=("always", "rent"), default="always",
+                    help="force metric after a Lanczos-capped subproblem: rebuild before the next one (always), or "
+                         "only count its time toward the rent-or-buy rule (rent: expensive metrics that do not cure "
+                         "the cap, e.g. fine spline knots)")
     ap.add_argument("--refresh-dM", type=float, default=None,
                     help="force metric: also rebuild when M moved by more than this (relative) since the rebuild")
     ap.add_argument("--outer-rebuild-factor", type=float, default=2.0,
@@ -249,6 +381,81 @@ def main():
                          "DESC surface, in every cross-section); a --start state is restored onto it")
     ap.add_argument("--pin-flux", action="store_true",
                     help="exact constraint: the toroidally averaged toroidal flux stays at J_fit's")
+    ap.add_argument("--jw-rho0", type=float, default=None,
+                    help="edge weight of |J - J_fit|^2: 1 for rho <= jw-rho0, cos^2 down to --jw-edge at rho = 1 "
+                         "(the force bound, not J_fit, then sets the edge current)")
+    ap.add_argument("--jw-edge", type=float, default=0.01, help="--jw-rho0: the weight at rho = 1")
+    ap.add_argument("--alpha-ref", choices=("desc", "start"), default="desc",
+                    help="eps = alpha x M_ref: M_ref = DESC's own <|F|>/norm (desc, default) or the start state's "
+                         "(J_fit with its Galerkin p*, on this run's grid and annulus: start). All 'M/M_desc' in the "
+                         "record are then M/M_ref; 'M/M_DESC (DESC own)' keeps DESC's")
+    ap.add_argument("--pert-eps", type=float, default=0.0,
+                    help="resonant error field: B_ext = coils + pert-eps [A] x the helical surface current "
+                         "Phi = sin(m theta - n zeta) on the coils' winding surface (nest/perturbation.py; the "
+                         "field of the DSHAPE perturbed DESC states, desc_input/tokamak_free_boundary)")
+    ap.add_argument("--pert-mn", type=int, nargs=2, default=(2, -1), help="--pert-eps: helicity m n")
+    ap.add_argument("--pressure", choices=("fz", "spline", "fz+spline"), default="fz",
+                    help="pressure basis: Fourier-Zernike at the basis L M N (default) or radial B-splines in "
+                         "rho^2 x Fourier (nest/spline_pressure.py), knots clustered at --p-rationals")
+    ap.add_argument("--p-MN", type=int, nargs=2, default=None, help="--pressure spline: Fourier M N (default: the basis')")
+    ap.add_argument("--p-knots", type=float, nargs=3, default=(0.05, 0.01, 0.08), metavar=("COARSE", "DENSE", "HALF"),
+                    help="--pressure spline: breakpoint spacing in rho, the dense spacing within HALF of each centre")
+    ap.add_argument("--current", choices=("fz", "spline", "fz+spline"), default="fz",
+                    help="radial basis of the current potential's a, b series: Fourier-Zernike (default) or B-splines "
+                         "in rho^2 (nest/spline_basis.py) with Fourier M N of --LMN (L unused), knots --j-knots")
+    ap.add_argument("--j-knots", type=float, nargs=3, default=(0.05, 0.01, 0.08), metavar=("COARSE", "DENSE", "HALF"),
+                    help="--current spline: breakpoint spacing in rho, the dense spacing within HALF of each --p-rationals surface")
+    ap.add_argument("--spl-mtol", type=float, default=0.0,
+                    help="spline p and T: drop (m != 0) splines whose support ends where rho^|m| < SPL_MTOL")
+    ap.add_argument("--spl-mmax", type=int, default=None,
+                    help="spline p and T: no splines for |m| > SPL_MMAX (the Fourier M, and chi, keep --LMN's)")
+    ap.add_argument("--spl-mfz", type=int, default=None, metavar="L",
+                    help="spline p and T: drop (m != 0) splines whose support ends before the first zero of the "
+                         "Fourier-Zernike radial function of |m| at resolution L (FZ's radial reach of that m)")
+    ap.add_argument("--knots-fz", type=float, nargs="+", default=None, metavar="L C [RHO_FROM]",
+                    help="spline p and T: outer breakpoints with Fourier-Zernike's local spacing at L times C, "
+                         "rho_i = sin(i C pi / (L + 2)) (the dense bands at --p-rationals kept; COARSE unused); "
+                         "with RHO_FROM only beyond it (COARSE below): an edge refinement")
+    ap.add_argument("--spl-band", type=float, nargs=3, action="append", default=None, metavar=("LO", "HI", "H"),
+                    help="spline p and T (repeatable): a refined band LO <= rho <= HI with breakpoint spacing H; "
+                         "the bands replace the --p-rationals centre bands (outer points from COARSE or --knots-fz)")
+    ap.add_argument("--spl-reg", choices=("drop3", "rhom"), default="drop3",
+                    help="spline p and T axis regularity: drop the three axis splines for m != 0 (drop3, default) or "
+                         "keep every spline as rho^q_m B_j(rho^2), q_m = |m| capped at --spl-qcap (rhom)")
+    ap.add_argument("--spl-qcap", type=int, default=6, help="--spl-reg rhom: the cap of the axis power q_m")
+    ap.add_argument("--colloc-knots", action="store_true",
+                    help="radial collocation: composite Gauss over the spline breakpoints of the --j-knots/--spl-band/"
+                         "--knots-fz settings even when T and p are Fourier-Zernike (a common grid for FZ and spline runs)")
+    ap.add_argument("--fit-split", action="store_true",
+                    help="--eval-only: at J_fit split dG = (J_fit - J_DESC) x B_DESC into the part this run's pressure "
+                         "space absorbs (grad dp, least squares) and the rest R (option A: B = B_DESC at J_fit), in total "
+                         "and by rho bin; plus DESC's own force projected the same way")
+    ap.add_argument("--jfit-nrho", type=int, default=None,
+                    help="--current spline: radial Chebyshev nodes of the standard (T-potential) fit (default 3 x the "
+                         "basis' effective L, capped at 300: too few for knots finer than 0.01)")
+    ap.add_argument("--jfit-wfit", type=float, default=None, metavar="LAMBDA",
+                    help="replace J_fit (the start, the |J - J_fit| target and option A's B_ext) by the exact weighted "
+                         "pointwise fit of DESC's J, min |dJ_par|^2 + LAMBDA |dJ_perp|^2 (meanforce_fixed.weighted_jfit)")
+    ap.add_argument("--wfit", type=float, nargs="+", default=None, metavar="LAMBDA",
+                    help="--fit-split: also re-fit J by weighted least squares at the collocation points, "
+                         "min |dJ_par|^2 + LAMBDA |dJ_perp|^2 (b = B_DESC/|B_DESC|, volume weights; CG on the normal "
+                         "equations from J_fit), and report the fit split of each (the start such a fit would give, "
+                         "B = B_DESC)")
+    ap.add_argument("--wfit-cg", type=int, default=3000, help="--wfit: CG iterations")
+    ap.add_argument("--wfit-direct", action="store_true",
+                    help="--wfit: solve exactly instead of by CG: the normal matrices N_par, N_perp (n_u x n_u) built "
+                         "column by column, (N_par + lambda N_perp + jitter) du = rhs by Cholesky")
+    ap.add_argument("--force-split", action="store_true",
+                    help="--eval-only: split the volume-mean force into the parallel part |b.F| = |b.grad p| and the "
+                         "perpendicular part, in total and by rho bin (--rho-bins, default 0 .4 .5 .55 ... .95 1)")
+    ap.add_argument("--p-colloc", type=int, default=4,
+                    help="--pressure spline: Gauss-Legendre collocation nodes per knot interval in rho")
+    ap.add_argument("--p-rationals", nargs="*", default=["2/1"],
+                    help="--pressure spline: q = m/n surfaces (DESC iota) where the knots cluster")
+    ap.add_argument("--dense-qr", default=None, metavar="DIR",
+                    help="write the column tables of the dense (exact-QR, multi-GPU) solver to DIR "
+                         "(nest/meanforce_dense.py; solved by scripts/meanforce/mf_fixed_qr.py) after "
+                         "setup, check them against this run's matrix-free state, then exit")
     a = ap.parse_args()
     a.hvp = True  # per-subproblem diagnostics (DIAG_H) are recorded for every model
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
@@ -288,14 +495,68 @@ def main():
     eq0 = inp0.eq
     kw = ({"L": a.LMN[0], "M": a.LMN[1], "N": a.LMN[2]} if a.LMN else
           {"factors": tuple(a.factors)})
-    cur0 = fit_cache.fit(BoundaryPotential, inp0, **kw)
-    pre0 = fit_cache.fit(Pressure, inp0, edge_order=2, **kw)
+    from spline_pressure import trunc_kw
+    if a.current == "spline":
+        if not a.LMN:
+            raise SystemExit("--current spline needs --LMN (M N of the Fourier part)")
+        cur0 = fit_cache.fit(BoundaryPotential, inp0, M=a.LMN[1], N=a.LMN[2], radial="spline",
+                             knots=tuple(a.j_knots), helicities=tuple(a.p_rationals),
+                             **({"n_rho": a.jfit_nrho} if a.jfit_nrho else {}),
+                             **trunc_kw(a.spl_mtol, a.spl_mmax, a.spl_mfz, a.knots_fz, a.spl_band, a.spl_reg,
+                                        a.spl_qcap))
+        run["current basis"] = cur0.basis.summary() | {"n_u": int(cur0.n_free)}
+        log(f"[current] spline a, b: {run['current basis']}")
+    elif a.current == "fz+spline":
+        if not (a.LMN and a.spl_band):
+            raise SystemExit("--current fz+spline needs --LMN and --spl-band (the splines live inside the bands)")
+        cur0 = fit_cache.fit(BoundaryPotential, inp0, L=a.LMN[0], M=a.LMN[1], N=a.LMN[2], radial="fz+spline",
+                             knots=tuple(a.j_knots), helicities=tuple(a.p_rationals),
+                             **trunc_kw(a.spl_mtol, a.spl_mmax, a.spl_mfz, a.knots_fz, a.spl_band))
+        run["current basis"] = cur0.basis.summary() | {"n_u": int(cur0.n_free)}
+        log(f"[current] FZ + band splines: {run['current basis']}")
+    else:
+        cur0 = fit_cache.fit(BoundaryPotential, inp0, **kw)
+    if a.pressure == "spline":
+        from spline_pressure import SplinePressure, count_fz
+        pM, pN = a.p_MN if a.p_MN else (cur0.basis.M, cur0.basis.N)
+        pre0 = fit_cache.fit(SplinePressure, inp0, M=pM, N=pN, edge_order=2, coarse=a.p_knots[0],
+                             dense=a.p_knots[1], half=a.p_knots[2], helicities=tuple(a.p_rationals),
+                             **trunc_kw(a.spl_mtol, a.spl_mmax, a.spl_mfz, a.knots_fz, a.spl_band, a.spl_reg,
+                                        a.spl_qcap))
+        run["pressure basis"] = dict(pre0.summary(), **{"FZ at the current basis (approx.)":
+                                                         count_fz(cur0.basis.L, cur0.basis.M, cur0.basis.N, bool(eq0.sym))})
+        log(f"[pressure] spline: {run['pressure basis']}")
+    elif a.pressure == "fz+spline":
+        if not (a.LMN and a.spl_band):
+            raise SystemExit("--pressure fz+spline needs --LMN and --spl-band")
+        spd = {"bands": tuple(tuple(float(v) for v in b_) for b_ in a.spl_band), "knots": tuple(a.p_knots)}
+        spd.update({k_: v_ for k_, v_ in trunc_kw(a.spl_mtol, a.spl_mmax, a.spl_mfz, a.knots_fz).items()})
+        pre0 = fit_cache.fit(Pressure, inp0, edge_order=2, L=a.LMN[0], M=a.LMN[1], N=a.LMN[2],
+                             spline=tuple(sorted(spd.items())))
+        run["pressure basis"] = pre0.basis.summary() | {"n": int(pre0.n)}
+        log(f"[pressure] FZ + band splines: {run['pressure basis']}")
+    else:
+        pre0 = fit_cache.fit(Pressure, inp0, edge_order=2, **kw)
+        run["pressure basis"] = {"kind": "fz", "n": int(pre0.n)}
     b = cur0.basis
     res = tuple(int(round(a.colloc * (u + v))) for u, v in
                 ((b.L, eq0.L), (b.M, eq0.M), (b.N, eq0.N)))
     if a.colloc_rho:
         res = (int(round(a.colloc_rho * (b.L + eq0.L))),) + res[1:]
-    ref = reference(inp0, res, current=cur0)
+    rho_nodes = None
+    bps = ([pre0.bp_rho] if a.pressure == "spline" else []) + ([pre0.basis.bp_rho] if a.pressure == "fz+spline" else [])
+    bps += [cur0.basis.bp_rho] if a.current in ("spline", "fz+spline") else []
+    if a.colloc_knots:  # the breakpoints a spline basis with these settings would have
+        from spline_pressure import breakpoints, rational_centres
+        cen = rational_centres(eq0, tuple(a.p_rationals)) if a.p_rationals else []
+        fzk = trunc_kw(fz_knots=a.knots_fz).get("fz_knots")
+        bps.append(breakpoints(0.0, 1.0, a.j_knots[0], a.j_knots[1], cen, a.j_knots[2], fzk, a.spl_band))
+    if bps:  # radial nodes under every spline (the uniform Gauss set misses the dense knots)
+        from spline_pressure import composite_gauss
+        rho_nodes = composite_gauss(np.unique(np.concatenate(bps)), a.p_colloc, min_nodes=res[0] // 2 + 1)
+        log(f"[spline] collocation: {len(rho_nodes[0])} radial nodes ({a.p_colloc} per knot interval)")
+        run["rho nodes"] = int(len(rho_nodes[0]))
+    ref = reference(inp0, res, current=cur0, rho_nodes=rho_nodes)
     norm = ref["norm"]
     M_desc = ref["F_desc_vol"] / norm
     run["basis"] = [b.L, b.M, b.N]
@@ -306,12 +567,21 @@ def main():
     t1 = time.time()
     box = annulus(inp0, inp0.a / a.frac, a.pad, a.N_phi)
     box.locate_plasma_planes(inp0, sym=bool(eq0.sym), verbose=True)
-    fr = ForceResidual(inp0, box, resolution=res)
+    fr = ForceResidual(inp0, box, resolution=res, rho_nodes=rho_nodes)
     fr.norm, fr.F_desc_vol = norm, ref["F_desc_vol"]
     if a.bext != "coils":
         fr.B_ext = np.zeros((len(fr.x), 3))  # set from DESC's field once Fields exists
     if "B_ext" not in vars(fr):
         fr.B_ext = _chunked(inp0.B_ext, fr.x)
+    if a.pert_eps:
+        from perturbation import Perturbation
+        pert = Perturbation(inp0.field, *a.pert_mn)
+        Bp = np.asarray(pert(np.asarray(fr.x)))
+        fr.B_ext = np.asarray(fr.B_ext) + a.pert_eps * Bp
+        rb = float(np.sqrt(np.mean(np.sum((a.pert_eps * Bp) ** 2, 1)) / np.mean(np.sum(np.asarray(fr.B_ext) ** 2, 1))))
+        run["perturbation"] = {"eps [A]": a.pert_eps, "m": a.pert_mn[0], "n": a.pert_mn[1],
+                               "rms |eps B_pert| / rms |B_ext|": rb}
+        log(f"{pert}, eps {a.pert_eps:g} A: rms |eps B_pert| / rms |B_ext| = {rb:.3e} on the collocation points")
     phase("annulus + locate + ForceResidual", t1)
 
     t1 = time.time()
@@ -327,6 +597,14 @@ def main():
     G = mff.gram_P(fields, cur0, pre0, chunk=a.gram_chunk, log=log)
     phase("pressure Gram", t1)
     u0 = jnp.asarray(cur0.u)
+    if a.jfit_wfit is not None:
+        t1 = time.time()
+        u0, run["jfit wfit"] = mff.weighted_jfit(fields, u0, fields.desc["J"], fields.desc["B"], a.jfit_wfit, log=log)
+        cur0 = cur0.with_u(np.asarray(u0))
+        for d_ in [os.path.dirname(a.out) or "."] + ([a.mirror] if a.mirror else []):
+            np.savez(os.path.join(d_, os.path.basename(a.out) + "_jfit.npz"), u=np.asarray(u0), nu=np.zeros(3), rho=1.0, eps=0.0,
+                     c_p=np.zeros(1))
+        phase("weighted J fit", t1)
     if a.bext != "coils":
         t1 = time.time()
         B_D = np.asarray(fields.desc["B"])
@@ -357,7 +635,14 @@ def main():
     Jfit = mff._J(fields, u0, fields.I)
     sw = jnp.asarray(fields.sw)
     rmsJ = float(jnp.sqrt(jnp.sum(sw[:, None] ** 2 * Jfit**2)))
-    A = mff.FixedAnchor(fields, cur0, pre0, u0, rmsJ, norm, G, log=log)
+    rho_sl = np.asarray(fr.tgrid.rho)
+    gw_sl = np.sqrt(mff.edge_weight(rho_sl, a.jw_rho0, a.jw_edge))
+    gw = np.asarray(gw_sl[np.searchsorted(rho_sl, np.asarray(fr.rtz[:, 0]))])
+    assert np.allclose(rho_sl[np.searchsorted(rho_sl, np.asarray(fr.rtz[:, 0]))], np.asarray(fr.rtz[:, 0]))
+    if a.jw_rho0 is not None:
+        log(f"edge weight of |J - J_fit|^2: 1 for rho <= {a.jw_rho0}, {a.jw_edge} at rho = 1; on the slices "
+            + ", ".join(f"{r:.3f}:{g**2:.3f}" for r, g in zip(rho_sl, gw_sl) if r > a.jw_rho0))
+    A = mff.FixedAnchor(fields, cur0, pre0, u0, rmsJ, norm, G, log=log, gw=gw)
     A.edge_all = bool(a.mean_whole)
     del G
     run["pressure space"] = {"rank": A.p_rank, "cond(G)": A.p_cond}
@@ -416,6 +701,13 @@ def main():
                     "rms J_fit": rmsJ, "M_desc": M_desc}
     log(f"start: M/M_desc {run['start']['M/M_desc']:.4f}, rms|F| {run['start']['rms|F|']:.3e}, "
         f"Galerkin {run['start']['galerkin']:.1e}")
+    M_DESC_own = M_desc
+    if a.alpha_ref == "start":
+        if a.force_norm != "mean":
+            raise SystemExit("--alpha-ref start needs --force-norm mean")
+        M_desc = float(s0["M"])
+        log(f"[alpha] eps = alpha x the start's M = {M_desc:.4e} ({M_desc / M_DESC_own:.3f} x DESC's own)")
+    run["alpha reference"] = {"kind": a.alpha_ref, "M_ref": M_desc, "M_DESC (DESC own)": M_DESC_own}
     phase("start state (first compile)", t1)
     t1 = time.time()
     s0 = A.state(z)
@@ -460,7 +752,7 @@ def main():
         return
 
     bfn = None
-    if a.pin_b21 is not None or a.b21_report or a.plane:
+    if a.pin_b21 is not None or a.b21_report or a.plane or a.bext == "desc-fit":  # (desc-fit: b21 in the live log)
         t1 = time.time()
         bfn, binfo = mff.resonant_b_fn(inp0, fields, fr, u0, a.b21_mk[0], a.b21_mk[1], log=log)
         bfn = jax.jit(bfn)
@@ -471,6 +763,179 @@ def main():
         v = np.asarray(bfn(jnp.asarray(uu)))
         return complex(v[0], v[1])
 
+    if a.eval_only and a.fit_split:
+        from objective import _cartesian as _cart  # noqa: F401
+        n_p_ = int(A.Lg.shape[0])
+        swj = jnp.asarray(fields.sw)
+        Jf = mff._J(fields, u0, fields.I)
+        Bf = fields.B_ext + fields.B_plasma(u0)
+        JD, BD, gpD = (jnp.asarray(fields.desc[k]) for k in ("J", "B", "grad(p)"))
+        wv = np.asarray(swj) ** 2
+        Wt = float(wv.sum())
+        rho_ = np.asarray(fr.rtz[:, 0])
+        rbins = np.array(a.rho_bins or [0, .2, .3, .4, .5, .55, .6, .65, .7, .75, .8, .85, .9, .95, 1.0])
+        volb = np.histogram(rho_, bins=rbins, weights=wv)[0]
+
+        def proj(V):  # V (n, 3) -> (grad dp part, residual R), each (n, 3), by the run's weighted least squares
+            x = (swj[:, None] * V).ravel()
+            f_, c_ = mff._project(fields, swj, x, A.Lg, n_p_)
+            f2_, _ = mff._project(fields, swj, f_, A.Lg, n_p_)  # one refinement step, as _state_impl
+            R_ = np.asarray(f2_).reshape(-1, 3) / np.asarray(swj)[:, None]
+            return np.asarray(V) - R_, R_
+
+        def mean_(V):
+            return float(np.sum(wv * np.linalg.norm(V, axis=1)) / Wt) / norm / M_desc_mean
+
+        def rms_(V):
+            return float(np.sqrt(np.sum(wv * np.sum(np.asarray(V) ** 2, 1)) / Wt)) / norm / M_desc_mean
+
+        def bins_(V):
+            return (np.histogram(rho_, bins=rbins, weights=wv * np.linalg.norm(V, axis=1))[0]
+                    / np.maximum(volb, 1e-300) / norm / M_desc_mean)
+        dJ = np.asarray(Jf - JD)
+        rmsJD = float(np.sqrt(np.sum(wv * np.sum(np.asarray(JD) ** 2, 1)) / Wt))
+        dG = np.cross(dJ, np.asarray(BD))
+        FD = np.cross(np.asarray(JD), np.asarray(BD)) - np.asarray(gpD)
+        gpG, RG = proj(dG)
+        gpF, RF = proj(FD)
+        _, Rtot = proj(np.cross(np.asarray(Jf), np.asarray(Bf)))
+        bh = np.asarray(BD) / np.linalg.norm(np.asarray(BD), axis=1, keepdims=True)
+        Rpar = np.sum(RG * bh, 1)[:, None] * bh
+        dJpar = np.sum(dJ * bh, 1)[:, None] * bh  # the force-free part of the fit error
+        dJperp = dJ - dJpar
+
+        def rel_(V):  # rms |V| / rms |J_DESC|
+            return float(np.sqrt(np.sum(wv * np.sum(np.asarray(V) ** 2, 1)) / Wt)) / rmsJD
+
+        def relbins_(V):
+            return np.sqrt(np.histogram(rho_, bins=rbins, weights=wv * np.sum(np.asarray(V) ** 2, 1))[0]
+                           / np.maximum(volb, 1e-300)) / rmsJD
+        fs_ = {"|B - B_DESC| / |B_DESC| (rms)": float(np.sqrt(np.sum(wv * np.sum(np.asarray(Bf - BD) ** 2, 1)) / np.sum(wv * np.sum(np.asarray(BD) ** 2, 1)))),
+               "rms dJ / rms J_DESC": float(np.sqrt(np.sum(wv * np.sum(dJ**2, 1)) / Wt)) / rmsJD,
+               "rms dJ_par / rms J_DESC": rel_(dJpar), "rms dJ_perp / rms J_DESC": rel_(dJperp),
+               "dJ_perp share of dJ^2": rel_(dJperp) ** 2 / max(rel_(dJ) ** 2, 1e-300),
+               "dJ_par by bin": relbins_(dJpar).tolist(), "dJ_perp by bin": relbins_(dJperp).tolist(),
+               "rms |B_DESC|": float(np.sqrt(np.sum(wv * np.sum(np.asarray(BD) ** 2, 1)) / Wt)),
+               "dG = dJ x B_DESC": {"mean": mean_(dG), "rms": rms_(dG)},
+               "grad dp (absorbed)": {"mean": mean_(gpG), "rms": rms_(gpG)},
+               "R (not absorbed)": {"mean": mean_(RG), "rms": rms_(RG)},
+               "R parallel": {"mean": mean_(Rpar), "rms": rms_(Rpar)},
+               "R perpendicular": {"mean": mean_(RG - Rpar), "rms": rms_(RG - Rpar)},
+               "rms R / rms dG": rms_(RG) / max(rms_(dG), 1e-300),
+               "DESC's own force F_D": {"mean": mean_(FD), "R(F_D) mean": mean_(RF)},
+               "total force at J_fit (check)": {"mean": mean_(Rtot), "rms": rms_(Rtot)},
+               "rho bins": rbins.tolist(), "dG by bin": bins_(dG).tolist(), "R by bin": bins_(RG).tolist(),
+               "grad dp by bin": bins_(gpG).tolist(), "R parallel by bin": bins_(Rpar).tolist()}
+        run["fit split"] = fs_
+        log(f"[fit split] B at J_fit vs B_DESC: {fs_['|B - B_DESC| / |B_DESC| (rms)']:.1e}; rms dJ / rms J_DESC "
+            f"{fs_['rms dJ / rms J_DESC']:.3e}: parallel {fs_['rms dJ_par / rms J_DESC']:.3e}, perpendicular "
+            f"{fs_['rms dJ_perp / rms J_DESC']:.3e} (perpendicular share of |dJ|^2 {fs_['dJ_perp share of dJ^2']:.3f})")
+        for k_ in ("dG = dJ x B_DESC", "grad dp (absorbed)", "R (not absorbed)", "R parallel", "R perpendicular"):
+            log(f"[fit split] {k_:22s}: mean {fs_[k_]['mean']:9.4f}  rms {fs_[k_]['rms']:9.4f}  (M_DESC units)")
+        fd_ = fs_["DESC's own force F_D"]
+        log(f"[fit split] rms R / rms dG {fs_['rms R / rms dG']:.4f}; DESC's own F_D mean {fd_['mean']:.4f} "
+            f"(not absorbed {fd_['R(F_D) mean']:.4f}); total force at J_fit mean "
+            f"{fs_['total force at J_fit (check)']['mean']:.4f}")
+        log("[fit split] rho bins    " + " ".join(f"{x:6.2f}" for x in rbins))
+        for k_ in ("dG by bin", "grad dp by bin", "R by bin", "R parallel by bin"):
+            log(f"[fit split] {k_[:-7]:10s} " + " ".join(f"{x:6.2f}" for x in fs_[k_]))
+        for k_ in ("dJ_par by bin", "dJ_perp by bin"):
+            log(f"[fit split] {k_[:-7]:10s} " + " ".join(f"{1e4 * x:6.2f}" for x in fs_[k_]) + "   (x 1e-4 of rms J_DESC)")
+        dump()
+        # the reference current's own structure, and dJ along J_DESC's direction (amplitude) vs across it
+        jh = np.asarray(JD) / np.maximum(np.linalg.norm(np.asarray(JD), axis=1, keepdims=True), 1e-300)
+        JDpar = np.sum(np.asarray(JD) * bh, 1)[:, None] * bh
+        dJalongJ = np.sum(dJ * jh, 1)[:, None] * jh
+        run["fit split"].update({"rms J_DESC_perp / rms J_DESC": rel_(np.asarray(JD) - JDpar),
+                                 "rms dJ along J_DESC / rms J_DESC": rel_(dJalongJ),
+                                 "rms dJ across J_DESC / rms J_DESC": rel_(dJ - dJalongJ)})
+        log(f"[fit split] J_DESC itself: rms J_perp / rms J {rel_(np.asarray(JD) - JDpar):.3e}; dJ along J_DESC "
+            f"{rel_(dJalongJ):.3e}, across J_DESC {rel_(dJ - dJalongJ):.3e}")
+        if a.wfit:
+            bhj = jnp.asarray(bh)
+
+            def Wop(V, lam):  # W V = (V.b) b + sqrt(lam) (V - (V.b) b)
+                vb = jnp.sum(V * bhj, 1)[:, None] * bhj
+                return vb + jnp.sqrt(lam) * (V - vb)
+
+            def Aop(v, lam):
+                return (swj[:, None] * Wop(mff._J(fields, v, 0.0), lam)).ravel()
+            run["wfit"] = {}
+            n_u_ = int(u0.shape[0])
+
+            def Apar(v):
+                Lv = mff._J(fields, v, 0.0)
+                return (swj[:, None] * (jnp.sum(Lv * bhj, 1)[:, None] * bhj)).ravel()
+
+            def Aperp(v):
+                Lv = mff._J(fields, v, 0.0)
+                return (swj[:, None] * (Lv - jnp.sum(Lv * bhj, 1)[:, None] * bhj)).ravel()
+            sd_ = jax.ShapeDtypeStruct(u0.shape, u0.dtype)
+            AparT = jax.linear_transpose(Apar, sd_)
+            AperpT = jax.linear_transpose(Aperp, sd_)
+            Npar = Nperp = None
+            if a.wfit_direct:
+                t_ = time.time()
+                bs = 32
+                fpar = jax.jit(jax.vmap(lambda v: AparT(Apar(v))[0]))
+                fperp = jax.jit(jax.vmap(lambda v: AperpT(Aperp(v))[0]))
+                Npar = np.zeros((n_u_, n_u_))
+                Nperp = np.zeros((n_u_, n_u_))
+                for i0 in range(0, n_u_, bs):
+                    E = jnp.eye(n_u_, min(bs, n_u_ - i0), -i0, dtype=u0.dtype).T  # rows: unit vectors i0..i0+bs
+                    Npar[:, i0:i0 + E.shape[0]] = np.asarray(fpar(E)).T
+                    Nperp[:, i0:i0 + E.shape[0]] = np.asarray(fperp(E)).T
+                log(f"[wfit] normal matrices N_par, N_perp ({n_u_} x {n_u_}) built in {time.time() - t_:.0f} s; "
+                    f"trace ratio perp/par {np.trace(Nperp) / np.trace(Npar):.3e}")
+            for lam in a.wfit:
+                t_ = time.time()
+                r0 = (swj[:, None] * Wop(Jf - JD, lam)).ravel()
+                AT = jax.linear_transpose(lambda v: Aop(v, lam), jax.ShapeDtypeStruct(u0.shape, u0.dtype))
+                rhs = -AT(r0)[0]
+                N = jax.jit(lambda v: AT(Aop(v, lam))[0])
+                g0n = float(jnp.linalg.norm(rhs))
+                if Npar is not None:
+                    Nl = jnp.asarray(Npar + lam * Nperp)
+                    jit_ = 1e-14 * float(jnp.trace(Nl)) / n_u_
+                    for _k in range(6):
+                        Lc = jnp.linalg.cholesky(Nl + jit_ * jnp.eye(n_u_))
+                        if bool(jnp.all(jnp.isfinite(jnp.diag(Lc)))):
+                            break
+                        jit_ *= 100
+                    du = jax.scipy.linalg.cho_solve((Lc, True), rhs)
+                    du = du + jax.scipy.linalg.cho_solve((Lc, True), rhs - Nl @ du)  # one refinement step
+                    how = f"direct (Cholesky, jitter {jit_ / (float(jnp.trace(Nl)) / n_u_):.0e} x mean diag)"
+                    del Nl, Lc
+                else:
+                    du, _ = jax.scipy.sparse.linalg.cg(N, rhs, maxiter=a.wfit_cg, tol=1e-12)
+                    how = f"CG {a.wfit_cg}"
+                g1n = float(jnp.linalg.norm(rhs - N(du)))
+                log(f"[wfit] lambda {lam:g}: {how}; normal-equation residual |A^T r| {g1n:.3e} of {g0n:.3e} "
+                    f"({g1n / max(g0n, 1e-300):.2e})")
+                ul = u0 + du
+                Jl = mff._J(fields, ul, fields.I)
+                obj0 = float(jnp.sum(r0**2))
+                obj1 = float(jnp.sum((r0 + Aop(du, lam)) ** 2))
+                dJl = np.asarray(Jl - JD)
+                dJlp = np.sum(dJl * bh, 1)[:, None] * bh
+                dGl = np.cross(dJl, np.asarray(BD))
+                gpl, Rl = proj(dGl)
+                _, Rtl = proj(np.cross(np.asarray(Jl), np.asarray(BD)))  # the start of an option-A run on this fit
+                rec = {"objective J_fit -> fitted": [obj0, obj1], "rms dJ": rel_(dJl), "rms dJ_par": rel_(dJlp),
+                       "rms dJ_perp": rel_(dJl - dJlp), "dG mean/rms": [mean_(dGl), rms_(dGl)],
+                       "R mean/rms": [mean_(Rl), rms_(Rl)], "rms R / rms dG": rms_(Rl) / max(rms_(dGl), 1e-300),
+                       "start force (B = B_DESC) mean/rms": [mean_(Rtl), rms_(Rtl)],
+                       "dJ_perp by bin": relbins_(dJl - dJlp).tolist(), "R by bin": bins_(Rl).tolist(),
+                       "time": time.time() - t_}
+                run["wfit"][str(lam)] = rec
+                log(f"[wfit] lambda {lam:g}: objective {obj0:.3e} -> {obj1:.3e}; rms dJ {rec['rms dJ']:.3e} (par "
+                    f"{rec['rms dJ_par']:.3e}, perp {rec['rms dJ_perp']:.3e}); dG mean {rec['dG mean/rms'][0]:.3f} rms "
+                    f"{rec['dG mean/rms'][1]:.2f}; R mean {rec['R mean/rms'][0]:.3f} rms {rec['R mean/rms'][1]:.2f}; start "
+                    f"force mean {rec['start force (B = B_DESC) mean/rms'][0]:.3f} rms "
+                    f"{rec['start force (B = B_DESC) mean/rms'][1]:.2f} ({rec['time']:.0f} s)")
+                log(f"[wfit] lambda {lam:g} dJ_perp by bin " + " ".join(f"{1e4 * x:6.2f}" for x in rec["dJ_perp by bin"]))
+                log(f"[wfit] lambda {lam:g} R by bin       " + " ".join(f"{x:6.2f}" for x in rec["R by bin"]))
+                dump()
     if a.eval_only:
         if a.force_norm != "p":
             raise SystemExit("--eval-only needs --force-norm p")
@@ -481,9 +946,15 @@ def main():
                 lo = fit_cache.fit(BoundaryPotential, inp0, L=a.start_LMN[0], M=a.start_LMN[1], N=a.start_LMN[2])
                 ue = mff.embed_truncate(lo, cur0, ue)[0]
             cases.append((os.path.basename(a.start), jnp.asarray(ue)))
+        lo_ev = None
         for spec in a.eval_state:
             nm_, pth = spec.split("=", 1)
-            cases.append((nm_, jnp.asarray(np.load(pth)["u"])))
+            ue_ = np.load(pth)["u"]
+            if ue_.size != cur0.n_free and a.start_LMN:  # a state of the --start-LMN (FZ) basis: embed it
+                if lo_ev is None:
+                    lo_ev = fit_cache.fit(BoundaryPotential, inp0, L=a.start_LMN[0], M=a.start_LMN[1], N=a.start_LMN[2])
+                ue_ = mff.embed_truncate(lo_ev, cur0, ue_)[0]
+            cases.append((nm_, jnp.asarray(ue_)))
         for s_ in a.eval_blend:
             cases += [(f"{nm_}@s{s_:g}", u0 + s_ * (zz - u0)) for nm_, zz in list(cases[1:]) if "@s" not in nm_]
         run["eval"] = {}
@@ -529,6 +1000,31 @@ def main():
                 run["shell max"][nm_] = (mx, mn)
                 log(f"[shell] {nm_[:9]:9s} max  " + " ".join(f"{x:8.2e}" for x in mx))
                 log(f"[shell] {nm_[:9]:9s} mean " + " ".join(f"{x:8.2e}" for x in mn))
+            dump()
+        if a.force_split:
+            rb = np.array(a.rho_bins or [0, .4, .5, .55, .6, .65, .7, .75, .8, .85, .9, .95, 1.0])
+            vol_b = np.histogram(rho_pts, bins=rb, weights=w_pts)[0]
+            Wt = float(np.sum(w_pts))
+            run["force split"] = {"edges": rb.tolist(), "unit": "M_desc (volume-mean |F| of DESC / norm)"}
+            log("[split] mean |F| = sum w |F| / norm / M_desc; par = |b.F| = |b.grad p|, perp = |F - (b.F) b|; "
+                "by bin: bin mean / M_desc")
+            log("[split] edges            " + " ".join(f"{x:6.3f}" for x in rb))
+            for nm_, zz in cases:
+                ss = A.state(zz)
+                F_, B_ = np.asarray(ss["F"]), np.asarray(ss["B"])
+                bh = B_ / np.linalg.norm(B_, axis=1, keepdims=True)
+                fpar = np.sum(F_ * bh, axis=1)
+                aperp = np.linalg.norm(F_ - fpar[:, None] * bh, axis=1)
+                apar = np.abs(fpar)
+                tot = {k_: float(np.sum(w_pts * v_) / Wt) / norm / M_desc_mean
+                       for k_, v_ in (("|F|", np.linalg.norm(F_, axis=1)), ("par", apar), ("perp", aperp))}
+                bpar = np.histogram(rho_pts, bins=rb, weights=w_pts * apar)[0] / np.maximum(vol_b, 1e-300) / norm / M_desc_mean
+                bperp = np.histogram(rho_pts, bins=rb, weights=w_pts * aperp)[0] / np.maximum(vol_b, 1e-300) / norm / M_desc_mean
+                run["force split"][nm_] = {"total": tot, "par by bin": bpar.tolist(), "perp by bin": bperp.tolist()}
+                log(f"[split] {nm_}: |F| {tot['|F|']:.4f}, par {tot['par']:.4f}, perp {tot['perp']:.4f} "
+                    f"(par share of sum w|F| ~ {tot['par'] / max(tot['par'] + tot['perp'], 1e-300):.2f})")
+                log(f"[split] {nm_[:11]:11s} par  " + " ".join(f"{x:6.3f}" for x in bpar))
+                log(f"[split] {nm_[:11]:11s} perp " + " ".join(f"{x:6.3f}" for x in bperp))
             dump()
         if a.rho_bins:
             rb = np.array(a.rho_bins)
@@ -577,13 +1073,15 @@ def main():
     t1 = time.time()
     lean = a.precond == "force" and not a.no_lean_metric
     if lean:  # H_J to host memory; the device copy becomes the first metric factor in place
-        HJ = mff.gram_J_lean(fields, cur0, pre0, rmsJ, chunk=a.gram_chunk, log=log)
+        HJ = mff.gram_J_lean(fields, cur0, pre0, rmsJ, chunk=a.gram_chunk, log=log, slice_gw=gw_sl)
         HJ_host = np.asarray(HJ)
         L = mff.metric_L_lean(HJ)
         del HJ
         HJ = None
     else:
-        HJ = mff.gram_J(fields, cur0, pre0, rmsJ, chunk=a.gram_chunk, log=log)
+        HJ = mff.gram_J(fields, cur0, pre0, rmsJ, chunk=a.gram_chunk, log=log, slice_gw=gw_sl)
+        if a.dense_qr:
+            HJ_host = np.asarray(HJ)
         L = mff.metric_L(HJ)
         if a.precond != "force":
             del HJ
@@ -697,6 +1195,19 @@ def main():
     log(f"products: J v {tJ:.3f} s, J^T w {tJT:.3f} s")
     phase("products", time.time())
     del rows
+    if a.dense_qr:
+        import meanforce_dense as md
+        t1 = time.time()
+        meta = {"args": vars(a), "M_desc": M_desc, "M_DESC (DESC own)": M_DESC_own, "basis": run["basis"], "sizes": run["sizes"],
+                "perturbation": run.get("perturbation"), "start": run["start"],
+                "constraints": run.get("constraints")}
+        chk = md.export_tables(a.dense_qr, fields, cur0, pre0, A, np.asarray(z), HJ_host,
+                               None if LC is None else LC.Ct, meta, log=log)
+        run["dense tables"] = {"dir": a.dense_qr, "check": chk}
+        phase("dense tables", t1)
+        run["stage"] = "dense tables written"
+        dump()
+        return
     if a.setup_only:
         run["stage"] = "setup only"
         dump()
@@ -709,6 +1220,46 @@ def main():
                        reanchor=None, cg_tol=a.cg_tol, cg_maxiter=a.cg,
                        stall_dir=os.path.dirname(a.out) or ".", run_name=name)
     solver.diagnose = lambda *args, **kw: {"skipped": "fixed boundary"}
+    if a.pert_eps and a.force_norm == "mean":  # per-trial log in physical units (trust-region study)
+        from resonant_profiles import resonant_profiles, resonant_setup
+        from spline_pressure import rational_centres
+        t1 = time.time()
+        rs = resonant_setup(inp0, fr)
+        rq = rational_centres(eq0, ["2/1"])
+        rq2 = rq[0] if rq else 0.58
+        rr = rs["rho"]
+        band = np.abs(rr - rq2) < 0.1
+        nr = len(rr)
+        w_pt = np.asarray(fields.sw) ** 2
+        w_r = w_pt.reshape(nr, -1).sum(1)  # volume per radial node
+
+        def resonant_of(st):
+            J, B = np.asarray(st["J"]), np.asarray(st["B"])
+            sig = np.sum(J * B, 1) / np.sum(B * B, 1)
+            pr = resonant_profiles(rs, B, J)
+            return sig, pr
+
+        cache = {}
+
+        def trial_extra(s_old, s_new):
+            if cache.get("obj") is not s_old:  # the reference is held, so identity cannot be reused
+                cache.update(obj=s_old, old=resonant_of(s_old))
+            sig0, p0 = cache["old"]
+            sig1, p1 = resonant_of(s_new)
+            ds = sig1 - sig0
+            d21 = p1["s21"] - p0["s21"]
+            tot = float(np.sum(w_pt * ds**2))
+            res = float(np.sum(w_r * 0.5 * d21**2))
+            return {"dJ_rms": float(jnp.linalg.norm(s_new["g"] - s_old["g"])),
+                    "dM/M_ref": (float(s_new["M"]) - float(s_old["M"])) / M_desc,
+                    "b21_q2": float(np.interp(rq2, rr, p1["b21"])),
+                    "s21_peak_band": float(np.max(np.abs(p1["s21"][band]))) if band.any() else float("nan"),
+                    "s21_int_band": float(np.trapezoid(p1["s21"][band], rr[band])) if band.sum() > 1 else float("nan"),
+                    "step_resonant_share": res / tot if tot > 0 else float("nan")}
+
+        solver.trial_extra = trial_extra
+        run["trial log"] = {"q2 rho": rq2, "band": [rq2 - 0.1, rq2 + 0.1], "setup [s]": time.time() - t1}
+        log(f"[trial log] resonant measurements per trial (q = 2 at rho {rq2:.4f}); setup {time.time() - t1:.0f} s")
     solver.delta0 = a.delta0
     solver.delta_reset = not a.no_delta_reset
     solver.radius_by_delta = a.radius_by_delta
@@ -770,7 +1321,7 @@ def main():
     solver.mult_ls = not a.no_mult_ls
     mff.use_models(a.model, far=a.hvp_far, fallback=a.hvp_fallback, beta=a.beta, solver=solver,
                    refresh=refresh_rows if a.precond == "force" else None,
-                   refresh_lz=a.refresh_lz, refresh_dM=a.refresh_dM, beta_adapt=a.beta_adapt,
+                   refresh_lz=a.refresh_lz, refresh_dM=a.refresh_dM, beta_adapt=a.beta_adapt, cap_rebuild=a.cap_rebuild,
                    beta_min=a.beta_min, log=log, lz_stop=a.lanczos_stop)
     log(f"[model] {a.model}" + (f" (beta {a.beta})" if a.model == "beta" else "")
         + (f" (GN while |c_F| > {a.hvp_far}, GN x{a.hvp_fallback} after a radius cut)" if a.model == "hybrid" else "")
@@ -890,6 +1441,8 @@ def main():
                 build_state["psi1"] = None  # new weights: rebuild the force metric at the first outer
                 log(f"[p-norm] p {p_cur:g}: eps = alpha x " + ("start" if a.ref_start else "DESC")
                     + f" {'band' if a.p_band else 'interior'} p-norm {M_desc:.4e}")
+            live = LiveLog(a.out + "_live.tsv", t0, m_ref=M_desc_mean, bfn=bfn, b_vac=a.b21_vac)
+            live.n_u = int(fields.n_u)
             for alpha in a.alphas:
                 t1 = time.time()
                 W.eps = alpha * M_desc
@@ -903,6 +1456,7 @@ def main():
 
                 def cb(zz, s, outer, entry=entry, is_last=is_last):
                     entry["outer"] = outer
+                    live.outer(alpha, outer[-1], W.eps)
                     entry["time"] = time.time() - t1
                     entry.pop("inner (current outer)", None)
                     run["memory"].append({"phase": f"alpha {alpha} outer {len(outer)}",
@@ -926,6 +1480,10 @@ def main():
 
                 def on_step(hist, entry=entry):
                     entry["inner (current outer)"] = hist
+                    if hist:
+                        live.trial(alpha, len(entry.get("outer", [])), len(hist) - 1, hist[-1],
+                                   mff.DIAG_H[-1] if mff.DIAG_H else {}, W.eps,
+                                   z=A.last_z if hist[-1]["accepted"] else None)
                     if hist and hist[-1]["accepted"] and A.pnorm is not None:
                         rep = pn_report(A.last_s, A.pnorm["p"])
                         im_ = int(jnp.argmax(jnp.where(A.pnorm["mask"] > 0, A.last_s["absF"], -1.0)))
@@ -959,7 +1517,7 @@ def main():
                 solver.on_step = on_step
                 forced = False
                 try:
-                    z, outer = solver.solve_alpha(z, max_outer=a.max_outer, maxiter=a.maxiter,
+                    z, outer = solver.solve_alpha(z, max_outer=a.max_outer, maxiter=a.maxiter, rho_max=a.rho_max,
                                                   gtol=a.gtol, callback=cb, stat_tol=a.stat_tol,
                                                   stat_window=a.stat_window)
                 except NextStage as e:
@@ -968,8 +1526,10 @@ def main():
                     entry["stage end"] = str(e)
                 s = A.state(z)
                 c = W.constraints(s)
-                entry.update({"M/M_desc": float(s["M"]) / M_desc, "rms|F|": float(s["rmsF"]),
+                entry.update({"M/M_desc": float(s["M"]) / M_desc, "M/M_DESC (DESC own)": float(s["M"]) / M_DESC_own,
+                              "rms|F|": float(s["rmsF"]),
                               "|J-J_fit|/rms": float(jnp.sqrt(jnp.sum(s["g"] ** 2))),
+                              "|J-J_fit|/rms unweighted": float(s["dJ"]),
                               "galerkin": float(s["galerkin"]), "feasible": bool(c[0] <= 1e-2),
                               "nu": W.nu.tolist(), "rho": W.rho, "time": time.time() - t1})
                 if A.pnorm is not None:
@@ -980,7 +1540,8 @@ def main():
                         entry["constraints"]["dPsi/Psi direct"] = (float(LC.psi(z)) - LC.psi_ref) / LC.psi_ref
                 save_state(f"{ptag}a{alpha}", z, s, W)
                 log(f"alpha {alpha} done in {time.time() - t1:.0f} s: |J - J_fit|/rms "
-                    f"{entry['|J-J_fit|/rms']:.4e}, M/M_desc {entry['M/M_desc']:.4f}")
+                    f"{entry['|J-J_fit|/rms']:.4e} (unweighted {entry['|J-J_fit|/rms unweighted']:.4e}), "
+                    f"M/M_desc {entry['M/M_desc']:.4f}")
                 dump()
                 if not entry["feasible"] and not forced:
                     log(f"alpha {alpha} not met: stopping the sweep")

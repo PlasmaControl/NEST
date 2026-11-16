@@ -625,7 +625,7 @@ class DirectField(_Pytree):
 
 
 # ---------------------------------------------------------------- reference
-def reference(inp, resolution, sym=None, current=None):
+def reference(inp, resolution, sym=None, current=None, rho_nodes=None):
     """What stays DESC's across anchors, from the starting equilibrium on the
     collocation grid of ``resolution``: the force normalization and DESC's own
     force error, rms |J|, |B|, p, and DESC's current as sqrt(g) J^i (``N_desc``,
@@ -635,7 +635,7 @@ def reference(inp, resolution, sym=None, current=None):
     sqrt(g) J^i is the target instead of DESC's. Unlike DESC's (J != 0 on NCSX's LCFS),
     it is in the basis, so the current term does not pull against force balance."""
     from force import ForceResidual
-    fr = ForceResidual(inp, None, resolution=resolution, sym=sym)
+    fr = ForceResidual(inp, None, resolution=resolution, sym=sym, rho_nodes=rho_nodes)
     g = fr.tgrid
     d = inp.compute_tensor(["sqrt(g)", "J^rho", "J^theta", "J^zeta", "J", "B", "p"],
                            g.rho, g.theta, g.zeta)

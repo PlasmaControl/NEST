@@ -156,7 +156,10 @@ class FactoredFactors(_Pytree):
         rho = jnp.asarray(grid.rho)
         self.Z, self.T = {}, {}
         for dr in sorted({d[0] for d in pol}):
-            z = zernike_radial(rho[:, None], lm[:, 0], lm[:, 1], dr=dr)  # (n_rho, n_p)
+            if hasattr(sep, "radial_table"):  # radial splines (spline_basis.SplineSeparable)
+                z = sep.radial_table(rho, dr)
+            else:
+                z = zernike_radial(rho[:, None], lm[:, 0], lm[:, 1], dr=dr)  # (n_rho, n_p)
             self.Z[dr] = jnp.zeros((len(grid.rho), self.n_m, self.n_l)).at[:, self.mi, self.li].set(z)
         for dt in sorted({d[1] for d in pol}):
             self.T[dt] = jnp.asarray(fourier(jnp.asarray(grid.theta)[:, None], ms, dt=dt))

@@ -9,7 +9,7 @@ w_i = dV_i / V, sw = sqrt(w):
     P c = sw grad p(c)                       (3 n, linear in c, CONSTANT: fixed geometry)
     p*  = G^+ P^T a,   G = P^T P (k x k)     (weak Poisson; G built once, by radial slices)
     f   = a - P p* = sw F,   M = sum_i w_i |F_i| / norm
-    g   = sw (J - J_fit) / rms J_fit
+    g   = sw gw (J - J_fit) / rms J_fit         (gw = sqrt of the edge weight, ``edge_weight``)
 
 Nothing of size n x k is stored: P c is one evaluation of grad p, P^T x its transpose,
 G^-1 by a Cholesky factor of G (+ rank_tol^2 mean(diag) jitter; cuSOLVER's eigh fails for
@@ -35,6 +35,16 @@ import meanforce as mf
 
 
 # ------------------------------------------------------------------ pieces
+def edge_weight(rho, rho0=None, w_edge=1.0):
+    """Weight of |J - J_fit|^2 in the objective: 1 for rho <= rho0, falling as cos^2 to w_edge
+    at rho = 1 (C^1 at rho0). rho0 None: 1 everywhere."""
+    rho = np.asarray(rho, dtype=float)
+    if rho0 is None:
+        return np.ones_like(rho)
+    t = np.clip((rho - rho0) / (1 - rho0), 0, 1)
+    return w_edge + (1 - w_edge) * np.cos(0.5 * np.pi * t) ** 2
+
+
 def _J(fields, u, I):
     return _cartesian(fields.J_col(u, I).reshape(-1, 3), fields.phi)
 
@@ -62,7 +72,7 @@ def _project(fields, sw, x, Lg, n_p):
 
 
 @jax.jit
-def _state_impl(fields, u, Jfit, sw, Lg, rmsJ, norm):
+def _state_impl(fields, u, Jfit, sw, Lg, rmsJ, norm, gw):
     n_p = Lg.shape[0]
     J = _J(fields, u, fields.I)
     B = fields.B_ext + fields.B_plasma(u)
@@ -75,11 +85,11 @@ def _state_impl(fields, u, Jfit, sw, Lg, rmsJ, norm):
     F = f.reshape(n, 3) / sw[:, None]
     w = sw**2
     absF = jnp.linalg.norm(F, axis=1)
-    g = (sw[:, None] * (J - Jfit) / rmsJ).ravel()
+    g = ((sw * gw)[:, None] * (J - Jfit) / rmsJ).ravel()
     PTf = _PT(fields, sw, f, n_p)
     return {"J": J, "B": B, "f": f, "c": c, "F": F, "z": w[:, None] * F, "absF": absF,
             "M": jnp.sum(w * absF) / norm, "rmsF": jnp.sqrt(jnp.sum(w * absF**2)) / norm,
-            "g": g, "PTf": PTf}
+            "g": g, "PTf": PTf, "dJ": jnp.sqrt(jnp.sum(w[:, None] * (J - Jfit) ** 2)) / rmsJ}
 
 
 def _lin_impl(fields, v, aux):
@@ -92,7 +102,7 @@ def _lin_impl(fields, v, aux):
     df, _ = _project(fields, sw, da, aux["Lg"], n_p)
     n = J.shape[0]
     dz = (sw[:, None] * df.reshape(n, 3)).ravel()
-    dg = (sw[:, None] * dJ / aux["rmsJ"]).ravel()
+    dg = ((sw * aux["gw"])[:, None] * dJ / aux["rmsJ"]).ravel()
     return dg, dz
 
 
@@ -130,8 +140,10 @@ def _cols_gp(tp, E):
     return jax.vmap(lambda e: tp(e)[1].reshape(-1))(E)
 
 
-def _gram(make_eval, cols_fn, n_cols, fields, current, pressure, scale, chunk, log, what):
-    """sum over radial slices of (scale sw C)(scale sw C)^T, C the columns at the slice.
+def _gram(make_eval, cols_fn, n_cols, fields, current, pressure, scale, chunk, log, what,
+          slice_scale=None):
+    """sum over radial slices k of (s sw C)(s sw C)^T, C the columns at the slice and
+    s = scale (x slice_scale[k] if given).
 
     Memory: H (n_pad^2) + one slice's columns C (n_pad x 3 m, preallocated, filled chunk by
     chunk with donation) + a (chunk x n_pad) temporary: H is updated in row blocks, never
@@ -144,7 +156,7 @@ def _gram(make_eval, cols_fn, n_cols, fields, current, pressure, scale, chunk, l
     C = None
     for k, (sl, g, geo) in enumerate(_slices(fields, current, pressure)):
         ev = make_eval(g, geo)
-        s3 = jnp.asarray(np.repeat(sw[sl], 3)) * scale
+        s3 = jnp.asarray(np.repeat(sw[sl], 3)) * scale * (1.0 if slice_scale is None else slice_scale[k])
         if C is None or C.shape[1] != s3.shape[0]:
             C = jnp.zeros((n_pad, s3.shape[0]))
         for i in range(0, n_pad, chunk):
@@ -173,10 +185,11 @@ def _rows_add(H, C, r0, blk):
     return jax.lax.dynamic_update_slice_in_dim(H, Hr, r0, 0)
 
 
-def gram_J(fields, current, pressure, rmsJ, chunk=1024, log=print):
+def gram_J(fields, current, pressure, rmsJ, chunk=1024, log=print, slice_gw=None):
+    """slice_gw: sqrt of the edge weight per radial slice (``edge_weight``), or None."""
     from flux_interp import TensorCurrent
     return _gram(lambda g, geo: TensorCurrent(current.S, current._RZ, g, geo), _cols_J,
-                 fields.n_u, fields, current, pressure, 1.0 / rmsJ, chunk, log, "H_J")
+                 fields.n_u, fields, current, pressure, 1.0 / rmsJ, chunk, log, "H_J", slice_gw)
 
 
 def gram_P(fields, current, pressure, chunk=1024, log=print):
@@ -190,7 +203,8 @@ class FixedAnchor:
     state(z), galerkin(s), raw_lin/raw_lin_T are replaced by ``FixedRows``)."""
 
     def __init__(self, fields, current, pressure, u0, rmsJ, norm, G, rank_tol=1e-12,
-                 log=print):
+                 log=print, gw=None):
+        """gw: sqrt of the objective's edge weight per collocation point (None: 1)."""
         self.fields, self.log = fields, log
         self.n_u, self.n_p, self.n_xi = fields.n_u, fields.n_p, 0
         self.n = self.n_u
@@ -199,6 +213,7 @@ class FixedAnchor:
         self.n_pts = len(fields.phi)
         self.n_b = 1
         self.sw = jnp.asarray(fields.sw)
+        self.gw = jnp.ones_like(self.sw) if gw is None else jnp.asarray(gw)
         # Cholesky (cuSOLVER's eigh fails above ~25k); G is full rank here (cond(P) ~1e5),
         # a jitter of rank_tol^2 x mean(diag) guards round-off; one refinement step in state()
         d = jnp.diag(G)
@@ -238,7 +253,7 @@ class FixedAnchor:
 
     def state(self, z):
         u = jnp.asarray(z)[: self.n_u]
-        s = _state_impl(self.fields, u, self.Jfit, self.sw, self.Lg, self.rmsJ, self.norm)
+        s = _state_impl(self.fields, u, self.Jfit, self.sw, self.Lg, self.rmsJ, self.norm, self.gw)
         s = dict(s)
         if self.pnorm is not None:
             s.update(pnorm_measures(s["absF"], self.sw**2, self.pnorm, self.norm))
@@ -253,7 +268,7 @@ class FixedAnchor:
         return float(s["galerkin"])
 
     def aux(self, s):
-        return {"sw": self.sw, "J": s["J"], "B": s["B"], "Lg": self.Lg, "rmsJ": self.rmsJ}
+        return {"sw": self.sw, "J": s["J"], "B": s["B"], "Lg": self.Lg, "rmsJ": self.rmsJ, "gw": self.gw}
 
 
 class FixedRows:
@@ -416,7 +431,19 @@ class FixedSolver(mf.Solver):
     from a feasible but non-optimal state (run fxL32, alpha 0.7: M = 0.972 eps)."""
 
     act_tol = 1e-2
+    hit_frac = 0.5  # flat is not stationary when more than this share of the window hit the radius
     delta_reset = True  # Delta <- max(Delta, delta0) at the start of every outer iteration
+
+    def flat_ok(self, hist, window):
+        """A flat merit is a stationary point only if the trust radius was not what held the
+        steps back. Refused when more than ``hit_frac`` of the last ``window`` accepted steps
+        ended on the radius (the model wanted to go further), whatever the radius: fxR48b005
+        (alpha 0.005) was flat at Delta ~2e-7 with |grad| 0.21 and was wrongly called
+        stationary under the old Delta > 1e-8 test."""
+        acc = [h for h in hist if h["accepted"]][-window:]
+        if not acc:
+            return False
+        return sum(bool(h["hit"]) for h in acc) <= self.hit_frac * len(acc)
     metric_refresh = None  # callable z -> (Metric, Delta): rebuild the TR metric per outer iteration
     mult_ls = False  # least-squares multiplier estimate at each bound's start; safeguard the updates
 
@@ -432,6 +459,9 @@ class FixedSolver(mf.Solver):
     def solve_alpha(self, z, max_outer=25, tol=(1e-2, 2e-2, 1e-2), maxiter=40, rho_max=1e8,
                     gtol=1e-3, callback=None, stat_tol=1e-3, stat_window=10):
         W = self.W
+        if W.rho > rho_max:  # a resumed state may carry a larger penalty than this run allows
+            self.log(f"  [penalty] rho {W.rho:.1e} -> {rho_max:.1e} (rho_max)")
+            W.rho = rho_max
         outer = []
         viol_prev = np.inf
         for k in range(max_outer):
@@ -453,6 +483,7 @@ class FixedSolver(mf.Solver):
                 self.log(f"  [radius] reset Delta {self.Delta:.2e} -> {self.delta0:.2e} at outer {k}")
                 self.Delta = self.delta0
             self._hist = hist  # the step model reads the last step's ratio (self-tuning beta)
+            Delta_start = None if self.Delta is None else float(self.Delta)
             z, hist, status = self.inner(z, maxiter=maxiter, hist=hist, gtol=gtol,
                                          flat_tol=0.1 * stat_tol, flat_window=stat_window)
             s, f, phi, c = self.evaluate(z)
@@ -463,7 +494,11 @@ class FixedSolver(mf.Solver):
             flat = (len(phis) > stat_window
                     and abs(phis[-stat_window - 1] - phis[-1]) <= stat_tol * abs(phis[-1])
                     and hist[-1]["Delta_next"] > 1e-8)
-            stationary = status == "stationary" or (flat and c[0] >= -0.01)
+            radius_limited = flat and not self.flat_ok(hist, stat_window)
+            if radius_limited:
+                self.log(f"  [stationarity] flat but radius-limited (> {self.hit_frac:.0%} of the last "
+                         f"{stat_window} accepted steps hit Delta): not stationary")
+            stationary = status == "stationary" or (flat and not radius_limited and c[0] >= -0.01)
             active_ok = (W.nu[0] <= 0) or (c[0] >= -self.act_tol)
             nu_old = W.nu.copy()
             W.nu = np.array([W.d1(c[0], W.nu[0]), W.d1(c[1], W.nu[1]), W.nu[2] + W.rho * c[2]])
@@ -477,6 +512,7 @@ class FixedSolver(mf.Solver):
                  "c": c.tolist(), "phi": phi, "M": float(s["M"]), "rmsF": float(s["rmsF"]),
                  "Bn_rms": 0.0, "Psi": 1.0, "viol": viol, "galerkin": self.A.galerkin(s),
                  "inner stop": status, "flat": bool(flat), "stationary": bool(stationary),
+                 "radius_limited": bool(radius_limited), "Delta_start": Delta_start,
                  "active_ok": bool(active_ok), "inner": hist}
             outer.append(o)
             self.log("  outer {:2d} rho {:.1e}: M/eps {:.4f} phi {:.6e} nu_F {:.3e} -> {:.3e} "
@@ -510,7 +546,7 @@ def _hvp_impl(fields, v, aux, sc):
     dav = (sw[:, None] * (jnp.cross(dJv, B) + jnp.cross(J, dBv))).ravel()
     dfv, _ = _project(fields, sw, dav, aux["Lg"], n_p)
     dzv = sw[:, None] * dfv.reshape(n, 3)
-    dgv = (sw[:, None] * dJv / aux["rmsJ"]).ravel()
+    dgv = ((sw * aux["gw"])[:, None] * dJv / aux["rmsJ"]).ravel()
     zh, t, act = sc["zhat"], sc["t"], sc["act"]
     # d(z / t): (I - zhat zhat^T) / |z| where |z| > w tau, I / (w tau) where smoothed
     Hz = (dzv - act[:, None] * zh * jnp.sum(zh * dzv, 1, keepdims=True)) / t[:, None]
@@ -523,7 +559,7 @@ def _hvp_impl(fields, v, aux, sc):
         da = (sw[:, None] * (jnp.cross(dJ, B) + jnp.cross(J, dB))).ravel()
         df, _ = _project(fields, sw, da, aux["Lg"], n_p)
         dz = (sw[:, None] * df.reshape(n, 3)).ravel()
-        dg = (sw[:, None] * dJ / aux["rmsJ"]).ravel()
+        dg = ((sw * aux["gw"])[:, None] * dJ / aux["rmsJ"]).ravel()
         a2 = (sw[:, None] * (jnp.cross(dJ, dBv) + jnp.cross(dJv, dB))).ravel()
         return dg, dz, a2
 
@@ -636,6 +672,7 @@ def lanczos_tr_step_H(Hv, grad, f0, met, Delta, tol=1e-2, maxiter=100):
     LAST_H.clear()
     LAST_H.update({"lanczos": len(alpha), "theta_min": float(th[0]), "theta_max": float(th[-1]),
                    "res": float(beta[-1] * abs(h[-1]) / gnorm), "converged": bool(beta[-1] * abs(h[-1]) <= tol * gnorm),
+                   "tol": float(tol), "theta_low": [float(v) for v in th[:3]], "n_neg": int(np.sum(th < 0)),
                    "mu": float(mu), "hit": bool(hit), "yBy": float(h @ Tm @ h), "|y|": float(np.linalg.norm(h)),
                    "near_hard": bool(th[0] < 0 and abs(mu + th[0]) <= 1e-6 * max(abs(th[0]), 1e-300))})
     return y, float(m_step), hit, len(alpha), share, gnorm, mu
@@ -648,7 +685,7 @@ def use_exact_hvp(hybrid=False, far=0.1, fallback=5, **kw):
 
 def use_models(mode, far=0.1, fallback=5, beta=0.5, solver=None, refresh=None, refresh_lz=None,
                refresh_dM=None, beta_adapt=False, beta_min=1.0 / 32, beta_hi=1.5, beta_lo=0.5, log=print,
-               lz_stop="both"):
+               lz_stop="both", cap_rebuild="always"):
     """Install the step model for ``meanforce.Solver`` (GLTR) and, optionally, a state-
     triggered rebuild of the trust-region metric.
 
@@ -669,6 +706,10 @@ def use_models(mode, far=0.1, fallback=5, beta=0.5, solver=None, refresh=None, r
     interior with ratio > beta_hi (model too conservative), beta <- min(1, 2 beta) when the
     ratio was < beta_lo or the step was rejected; it takes effect at the next accepted state
     (the rows are rebuilt there).
+
+    cap_rebuild: "always" (a subproblem that hit the Lanczos cap triggers a rebuild before the next one) or
+    "rent" (a capped subproblem only adds its whole Lanczos time to the rent-or-buy account: the rebuild comes when
+    that time exceeds one rebuild; for bases where the rebuild is expensive and does not cure the cap).
 
     lz_stop (models gn / beta): "both" (pointwise.lanczos_tr_step: stop when the trust-region
     step AND the unconstrained Gauss-Newton minimizer have converged; the latter only feeds the
@@ -707,7 +748,7 @@ def use_models(mode, far=0.1, fallback=5, beta=0.5, solver=None, refresh=None, r
             st.update(met_id=id(met), k_ref=None, M_ref=M_now, last_k=None, extra_t=0.0)
         if refresh is not None and st["last_k"] is not None and st["k_ref"] is not None:
             why = None
-            if st["last_k"] >= maxiter:
+            if st["last_k"] >= maxiter and cap_rebuild == "always":
                 why = f"Lanczos hit the cap ({maxiter})"
             elif st["extra_t"] >= METRIC_BUILD_T[0]:
                 why = (f"extra Lanczos time {st['extra_t']:.0f} s since the rebuild >= one rebuild "
@@ -729,6 +770,7 @@ def use_models(mode, far=0.1, fallback=5, beta=0.5, solver=None, refresh=None, r
                     f"(|L^-1 g| {D_old:.3e} -> {D_new:.3e})")
                 Delta = D_map
                 st.update(k_ref=None, M_ref=M_now, last_k=None, prev_Delta=None, extra_t=0.0)
+                st["rebuild"] = why
         model, why = ("gn" if mode in ("gn", "beta") else "hvp"), mode
         if mode == "hybrid":
             why = "near bound"
@@ -745,7 +787,9 @@ def use_models(mode, far=0.1, fallback=5, beta=0.5, solver=None, refresh=None, r
             out = lanczos_tr_step_H(lambda v: JT(J(v)), JT(r), f0, met, Delta, tol, maxiter)
             d = {"model": mode if mode == "beta" else "gn", "why": why, "lanczos": int(out[3]),
                  "Delta": float(Delta), "f0": f0, "c_F": cF, "t_sub": time.time() - t1,
-                 "theta_min": LAST_H["theta_min"], "theta_max": LAST_H["theta_max"], "res": LAST_H["res"]}
+                 "theta_min": LAST_H["theta_min"], "theta_max": LAST_H["theta_max"], "res": LAST_H["res"],
+                 "tol": LAST_H["tol"], "converged": LAST_H["converged"], "theta_low": LAST_H["theta_low"],
+                 "n_neg": LAST_H["n_neg"], "hit": LAST_H["hit"]}
             tag = "beta" if mode == "beta" else "gn "
             print(f"      [{tag}] lanczos {d['lanczos']} (TR stop; theta [{d['theta_min']:.2e}, {d['theta_max']:.2e}], "
                   f"hit {bool(out[2])}) t {d['t_sub']:.1f}s", flush=True)
@@ -766,11 +810,15 @@ def use_models(mode, far=0.1, fallback=5, beta=0.5, solver=None, refresh=None, r
                   f"t {d['t_sub']:.1f}s", flush=True)
         if mode == "beta":
             d["beta"] = float(rows_cls.beta)
+        d["cap"] = bool(int(out[3]) >= maxiter)
+        d["rebuild"] = st.pop("rebuild", None)
         DIAG_H.append(d)
         k_now = max(int(out[3]), 1)
         st["last_k"] = k_now
         if st["k_ref"] is None:
             st["k_ref"] = k_now
+        elif d["cap"] and cap_rebuild == "rent":
+            st["extra_t"] += d["t_sub"]
         else:
             st["extra_t"] += max(0, k_now - st["k_ref"]) * (d["t_sub"] / k_now)
         return out
@@ -934,7 +982,7 @@ def _rows_add_lean(H, C, r0, blk):
     return jax.lax.dynamic_update_slice_in_dim(H, Hr, r0, 0)
 
 
-def _gram_lean(make_eval, cols_fn, n_cols, fields, current, scale, chunk, log, what):
+def _gram_lean(make_eval, cols_fn, n_cols, fields, current, scale, chunk, log, what, slice_scale=None):
     """``_gram`` without padding: H (n x n) + one slice of columns."""
     sw = np.asarray(fields.sw)
     H = jnp.zeros((n_cols, n_cols))
@@ -944,7 +992,7 @@ def _gram_lean(make_eval, cols_fn, n_cols, fields, current, scale, chunk, log, w
     bl = _blocks(n_cols, chunk)
     for k, (sl, g, geo) in enumerate(_slices(fields, current, None)):
         ev = make_eval(g, geo)
-        s3 = jnp.asarray(np.repeat(sw[sl], 3)) * scale
+        s3 = jnp.asarray(np.repeat(sw[sl], 3)) * scale * (1.0 if slice_scale is None else slice_scale[k])
         if C is None or C.shape[1] != s3.shape[0]:
             C = jnp.zeros((n_cols, s3.shape[0]))
         for i, b in bl:
@@ -958,10 +1006,10 @@ def _gram_lean(make_eval, cols_fn, n_cols, fields, current, scale, chunk, log, w
     return H
 
 
-def gram_J_lean(fields, current, pressure, rmsJ, chunk=1024, log=print):
+def gram_J_lean(fields, current, pressure, rmsJ, chunk=1024, log=print, slice_gw=None):
     from flux_interp import TensorCurrent
     return _gram_lean(lambda g, geo: TensorCurrent(current.S, current._RZ, g, geo), _cols_J,
-                      fields.n_u, fields, current, 1.0 / rmsJ, chunk, log, "H_J")
+                      fields.n_u, fields, current, 1.0 / rmsJ, chunk, log, "H_J", slice_gw)
 
 
 @functools.partial(jax.jit, donate_argnums=(1,))
@@ -1075,8 +1123,20 @@ def force_metric_lean(anchor, current, pressure, HJ_host, s, W, norm, rows=None,
         H = _add_rows(H, jnp.asarray(HJ_host[r : r + b]), aF, r, b)
     if return_H:
         return H, (trJ, trF)
+    # host copy for a retry: Cholesky consumes H's buffer, and at trace H_F / trace H_J ~ 1e8 (80/80/8: 6.5e7)
+    # the 1e-10 jitter was not enough (NaN factor); retried with 100x larger jitter, logged
+    H_host = np.asarray(H) if trF / max(trJ, 1e-300) > 1e6 else None
     L = metric_L_lean(H, reg)
     jax.block_until_ready(L)
+    r_used = reg
+    while not bool(jnp.all(jnp.isfinite(jnp.diag(L)))) and H_host is not None and r_used < 1e-4:
+        r_used *= 100.0
+        log(f"  metric: Cholesky not finite, retrying with jitter {r_used:.0e} x mean(diag)")
+        L = metric_L_lean(jnp.asarray(H_host), r_used)
+        jax.block_until_ready(L)
+    if not bool(jnp.all(jnp.isfinite(jnp.diag(L)))):
+        raise FloatingPointError("force metric Cholesky not finite (raise reg or use --precond hj)")
+    del H_host
     METRIC_BUILD_T[0] = time.time() - t_b
     log(f"  metric: trace H_J {trJ:.3e}, trace H_F(local) {trF:.3e} (lean build)")
     return L, (trJ, trF)
@@ -1321,3 +1381,60 @@ class LinearConstraints:
             for c_, d_ in zip(c, D):
                 u = u + c_ * d_
         return u
+
+
+def weighted_jfit(fields, u0, J_target, B_ref, lam, bs=32, log=print):
+    """u minimizing sum_i w_i (|dJ_par|^2 + lam |dJ_perp|^2), dJ = J(u) - J_target at the collocation points, par/perp
+    to b = B_ref/|B_ref| (w = the volume weights fields.sw^2), exactly: the normal matrices N_par, N_perp (n_u x n_u)
+    built column by column (bs columns per call), (N_par + lam N_perp + jitter) du = rhs by Cholesky with one
+    refinement step, from u0. J is affine in u at fixed net current. Returns (u, info)."""
+    t0 = time.time()
+    sw = jnp.asarray(fields.sw)
+    bh = jnp.asarray(B_ref) / jnp.linalg.norm(jnp.asarray(B_ref), axis=1, keepdims=True)
+    u0 = jnp.asarray(u0)
+    n_u = int(u0.shape[0])
+
+    def split(V):
+        vp = jnp.sum(V * bh, 1)[:, None] * bh
+        return vp, V - vp
+
+    def Apar(v):
+        return (sw[:, None] * split(_J(fields, v, 0.0))[0]).ravel()
+
+    def Aperp(v):
+        return (sw[:, None] * split(_J(fields, v, 0.0))[1]).ravel()
+    sd = jax.ShapeDtypeStruct(u0.shape, u0.dtype)
+    AparT, AperpT = jax.linear_transpose(Apar, sd), jax.linear_transpose(Aperp, sd)
+    fpar = jax.jit(jax.vmap(lambda v: AparT(Apar(v))[0]))
+    fperp = jax.jit(jax.vmap(lambda v: AperpT(Aperp(v))[0]))
+    N = np.zeros((n_u, n_u))
+    for i0 in range(0, n_u, bs):
+        E = jnp.eye(n_u, min(bs, n_u - i0), -i0, dtype=u0.dtype).T
+        N[:, i0:i0 + E.shape[0]] = np.asarray(fpar(E)).T + lam * np.asarray(fperp(E)).T
+    dJ0 = _J(fields, u0, fields.I) - jnp.asarray(J_target)
+    p0, q0 = split(dJ0)
+    rhs = -(AparT((sw[:, None] * p0).ravel())[0] + lam * AperpT((sw[:, None] * q0).ravel())[0])
+    Nj = jnp.asarray(N)
+    del N
+    jit = 1e-14 * float(jnp.trace(Nj)) / n_u
+    for _ in range(6):
+        Lc = jnp.linalg.cholesky(Nj + jit * jnp.eye(n_u))
+        if bool(jnp.all(jnp.isfinite(jnp.diag(Lc)))):
+            break
+        jit *= 100
+    du = jax.scipy.linalg.cho_solve((Lc, True), rhs)
+    du = du + jax.scipy.linalg.cho_solve((Lc, True), rhs - Nj @ du)
+    res = float(jnp.linalg.norm(rhs - Nj @ du) / jnp.maximum(jnp.linalg.norm(rhs), 1e-300))
+    u = u0 + du
+    w = sw**2
+    rmsT = float(jnp.sqrt(jnp.sum(w[:, None] * jnp.asarray(J_target) ** 2)))
+
+    def rel(V):
+        return float(jnp.sqrt(jnp.sum(w[:, None] * V**2))) / rmsT
+    p1, q1 = split(_J(fields, u, fields.I) - jnp.asarray(J_target))
+    info = {"lambda": float(lam), "normal-equation residual": res, "jitter / mean diag": jit / (float(jnp.trace(Nj)) / n_u),
+            "rms dJ par, perp before": [rel(p0), rel(q0)], "rms dJ par, perp after": [rel(p1), rel(q1)],
+            "rms du / rms u0": float(jnp.linalg.norm(du) / jnp.maximum(jnp.linalg.norm(u0), 1e-300)), "time": time.time() - t0}
+    log(f"[jfit-wfit] lambda {lam:g}: rms dJ par/perp {rel(p0):.3e}/{rel(q0):.3e} -> {rel(p1):.3e}/{rel(q1):.3e} "
+        f"(of rms J_target); residual {res:.1e}; |du|/|u0| {info['rms du / rms u0']:.3e}; {info['time']:.0f} s")
+    return u, info

@@ -1,0 +1,28 @@
+# Follow-up of docs/ripple_spline_report.md (items 1-4). NAME|TIME|AFTER|ENV|SCRIPT ARGS
+# 1. convergence: hybrid h1 (one mode per job) and FZ control fzc (two modes per job)
+c_h1_S|16:00:00|-|KIND=hybrid TAG=h1 FRAC=100 BETA_ALPHA=0.02 BUDGET_CONV=54000|scripts/ripple_spline/conv.sh S
+c_h1_R05|16:00:00|-|KIND=hybrid TAG=h1 FRAC=100 BETA_ALPHA=0.02 BUDGET_CONV=54000|scripts/ripple_spline/conv.sh R05
+c_h1_P0|16:00:00|-|KIND=hybrid TAG=h1 FRAC=100 BETA_ALPHA=0.02 BUDGET_CONV=54000|scripts/ripple_spline/conv.sh P0
+c_h1_P05|16:00:00|-|KIND=hybrid TAG=h1 FRAC=100 BETA_ALPHA=0.02 BUDGET_CONV=54000|scripts/ripple_spline/conv.sh P05
+c_fzc_SR|20:00:00|-|KIND=fz TAG=fzc FRAC=100 BETA_ALPHA=0.02 BUDGET_CONV=34200|scripts/ripple_spline/conv.sh S R05
+c_fzc_P|20:00:00|-|KIND=fz TAG=fzc FRAC=100 BETA_ALPHA=0.02 BUDGET_CONV=34200|scripts/ripple_spline/conv.sh P0 P05
+# 2. resolution: FZ 40/40/6 + bands 0.01 (h2), FZ 32 + bands 0.005 at a/120 (h3), FZ 40/40/6 control (fz40)
+r_h2|20:00:00|-|KIND=hybrid TAG=h2 LMN=40_40_6 FRAC=100 START=results/ripple_landscape/states/shielded_start_A60_a0.1.npz START_LMN=1 ALPHAS=0.1_0.05_0.03_0.02 BUDGET_CONT=14400 BETA_ALPHA=0.02 BUDGET_BETA=14400|scripts/ripple_spline/res.sh
+r_h3|24:00:00|-|KIND=hybrid TAG=h3 HB2=0.005 HB3=0.0075 FRAC=120 START=results/ripple_landscape/states/shielded_start_A60_a0.1.npz START_LMN=1 ALPHAS=0.1_0.05_0.03_0.02 BUDGET_CONT=14400 BETA_ALPHA=0.02 BUDGET_BETA=18000|scripts/ripple_spline/res.sh
+r_fz40|16:00:00|-|KIND=fz TAG=fz40 LMN=40_40_6 FRAC=100 START=results/ripple_landscape/states/shielded_start_A60_a0.1.npz START_LMN=1 ALPHAS=0.1_0.05_0.03_0.02 BUDGET_CONT=10800 BETA_ALPHA=0.02 BUDGET_BETA=10800|scripts/ripple_spline/res.sh
+# 3. q = 3 and edge refinement: q = 3 band 0.84-0.96 at 0.0075 and an edge band 0.96-1 at 0.005
+r_h4|20:00:00|-|KIND=hybrid TAG=h4 B3=0.84_0.96_0.0075 BE=0.96_1.0_0.005 FRAC=100 START=results/ripple_landscape/states/shielded_start_A60_a0.1.npz START_LMN=1 ALPHAS=0.1_0.05_0.03_0.02 BUDGET_CONT=14400 BETA_ALPHA=0.02 BUDGET_BETA=14400|scripts/ripple_spline/res.sh
+# 4. localized (band p16 at q = 2) bound, hybrid and FZ control
+l_h1|16:00:00|-|KIND=hybrid TAG=h1 FRAC=100 BUDGET_LOC=18000|scripts/ripple_spline/loc.sh S P05 P5
+l_fzc|14:00:00|-|KIND=fz TAG=fzc FRAC=100 BUDGET_LOC=14400|scripts/ripple_spline/loc.sh S P05 P5
+# common-grid evaluation of the convergence and localized states
+# 1b. continuations of the convergence runs with the penalty capped (the first ones sank to the merit's noise floor
+#     at kappa = 1e8): same modes from their end states, --rho-max 1e4
+cx_h1_R05|08:00:00|c_h1_R05|KIND=hybrid TAG=h1 FRAC=100 BETA_ALPHA=0.02 BUDGET_CONV=25200 RHOMAX=1e4|scripts/ripple_spline/conv.sh xR05
+cx_h1_P05|08:00:00|c_h1_P05|KIND=hybrid TAG=h1 FRAC=100 BETA_ALPHA=0.02 BUDGET_CONV=25200 RHOMAX=1e4|scripts/ripple_spline/conv.sh xP05
+cx_h1_S|08:00:00|c_h1_S|KIND=hybrid TAG=h1 FRAC=100 BETA_ALPHA=0.02 BUDGET_CONV=25200 RHOMAX=1e4|scripts/ripple_spline/conv.sh xS
+cx_h1_P0|08:00:00|c_h1_P0|KIND=hybrid TAG=h1 FRAC=100 BETA_ALPHA=0.02 BUDGET_CONV=25200 RHOMAX=1e4|scripts/ripple_spline/conv.sh xP0
+cx_fzc_SR|09:00:00|c_fzc_SR|KIND=fz TAG=fzc FRAC=100 BETA_ALPHA=0.02 BUDGET_CONV=14400 RHOMAX=1e4|scripts/ripple_spline/conv.sh xS xR05
+cx_fzc_P|09:00:00|c_fzc_P|KIND=fz TAG=fzc FRAC=100 BETA_ALPHA=0.02 BUDGET_CONV=14400 RHOMAX=1e4|scripts/ripple_spline/conv.sh xP0 xP05
+e_h1|06:00:00|cx_h1_R05,cx_h1_P05,cx_h1_S,cx_h1_P0,l_h1|KIND=hybrid TAG=h1|scripts/ripple_spline/eval_extra.sh
+e_fzc|06:00:00|cx_fzc_SR,cx_fzc_P,l_fzc|KIND=fz TAG=fzc|scripts/ripple_spline/eval_extra.sh

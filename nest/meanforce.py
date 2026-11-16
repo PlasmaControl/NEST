@@ -561,6 +561,11 @@ class Solver:
                  f"{'curved' if f_a < f_new else 'straight'}; {time.time() - t1:.1f}s")
         return {"z": z_a, "s": s_a, "f": f_a, "phi": phi_a, "c": c_a, "info": info}
 
+    def flat_ok(self, hist, window):
+        """May a flat merit over the last ``window`` accepted steps count as stationary?
+        (Always, here; ``meanforce_fixed.FixedSolver`` refuses radius-limited windows.)"""
+        return True
+
     def inner(self, z, maxiter=40, ftol=1e-12, gn_tol=1e-8, gtol=1e-3, hist=None,
               flat_tol=None, flat_window=10):
         """Trust-region steps on L_A at fixed multipliers. Stops on its own tests
@@ -595,6 +600,9 @@ class Solver:
                 mu = None
                 extra = {"lanczos": k_cg, "mu": float(mu_k)}
             else:
+                if qr_cache is None and getattr(self, "qr_factor", None) is not None:
+                    # external factorization (meanforce_dense: tables, multi-GPU jaxmg)
+                    qr_cache = self.qr_factor(rows)
                 if qr_cache is None:
                     t1 = time.time()
                     Lu, Lx = self._metric_inv()
@@ -678,7 +686,11 @@ class Solver:
             g_first = gn if g_first is None else g_first
             xi_new = np.asarray(s_new["xi"] if accepted else s["xi"])
             dm = self.dmax(xi_new) if self.dmax else float(np.abs(xi_new).max())
-            h = {"f": f, "f_new": f_new, "ratio": ratio, "|grad|": gn, "Delta": Delta_old,
+            noise_acc = bool(sig > 0 and accepted and np.isfinite(f_new) and pred < 10.0 * sig
+                             and f_new <= f + 4.0 * sig)
+            kind = "noise" if noise_acc else ("boundary" if hit else "interior")
+            h = {"f": f, "f_new": f_new, "pred": pred, "ratio": ratio, "|grad|": gn, "Delta": Delta_old,
+                 "sigma_f": sig, "kind": kind,
                  "Delta_next": self.Delta, "|y|": ny, "hit": bool(hit), "GN share": share,
                  "accepted": accepted, "phi": phi_new if accepted else phi,
                  "M": float((s_new if accepted else s)["M"]),
@@ -688,6 +700,11 @@ class Solver:
                  "psi'": list(rows.d1), "max|D|": dm,
                  "galerkin": float((s_new if accepted else s)["galerkin"]),
                  "time": time.time() - t0, **extra}
+            if getattr(self, "trial_extra", None) is not None:  # per-trial measurements (mf_fixed: physical step size)
+                try:
+                    h.update(self.trial_extra(s, s_new))
+                except Exception as e:  # a diagnostic must not stop the run
+                    h["trial_extra error"] = repr(e)
             hist.append(h)
             if self.on_step is not None:
                 self.on_step(hist)
@@ -730,7 +747,8 @@ class Solver:
                     return z, hist, "stationary"
                 fs = [e["f_new"] for e in hist if e["accepted"]]
                 if (flat_tol is not None and len(fs) > flat_window and self.Delta > 1e-8
-                        and abs(fs[-flat_window - 1] - fs[-1]) <= flat_tol * abs(fs[-1])):
+                        and abs(fs[-flat_window - 1] - fs[-1]) <= flat_tol * abs(fs[-1])
+                        and self.flat_ok(hist, flat_window)):
                     return z, hist, "stationary"
             elif self.Delta < 1e-14:
                 return z, hist, "radius"
@@ -743,6 +761,9 @@ class Solver:
         its own tests, or |J - J_fit|^2 / 2 changed by less than ``stat_tol`` (relative)
         over its last ``stat_window`` accepted steps."""
         W = self.W
+        if W.rho > rho_max:  # a resumed state may carry a larger penalty than this run allows
+            self.log(f"  [penalty] rho {W.rho:.1e} -> {rho_max:.1e} (rho_max)")
+            W.rho = rho_max
         outer = []
         viol_prev = np.inf
         for k in range(max_outer):

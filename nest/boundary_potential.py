@@ -76,7 +76,11 @@ class _Structure:
     def __init__(self, basis, s):
         self.basis, self.s, self.NFP = basis, s, basis.NFP
         K = basis.num_modes
-        self.ab = Separable([basis, basis], [np.zeros(K)] * 2, basis.NFP)
+        if getattr(basis, "spectral_indexing", None) in ("spline", "fz+spline"):  # spline_basis.py
+            from spline_basis import separable_for
+            self.ab = separable_for([basis, basis], [np.zeros(K)] * 2, basis.NFP)
+        else:
+            self.ab = Separable([basis, basis], [np.zeros(K)] * 2, basis.NFP)
         M, N = basis.M, basis.N
         self.chi_m = np.array([m for m in range(-M, M + 1) if m != 0])
         self.chi_n = np.arange(-N, N + 1)
@@ -259,7 +263,8 @@ class BoundaryPotential:
     @classmethod
     def fit(cls, eq, L=None, M=None, N=None, factors=(3, 3, 2.5), n_rho=None,
             edge_power=2, I=None, sym=None, target="T", t_weight=1e-3, edge_weight=1.0,
-            edge_rho=0.95):
+            edge_rho=0.95, radial="fz", knots=(0.05, 0.01, 0.08), helicities=("2/1",), m_tol=0.0, m_max=None,
+            m_fz=None, fz_knots=None, bands=None, reg="drop3", q_cap=6):
         """Fit the free coefficients to DESC's potential T (``target="T"``) or to
         its current (``target="J"``).
 
@@ -293,13 +298,46 @@ class BoundaryPotential:
         T_theta mode (-m, n) (via d_theta) with the T_zeta mode (m, -n) (via
         d_zeta), so it is solved as one small least-squares problem per chi_mn,
         plus one per m = 0 mode of T_theta (a) and of T_zeta (b and alpha).
+
+        ``radial="spline"``: a and b in radial B-splines of rho^2 x Fourier (``spline_basis.SplineBasis``),
+        breakpoints ``knots`` = (coarse, dense, half) in rho, dense around the rational surfaces
+        ``helicities`` (q = m/n); L is then unused and the fit's radial nodes default to 3 x the basis'
+        effective L (a few per fine knot interval). ``m_tol``, ``m_max``: truncation of the spline a, b
+        (``spline_pressure.spline_keep``; chi keeps M); ``m_fz``: FZ-reach truncation at that L;
+        ``fz_knots`` = (L, c): outer breakpoints with the FZ spacing at L times c (``spline_pressure.fz_points``).
+        ``bands`` = ((lo, hi, h), ...): explicit refined bands in rho (replace the centre bands); ``reg``,
+        ``q_cap``: axis regularity of the spline a, b (``spline_basis``: "drop3" or "rhom").
         """
         L = int(round(factors[0] * eq.L)) if L is None else L
         M = int(round(factors[1] * eq.M)) if M is None else M
         N = int(round(factors[2] * eq.N)) if N is None else N
         sym = bool(eq.sym) if sym is None else sym
-        basis = FourierZernikeBasis(L, M, N, NFP=eq.NFP, sym="cos" if sym else False,
-                                    spectral_indexing=eq.spectral_indexing)
+        if radial == "fz+spline":
+            # FZ fit, then band-localized splines with zero coefficients: J_fit is the FZ J_fit exactly
+            if not bands:
+                raise ValueError("radial='fz+spline' needs bands ((lo, hi, h), ...): the splines live inside them")
+            from spline_basis import CompositeBasis, SplineBasis
+            fzp = cls.fit(eq, L=L, M=M, N=N, n_rho=n_rho, edge_power=edge_power, I=I, sym=sym, target=target,
+                          t_weight=t_weight, edge_weight=edge_weight, edge_rho=edge_rho)
+            sb = SplineBasis.from_knots(eq, M, N, *knots, helicities=tuple(helicities), sym=sym, m_tol=m_tol,
+                                        m_max=m_max, m_fz=m_fz, fz_knots=fz_knots, bands=bands, reg="drop3",
+                                        q_cap=q_cap, inside=[(b_[0], b_[1]) for b_ in bands])
+            basis = CompositeBasis(fzp.basis, sb)
+            pot = cls(basis, embed_fz(fzp, basis), fzp.I, eq, edge_power)
+            pot.fit_info = getattr(fzp, "fit_info", None)
+            return pot
+        if radial == "spline":
+            from spline_basis import SplineBasis
+            basis = SplineBasis.from_knots(eq, M, N, *knots, helicities=tuple(helicities), sym=sym, m_tol=m_tol,
+                                           m_max=m_max, m_fz=m_fz, fz_knots=fz_knots, bands=bands, reg=reg,
+                                           q_cap=q_cap)
+            L = basis.L
+            n_rho = 3 * L if n_rho is None else n_rho
+        elif radial == "fz":
+            basis = FourierZernikeBasis(L, M, N, NFP=eq.NFP, sym="cos" if sym else False,
+                                        spectral_indexing=eq.spectral_indexing)
+        else:
+            raise ValueError(f"radial {radial!r}: 'fz' or 'spline'")
         S = _Structure(basis, edge_power)
         if I is None:
             g1 = LinearGrid(rho=1.0, M=eq.M_grid, N=eq.N_grid, NFP=eq.NFP)
@@ -334,6 +372,18 @@ class BoundaryPotential:
 
     def save(self, path):
         b = self.basis
+        if getattr(b, "spectral_indexing", None) == "fz+spline":
+            from spline_basis import composite_save_fields
+            np.savez_compressed(path, u=self.u, I=self.I, edge_power=self.edge_power, modes=b.modes,
+                                chi_modes=self.chi_modes, **composite_save_fields(b))
+            return
+        if getattr(b, "spectral_indexing", None) == "spline":
+            np.savez_compressed(path, u=self.u, I=self.I, edge_power=self.edge_power, modes=b.modes,
+                                chi_modes=self.chi_modes, bp_rho=b.bp_rho, M=b.M, N=b.N, NFP=b.NFP,
+                                sym=str(b.sym) if b.sym else "", centres=np.asarray(b.centres, float),
+                                m_tol=b.m_tol, m_max=-1 if b.m_max is None else b.m_max, m_fz=b.m_fz or 0,
+                                reg=b.reg, q_cap=b.q_cap)
+            return
         np.savez_compressed(path, u=self.u, I=self.I, edge_power=self.edge_power,
                             modes=b.modes, chi_modes=self.chi_modes, L=b.L, M=b.M, N=b.N,
                             NFP=b.NFP, spectral_indexing=b.spectral_indexing,
@@ -343,8 +393,19 @@ class BoundaryPotential:
     def load(cls, path, eq):
         with np.load(path) as f:
             sym = str(f["sym"]) if "sym" in f and str(f["sym"]) else False
-            basis = FourierZernikeBasis(int(f["L"]), int(f["M"]), int(f["N"]), NFP=int(f["NFP"]),
-                                        sym=sym, spectral_indexing=str(f["spectral_indexing"]))
+            if "kind" in f and str(f["kind"]) == "fz+spline":
+                from spline_basis import composite_from_fields
+                basis = composite_from_fields(f)
+            elif "bp_rho" in f:  # radial splines
+                from spline_basis import SplineBasis
+                basis = SplineBasis(f["bp_rho"], int(f["M"]), int(f["N"]), int(f["NFP"]), bool(sym),
+                                    list(np.asarray(f["centres"])), float(f["m_tol"]) if "m_tol" in f else 0.0,
+                                    int(f["m_max"]) if "m_max" in f else None,
+                                    int(f["m_fz"]) if "m_fz" in f else None,
+                                    str(f["reg"]) if "reg" in f else "drop3", int(f["q_cap"]) if "q_cap" in f else 6)
+            else:
+                basis = FourierZernikeBasis(int(f["L"]), int(f["M"]), int(f["N"]), NFP=int(f["NFP"]),
+                                            sym=sym, spectral_indexing=str(f["spectral_indexing"]))
             assert np.array_equal(basis.modes, f["modes"]), "basis mode mismatch"
             pot = cls(basis, f["u"], float(f["I"]), eq, int(f["edge_power"]))
             assert np.array_equal(pot.chi_modes, f["chi_modes"]), "chi mode mismatch"
@@ -384,8 +445,11 @@ def _fit_blocks(S, I, rho, q, C, ms, ns, D=None, t_weight=1e-3, qJ=None):
     H, H1 = np.asarray(_h(S, r, 0)), np.asarray(_h(S, r, 1))  # h_|m|(rho), column |m|
     index = {tuple(mode): i for i, mode in enumerate(b.modes)}
     am, an = {m: i for i, m in enumerate(ms)}, {n: i for i, n in enumerate(ns)}
-    Z = {}  # radial columns per |m|: (l values, Z_l^|m|(rho), d_rho Z_l^|m|)
-    for m in np.unique(np.abs(b.modes[:, 1])):
+    Z = {}  # radial columns per |m|: (l values, Z_l^|m|(rho), d_rho Z_l^|m|) (or the basis' own: splines)
+    for m in np.unique(np.concatenate([np.abs(b.modes[:, 1]), np.abs(np.asarray(S.chi_m, int))])):
+        if hasattr(b, "radial_columns"):
+            Z[m] = b.radial_columns(m, rho)
+            continue
         ls = np.unique(b.modes[np.abs(b.modes[:, 1]) == m, 0])
         mm = np.full(len(ls), m)
         Z[m] = (ls, np.asarray(zernike_radial(rho[:, None], ls, mm)),
@@ -469,3 +533,16 @@ def _fit_blocks(S, I, rho, q, C, ms, ns, D=None, t_weight=1e-3, qJ=None):
         put(b_c, 0, n, sol[:-1])
         alpha[an[n]] = sol[-1]
     return np.concatenate([chi[S.chi_idx], a_c, b_c]), alpha
+
+
+def embed_fz(fzp, basis):
+    """u of a Fourier-Zernike ``BoundaryPotential`` in a ``CompositeBasis`` (same chi; spline coefficients 0)."""
+    S = _Structure(basis, fzp.edge_power)
+    assert np.array_equal(S.chi_modes, fzp.chi_modes)
+    nc, K, Kf = S.n_chi, S.K, fzp.S.K
+    u = np.zeros(nc + 2 * K)
+    uf = np.asarray(fzp.u)
+    u[:nc] = uf[:nc]
+    u[nc:nc + Kf] = uf[nc:nc + Kf]
+    u[nc + K:nc + K + Kf] = uf[nc + Kf:]
+    return u

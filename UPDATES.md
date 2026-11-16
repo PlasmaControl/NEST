@@ -2,6 +2,24 @@
 
 One entry per commit, newest first.
 
+## 2026-11-16: ripple spline follow-up: fit split, weighted J fits, convergence, resolution, localized bound (branch ripple-spline)
+- Findings sections 13-16 in `docs/ripple_spline_findings.md`; data `results/ripple_spline/` (run records stay on Stellar-AI).
+- `mf_fixed.py --fit-split` (dG = (J_fit - J_DESC) x B_DESC split into the part the pressure space absorbs and the rest; dJ parallel / perpendicular to B), `--wfit` / `--wfit-direct` (exact weighted J fits, min |dJ_par|^2 + lambda |dJ_perp|^2), `--jfit-wfit` (use such a fit as J_fit), `--jfit-nrho` (radial nodes of the standard spline fit).
+- `meanforce_fixed.weighted_jfit` (dense normal matrices, Cholesky); `FixedSolver.solve_alpha` and `Solver.solve_alpha` clamp a resumed penalty to `--rho-max`.
+- `scripts/ripple_spline/`: `conv.sh` (convergence modes S / R05 / P0 / P05, xMODE continuations), `loc.sh` (band p16 bound at q = 2), `res.sh` (resolution chains), `p2_beta_ext.sh`, `queue.sh` (submits a job list as slots free), `converge_check.py`, `fitsplit*.sh`, `wfit*.sh`, `fitres.sh`.
+- Results: FZ's J_fit error is 99.9% field-aligned; the pure-spline standard fit puts 21-27% across B (the T-potential fit; finer knots make it worse), the pointwise J fit does not; pure-spline floors are unchanged from the better start (basis limit in the core). Hybrid 40/40/6 is 34-47% below FZ 40/40/6; the q = 2 band can be made nearly force-free in both bases; convergence runs end at the merit's noise floor.
+
+## 2026-11-12: ripple landscape with B-spline T and p (branch ripple-spline)
+- Report: `docs/ripple_spline_report.md` (FZ vs FZ + band-localized splines; data `results/ripple_spline/`, figures `figures/ripple_spline/`); plan and run log: `docs/ripple_spline_plan.md`.
+- Hybrid basis `--current fz+spline --pressure fz+spline` (`spline_basis.CompositeBasis`: FZ + B-splines inside `--spl-band` bands; `Pressure.fit(spline=...)`, `BoundaryPotential.fit(radial="fz+spline")`, exact FZ embedding); `--eval-state` embeds `--start-LMN` states; gates `tests/test_hybrid_gates.py`.
+- Result: at equal iteration counts the hybrid halves M and b.grad p at every beta (start 0.098 -> 0.054, beta 1 0.184 -> 0.110 M_DESC, a/120); its floor is flat from the shielded state to small island-phase states. Pure cubic splines stall at 0.38-0.50 M_DESC (core force).
+- Ported from dshape-fixed (uncommitted there): `nest/spline_basis.py`, `nest/spline_pressure.py`, `--current/--pressure spline`, truncation, dense QR tables, tests.
+- `nest/spline_pressure.py`, `nest/spline_basis.py`: `reg="rhom"` axis regularity (rho^q_m B_j(rho^2), unit-max scaling, axis splines kept for |m| <= q_cap), explicit knot bands; `mf_fixed.py` `--spl-reg --spl-qcap --spl-band --colloc-knots --force-split`.
+- `free_boundary.reference(rho_nodes=)`: M_DESC of spline runs on the run's own radial nodes (it came from the uniform Gauss grid).
+- Live convergence log: `<out>_live.tsv` (eta, Delta, step kind, sigma_f, |g|, Lanczos/Ritz, M/eps, M/M_DESC, b21, ...) and `<out>_status.json` (window statistics, warnings); `scripts/meanforce/tr_live.py` (one run, or a directory overview).
+- `scripts/meanforce/basis_args.py`: island_seed.py and start_check_bext.py build spline bases (`--current spline --p-basis spline`).
+- `tests/test_ripple_spline_gates.py`, `scripts/ripple_spline/` (Stellar-AI job scripts, knot scan).
+
 ## 2026-11-12: resolution rungs, R1 grid convergence, beta=0 vs beta=1 characterization, energy and helicity; hand-off (branch ripple-landscape)
 - Hand-off for the next agent: `docs/handoff_ripple_landscape_2026-11-12.md` (questions, chronology, confidence table, next experiments, run recipes, standards).
 - Resolution rungs (`job_res.sh`; `results/ripple_landscape/resolution/`). Fresh multipliers, <= 400 steps. R0 32/32/6 a/60: shielded 0.1235, beta 1 0.215 M_DESC. R1 40/40/6 a/80: every state meets alpha 0.1 (0.100).

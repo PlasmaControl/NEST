@@ -93,7 +93,7 @@ class Pressure:
         self.edge_order = edge_order
 
     @classmethod
-    def fit(cls, eq, L=None, M=None, N=None, factors=(3, 3, 2.5), edge_order=None, sym=None):
+    def fit(cls, eq, L=None, M=None, N=None, factors=(3, 3, 2.5), edge_order=None, sym=None, spline=None):
         """DESC's p(rho) on a basis of resolution (L, M, N), default that of T.
 
         Only the m = n = 0 modes are fitted (least squares on 4 L + 8 points
@@ -117,7 +117,17 @@ class Pressure:
             Z = window(rho, edge_order)[:, None] * Z
         c = np.zeros(basis.num_modes)
         c[k] = np.linalg.lstsq(Z, p, rcond=None)[0]
-        return cls(basis, c, eq, edge_order).impose_zero_edge()
+        out = cls(basis, c, eq, edge_order).impose_zero_edge()
+        if spline:  # FZ + band-localized splines (spline_basis.CompositeBasis), spline coefficients 0
+            from spline_basis import CompositeBasis, SplineBasis
+            sp = dict(spline)
+            bands = [tuple(b_) for b_ in sp.pop("bands")]
+            knots = tuple(sp.pop("knots", (0.05, 0.01, 0.08)))
+            sb = SplineBasis.from_knots(eq, M, N, *knots, sym=sym, bands=bands, reg="drop3",
+                                        inside=[(b_[0], b_[1]) for b_ in bands], **sp)
+            cb = CompositeBasis(out.basis, sb)
+            out = cls(cb, np.concatenate([out.c, np.zeros(cb.num_modes - cb.n_fz)]), eq, edge_order)
+        return out
 
     def impose_zero_edge(self):
         """Copy with p = 0 on rho = 1: sum_l c_lmn = 0 for each (m, n).
@@ -153,15 +163,21 @@ class Pressure:
         p = np.asarray(self.basis.modes, int)
         return np.column_stack([np.ones(len(p), int), p])
 
+    def _sep(self):
+        if getattr(self.basis, "spectral_indexing", None) == "fz+spline":
+            from spline_basis import separable_for
+            return separable_for([self.basis], [self.c], self.basis.NFP)
+        return Separable([self.basis], [self.c], self.basis.NFP)
+
     def tensor(self, grid, geo, RZ, factored=False):
         from flux_interp import TensorPressure
-        P = Separable([self.basis], [self.c], self.basis.NFP)
+        P = self._sep()
         return TensorPressure(P, self.edge_order, RZ, grid, geo, factored=factored)
 
     def point_evaluator(self, eq=None):
         """Jitted f(rho, theta, zeta) -> (p, grad p in (R, phi, Z) components)."""
         eq = self.eq if eq is None else eq
-        P = Separable([self.basis], [self.c], self.basis.NFP)
+        P = self._sep()
         RZ = Separable([eq.R_basis, eq.Z_basis], [eq.R_lmn, eq.Z_lmn], eq.NFP)
         return functools.partial(_p_and_grad, P, RZ, self.edge_order)
 
@@ -175,6 +191,12 @@ class Pressure:
 
     def save(self, path):
         b = self.basis
+        if getattr(b, "spectral_indexing", None) == "fz+spline":
+            from spline_basis import composite_save_fields
+            np.savez_compressed(path, c=self.c, modes=b.modes,
+                                edge_order=-1 if self.edge_order is None else self.edge_order,
+                                **composite_save_fields(b))
+            return
         np.savez_compressed(path, c=self.c, modes=b.modes, L=b.L, M=b.M, N=b.N,
                             NFP=b.NFP, spectral_indexing=b.spectral_indexing,
                             edge_order=-1 if self.edge_order is None else self.edge_order,
@@ -183,6 +205,12 @@ class Pressure:
     @classmethod
     def load(cls, path, eq):
         with np.load(path) as f:
+            if "kind" in f and str(f["kind"]) == "fz+spline":
+                from spline_basis import composite_from_fields
+                basis = composite_from_fields(f)
+                assert np.array_equal(basis.modes, f["modes"]), "basis mode mismatch"
+                k = int(f["edge_order"])
+                return cls(basis, f["c"], eq, None if k < 0 else k)
             sym = str(f["sym"]) if "sym" in f and str(f["sym"]) else False
             basis = FourierZernikeBasis(
                 int(f["L"]), int(f["M"]), int(f["N"]), NFP=int(f["NFP"]),

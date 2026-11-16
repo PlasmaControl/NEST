@@ -36,7 +36,7 @@ def main():
     sw = jnp.asarray(fields.sw); u0 = jnp.asarray(cur.u)
     Jfit = mff._J(fields, u0, fields.I); rmsJ = float(jnp.sqrt(jnp.sum(sw[:, None] ** 2 * Jfit**2)))
     G = mff.gram_P(fields, cur, pre, chunk=128, log=lambda *a: None)
-    A = mff.FixedAnchor(fields, cur, pre, u0, rmsJ, norm, G, log=lambda *a: None)
+    A = mff.FixedAnchor(fields, cur, pre, u0, rmsJ, norm, G, log=lambda *a: None, gw=T.edge_gw(fr)[1])
     rng = np.random.default_rng(1)
     z = u0 * (1 + 0.01 * jnp.asarray(rng.normal(size=A.n_u)))
     s = A.state(z)

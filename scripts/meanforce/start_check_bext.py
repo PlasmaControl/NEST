@@ -54,6 +54,7 @@ from free_boundary import reference  # noqa: E402
 from objective import VECTOR_PARITY, Fields, _cartesian  # noqa: E402
 from optimize_fb import annulus  # noqa: E402
 from pressure import Pressure  # noqa: E402
+import basis_args as BA  # noqa: E402
 
 T0 = time.time()
 
@@ -89,6 +90,7 @@ ap.add_argument("--pressure", action="store_true",
                 help="pressure diagnostics: <p>(rho), p', |p_mk|, rms B.grad p / |B||grad p| (DESC, the fit, each "
                      "state's least-squares p from its c_p) and p along the Poincare lines (island flattening)")
 ap.add_argument("--out", required=True)
+BA.add_basis_args(ap)
 a = ap.parse_args()
 os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
 rep = {"args": vars(a)}
@@ -102,16 +104,13 @@ def save():
 # ------------------------------------------------------------------ setup (as mf_fixed.py)
 inp = DESCInput.load(a.eq, field=None)
 eq = inp.eq
-kw = {"L": a.LMN[0], "M": a.LMN[1], "N": a.LMN[2]}
-cur = fit_cache.fit(BoundaryPotential, inp, **kw)
-pre = fit_cache.fit(Pressure, inp, edge_order=2, **kw)
+cur, pre, res, rho_nodes = BA.build(inp, a, a.LMN, a.colloc, log=log)
 b = cur.basis
-res = tuple(int(round(a.colloc * (u + v))) for u, v in ((b.L, eq.L), (b.M, eq.M), (b.N, eq.N)))
-ref = reference(inp, res, current=cur)
+ref = reference(inp, res, current=cur, rho_nodes=rho_nodes)
 log(f"{inp}\nbasis {b.L}/{b.M}/{b.N}, n_u {cur.n_free}, collocation {res}")
 box = annulus(inp, inp.a / a.frac, a.pad, a.N_phi)
 box.locate_plasma_planes(inp, sym=bool(eq.sym), verbose=False)
-fr = ForceResidual(inp, box, resolution=res)
+fr = ForceResidual(inp, box, resolution=res, rho_nodes=rho_nodes)
 fr.norm, fr.F_desc_vol = ref["norm"], ref["F_desc_vol"]
 fr.B_ext = np.zeros((len(fr.x), 3))  # replaced below (per option)
 fields = Fields(fr, cur, pre, dtype=jnp.float64, cyl_stencil=True)
