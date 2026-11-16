@@ -5,3 +5,4 @@ logs/
 .claude/settings.local.json
 .cache/
 results/
+scripts/cluster/ripple_long/site.sh

@@ -255,6 +255,14 @@ def main():
                          "(an affine row: b_mk is linear in u under option A)")
     ap.add_argument("--b21-mk", type=int, nargs=2, default=(2, 1), help="(m, k) of the resonant harmonic (start_check)")
     ap.add_argument("--b21-vac", type=float, default=3.778e-4, help="vacuum |b_mk| at the resonance (start_check)")
+    ap.add_argument("--diag-every", type=int, default=0,
+                    help="log a [diag] line every K accepted steps (also at the start, at every outer end and at the "
+                         "end): M/M_desc, |J - J_fit|/rms, b_mk (/ vacuum, phase), and |F| in the --diag-band "
+                         "(p16, max) and outside it (mean), each / DESC's on the same points. 0 = off")
+    ap.add_argument("--diag-band", type=float, nargs=2, default=(0.5675, 0.7075), metavar=("LO", "HI"),
+                    help="--diag-every: the DESC-rho band of the resonant surface (default: q = 2 of the ripple case)")
+    ap.add_argument("--save-every", type=int, default=5,
+                    help="write <out>_a<alpha>_latest.npz every K accepted steps (default 5)")
     ap.add_argument("--b21-phase-state", default=None,
                     help="npz whose b_mk sets the island phase (an island seed); default: the phase of --start")
     ap.add_argument("--b21-report", action="store_true", help="--eval-only: print b_mk at q res for each state")
@@ -286,11 +294,13 @@ def main():
     t0 = time.time()
     run = {"args": vars(a), "setup": {}, "alphas": [], "memory": []}
 
-    def write(path, text):
-        with open(path, "w") as fh:
+    def write(path, text):  # atomic: a kill mid-write leaves the previous file intact
+        tmp = path + ".tmp"
+        with open(tmp, "w") as fh:
             fh.write(text)
             fh.flush()
             os.fsync(fh.fileno())
+        os.replace(tmp, path)
 
     def dump():
         if a.hvp:
@@ -303,7 +313,12 @@ def main():
     def save_state(tag, z, s, W):
         for d in [os.path.dirname(a.out) or "."] + ([a.mirror] if a.mirror else []):
             p = os.path.join(d, os.path.basename(a.out) + f"_{tag}.npz")
-            np.savez(p, u=np.asarray(z), c_p=np.asarray(s["c"]), nu=W.nu, rho=W.rho, eps=W.eps)
+            tmp = p + ".tmp"  # atomic, so a kill mid-write never leaves a truncated checkpoint
+            with open(tmp, "wb") as fh:
+                np.savez(fh, u=np.asarray(z), c_p=np.asarray(s["c"]), nu=W.nu, rho=W.rho, eps=W.eps)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, p)
 
     def phase(name, t1):
         run["setup"][name] = time.time() - t1
@@ -489,7 +504,7 @@ def main():
         return
 
     bfn = None
-    if a.pin_b21 is not None or a.b21_report or a.plane:
+    if a.pin_b21 is not None or a.b21_report or a.plane or a.diag_every:
         t1 = time.time()
         bfn, binfo = mff.resonant_b_fn(inp0, fields, fr, u0, a.b21_mk[0], a.b21_mk[1], log=log)
         bfn = jax.jit(bfn)
@@ -766,6 +781,42 @@ def main():
             f"share stop {'off' if a.no_share_stop else 'on'}")
     best = {"z": z, "s": s0, "n": 0}
 
+    diag = None
+    if a.diag_every:
+        # cheap periodic diagnostics: one extra B_ann solve (b_mk) and host reductions over the points
+        t1 = time.time()
+        rho_d = np.asarray(fr.rtz[:, 0])
+        w_d = np.asarray(sw) ** 2
+        band_d = (rho_d >= a.diag_band[0]) & (rho_d <= a.diag_band[1])
+        tg_ = fr.tgrid
+        absF_D = np.asarray(inp0.compute_tensor(["|F|"], tg_.rho, tg_.theta, tg_.zeta)["|F|"]).ravel()
+        assert absF_D.size == len(rho_d), (absF_D.size, len(rho_d))
+        ref_d = mff.desc_pnorm(absF_D, w_d, band_d, 16.0, norm)
+        run["diag"] = {"band": list(a.diag_band), "band points": int(band_d.sum()), "DESC": ref_d,
+                       "b_vac": a.b21_vac, "M_desc": M_desc_mean}
+        log(f"[diag] band {a.diag_band[0]:.4f} <= rho <= {a.diag_band[1]:.4f}: {int(band_d.sum())} points; DESC there: "
+            f"p16 {ref_d['M_p']:.4e}, max {ref_d['max_int']:.4e}, outside mean {ref_d['edge']:.4e} (/ norm); "
+            f"set up in {time.time() - t1:.1f} s")
+
+        def diag(zz, ss, where):
+            nd = mff.desc_pnorm(np.asarray(ss["absF"]), w_d, band_d, 16.0, norm)
+            bv = bmk(zz)
+            out_ = {"where": where, "t [s]": time.time() - t0,
+                    "M/M_desc": float(ss.get("M_mean", ss["M"])) / M_desc_mean,
+                    "|J-J_fit|/rms": float(jnp.sqrt(jnp.sum(ss["g"] ** 2))),
+                    "b/vac": abs(bv) / a.b21_vac, "b phase deg": float(np.degrees(np.angle(bv))),
+                    "band p16/DESC": nd["M_p"] / ref_d["M_p"], "band max/DESC": nd["max_int"] / ref_d["max_int"],
+                    "outside mean/DESC": nd["edge"] / ref_d["edge"]}
+            run.setdefault("diag log", []).append(out_)
+            log(f"[diag] {where}: M/M_desc {out_['M/M_desc']:.5f} |J-J_fit|/rms {out_['|J-J_fit|/rms']:.4e} "
+                f"b{a.b21_mk[0]}{a.b21_mk[1]}/vac {out_['b/vac']:.4f} phase {out_['b phase deg']:+.1f} deg | band p16/DESC "
+                f"{out_['band p16/DESC']:.4f} max/DESC {out_['band max/DESC']:.4f} | outside mean/DESC "
+                f"{out_['outside mean/DESC']:.4f}")
+            return out_
+
+        diag(z, A.state(z), "start")
+        dump()
+
     build_state = {"psi1": None}
 
     def refresh(zz):
@@ -954,6 +1005,8 @@ def main():
                     run["memory"].append({"phase": f"alpha {alpha} outer {len(outer)}",
                                           "t": time.time() - t0, **mem()})
                     save_state(f"{ptag}a{alpha}_latest", zz, s, W)
+                    if diag is not None:
+                        diag(zz, s, f"alpha {alpha} outer {len(outer) - 1} end")
                     if a.snap_outer:
                         save_state(f"{ptag}a{alpha}_o{len(outer)}", zz, s, W)
                     dump()
@@ -987,8 +1040,10 @@ def main():
                     if hist and hist[-1]["accepted"]:
                         best["z"], best["s"] = A.last_z, A.last_s
                         best["n"] += 1
-                        if best["n"] % 5 == 0:
+                        if best["n"] % max(a.save_every, 1) == 0:
                             save_state(f"{ptag}a{alpha}_latest", best["z"], best["s"], W)
+                        if diag is not None and best["n"] % a.diag_every == 0:
+                            hist[-1]["diag"] = diag(best["z"], best["s"], f"alpha {alpha} accepted step {best['n']}")
                     dump()
                     if a.time_budget and time.time() - t0 > a.time_budget:
                         raise Budget()
@@ -1027,6 +1082,8 @@ def main():
                 save_state(f"{ptag}a{alpha}", z, s, W)
                 log(f"alpha {alpha} done in {time.time() - t1:.0f} s: |J - J_fit|/rms "
                     f"{entry['|J-J_fit|/rms']:.4e}, M/M_desc {entry['M/M_desc']:.4f}")
+                if diag is not None:
+                    entry["diag"] = diag(z, s, f"alpha {alpha} end")
                 dump()
                 if not entry["feasible"] and not forced:
                     log(f"alpha {alpha} not met: stopping the sweep")
@@ -1039,6 +1096,8 @@ def main():
         save_state("budget", best["z"], best["s"], W)
         run["stage"] = "time budget reached"
         log("time budget reached: state saved")
+        if diag is not None:
+            diag(best["z"], best["s"], "end (budget)")
     run["total [s]"] = time.time() - t0
     run["memory"].append({"phase": "end", "t": time.time() - t0, **mem()})
     dump()

@@ -1,0 +1,11 @@
+# Site settings, sourced by submit.sh, run.sbatch and preflight.sh. Copy to site.sh and edit.
+# Example values for Princeton Stellar AI (B200); check them against your own job scripts.
+export RUNS=/scratch/gpfs/$USER/nest_ripple_long            # output root (fast, large, not purged during the run)
+export NEST_CACHE=$RUNS/cache                                # fit cache (BoundaryPotential/Pressure fits)
+export SBATCH_OPTS="--account=kolemen --partition=gpu --qos=gpu-medium --time=24:00:00"
+# python environment with jax (CUDA), DESC and numpy/scipy; PY is used by every script
+module purge 2>/dev/null
+# module load anaconda3/2024.10 ; conda activate /scratch/gpfs/EKOLEMEN/lk1158/envs/nest13
+export PY=${PY:-python}
+# DESC: if it is not installed in the environment, put its source tree on the path
+# export PYTHONPATH=/path/to/DESC:${PYTHONPATH:-}

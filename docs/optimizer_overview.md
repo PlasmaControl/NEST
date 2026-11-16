@@ -1271,9 +1271,12 @@ harmonic, in straight-field-line (PEST) angles, of $b^\rho = \delta\mathbf B\cdo
 on the q = 2 surface, where $\delta\mathbf B = \mathbf B_\text{ann}[\mathbf J - \mathbf J_\text{fit}]$ is the
 field change from the start (DESC's own resonant field is zero, because its surfaces are nested).
 It is quoted as a fraction of the *vacuum* value $3.78\times10^{-4}$, the resonant field the ripple
-would produce with no shielding current. For the four end states it is 2.08–2.14%, phase −90°: about
-98% of the vacuum resonant field is still cancelled. An open island would need $b_{21}$ to grow
-toward the vacuum value (`--b21-report` prints it in an `--eval-only` run).
+would produce with no shielding current. Under stellarator symmetry the phase can only be ±90°; the
+vacuum field has +90°, so −90° means the plasma response slightly *over*-cancels it. For the four end
+states $|b_{21}|$ is 2.08–2.14% of vacuum at −90°: the resonant field is still cancelled to within
+about 2%, on the over-shielded side. An opening island would show $b_{21}$ growing toward the vacuum
+value with phase +90° (`--b21-report` prints it in an `--eval-only` run; `--diag-every` logs it
+during a solve).
 
 **Caveats.**
 - One run per arm, so the factors have no error bar; run-to-run variability (for example from the
