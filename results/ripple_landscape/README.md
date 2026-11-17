@@ -119,3 +119,8 @@ above: `A60_cont.log` (+ `.json`), `A48_cont.log`, `Q2b.log`, `pushthrough_v3.lo
   spectra, and the energy, helicity and flux results (`eh_R0.json`, `eh_R1.json`).
 
 See `docs/handoff_ripple_landscape_2026-11-12.md` for the overview.
+
+## Long runs (2026-11-17)
+
+- `long/M30/`: the M30 run of `docs/ripple_long_runs_runbook.md` (30/30/8, a/100): α = 0.1 not reachable
+  (0.1195 M_DESC), α = 0.001 floor 0.10335 M_DESC; shielding survives (b21 0.0154 of vacuum, −90°). Own `README.md`.
