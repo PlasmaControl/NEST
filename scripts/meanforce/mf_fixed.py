@@ -507,7 +507,7 @@ def main():
     if a.pin_b21 is not None or a.b21_report or a.plane or a.diag_every:
         t1 = time.time()
         bfn, binfo = mff.resonant_b_fn(inp0, fields, fr, u0, a.b21_mk[0], a.b21_mk[1], log=log)
-        bfn = jax.jit(bfn)
+        # not jax.jit(bfn): the closure would capture the field tables as constants; bfn calls a jitted kernel
         run["b_mk"] = binfo
         phase(f"b{a.b21_mk[0]}{a.b21_mk[1]} functional", t1)
 

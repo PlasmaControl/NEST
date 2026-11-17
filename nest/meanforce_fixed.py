@@ -1012,9 +1012,88 @@ def _chol_donated(H, reg):
     return jnp.linalg.cholesky(H)
 
 
+@functools.partial(jax.jit, donate_argnums=(0,))
+def _diag_shift(H, reg):
+    n = H.shape[0]
+    return H.at[jnp.arange(n), jnp.arange(n)].add(reg * jnp.mean(jnp.diag(H)))
+
+
+@functools.partial(jax.jit, donate_argnums=(0,), static_argnums=(1, 2))
+def _chol_panel(H, k0, k1):
+    """Factor the diagonal block [k0:k1] and the panel below it, in place."""
+    Lkk = jnp.linalg.cholesky(H[k0:k1, k0:k1])
+    H = H.at[k0:k1, k0:k1].set(Lkk)
+    if k1 < H.shape[0]:
+        P = jax.scipy.linalg.solve_triangular(Lkk, H[k1:, k0:k1].T, lower=True).T
+        H = H.at[k1:, k0:k1].set(P)
+    return H
+
+
+@functools.partial(jax.jit, donate_argnums=(0,), static_argnums=(1, 2, 3, 4))
+def _chol_update(H, k0, k1, j0, j1):
+    """Trailing update of the column block [j0:j1] (rows >= j0) by panel [k0:k1]; zeroes the upper part."""
+    upd = H[j0:, j0:j1] - H[j0:, k0:k1] @ H[j0:j1, k0:k1].T
+    H = H.at[j0:, j0:j1].set(upd)
+    return H.at[k0:k1, j0:j1].set(0.0)  # the upper triangle above the panel's diagonal block
+
+
+@functools.partial(jax.jit, donate_argnums=(0,), static_argnums=(1, 2))
+def _zero_upper_diag(H, k0, k1):
+    blk = H[k0:k1, k0:k1]
+    return H.at[k0:k1, k0:k1].set(jnp.tril(blk))
+
+
+def chol_blocked_inplace(H, reg, block=4096):
+    """Right-looking blocked Cholesky on H's buffer (H is consumed): lower L with zeros above the diagonal.
+
+    Extra memory is O(n * block) (one panel and one column-block update at a time) instead of the
+    ~2 n^2 that jnp.linalg.cholesky requests; every jitted step donates H so XLA updates it in place.
+    """
+    n = H.shape[0]
+    H = _diag_shift(H, reg)
+    starts = list(range(0, n, block))
+    for k0 in starts:
+        k1 = min(k0 + block, n)
+        H = _chol_panel(H, k0, k1)
+        for j0 in range(k1, n, block):
+            H = _chol_update(H, k0, k1, j0, min(j0 + block, n))
+        H = _zero_upper_diag(H, k0, k1)
+    return H
+
+
+CHOL_BLOCKED_ABOVE = 32768  # n_u above which the metric Cholesky is blocked and in place (memory)
+
+
 def metric_L_lean(H, reg=1e-10):
-    """``metric_L`` on H's buffer (H is consumed)."""
+    """``metric_L`` on H's buffer (H is consumed). Above CHOL_BLOCKED_ABOVE unknowns, a blocked in-place
+    factorization (the dense call requests ~2 n^2 extra, which OOMed 80/80/6 and 96/64/6)."""
+    if H.shape[0] > CHOL_BLOCKED_ABOVE:
+        return chol_blocked_retry(H, reg)
     return _chol_donated(H, reg)
+
+
+def _chol_ok(L):
+    d = jnp.diag(L)
+    return bool(jnp.all(jnp.isfinite(d)) & jnp.all(d > 0))
+
+
+def chol_blocked_retry(H, reg, factors=(1.0, 1e2, 1e4, 1e6), log=print):
+    """``chol_blocked_inplace`` with DESC-style recovery (desc.optimize.utils.chol / _cholmod): if the factor
+    is not finite and positive on the diagonal (H indefinite to rounding), retry from a host copy of H
+    with the diagonal shift reg * mean(diag) raised by 100x each time. The host copy costs n^2 * 8 B of RAM."""
+    H_host = np.asarray(H)
+    for i, f in enumerate(factors):
+        L = chol_blocked_inplace(H if i == 0 else jnp.asarray(H_host), reg * f)
+        if _chol_ok(L):
+            if i:
+                log(f"  [chol] blocked Cholesky needed reg {reg * f:.1e} x mean(diag) (failed at {reg * factors[i - 1]:.1e})")
+            return L
+        d = np.asarray(jnp.diag(L))
+        bad = np.flatnonzero(~(np.isfinite(d) & (d > 0)))
+        log(f"  [chol] blocked Cholesky failed at reg {reg * f:.1e} x mean(diag): first bad pivot {bad[0]} of {len(d)} "
+            f"(block {bad[0] // 4096}); H finite {bool(np.isfinite(H_host).all())}; retrying")
+        del L
+    raise FloatingPointError("blocked Cholesky failed at every regularization tried")
 
 
 def gram_F_local_lean(fields, current, pressure, B, q, Lg, chunk=1024, log=print):
@@ -1233,15 +1312,21 @@ def resonant_b_fn(inp, fields, fr, u_ref, m, k, rho_res=None, log=print):
     cr, ci = jnp.asarray(coef.real), jnp.asarray(coef.imag)
     ex_j, sel_j, u_ref = jnp.asarray(ex), jnp.asarray(sel), jnp.asarray(u_ref)
 
-    def b(u):
-        dB = fields.B_plasma(jnp.asarray(u) - u_ref, 0.0)[sel_j]
-        br = jnp.sum(dB * ex_j, axis=1)
-        return jnp.stack([jnp.sum(cr * br), jnp.sum(ci * br)])
+    def b(u):  # fields and the tables are jit arguments, not captured constants (15.7 GB at 96/64/6)
+        return _resonant_b_kernel(fields, jnp.asarray(u), u_ref, sel_j, ex_j, cr, ci)
     info = {"rho_res": rho_res, "shells": [float(r_lo), float(r_hi)], "weight hi": float(wt), "points": int(len(sel)),
             "sym": sym, "m": m, "k": k}
     log(f"[b{m}{k}] resonance rho {rho_res:.5f} between collocation shells {r_lo:.4f} / {r_hi:.4f} ({len(sel)} points, "
         f"{'half-period symmetric' if sym else 'full'} grid)")
     return b, info
+
+
+@jax.jit
+def _resonant_b_kernel(fields, u, u_ref, sel, ex, cr, ci):
+    """b_mk = sum coef * (dB . e^rho) on the resonant shells (see ``resonant_b_fn``)."""
+    dB = fields.B_plasma(u - u_ref, 0.0)[sel]
+    br = jnp.sum(dB * ex, axis=1)
+    return jnp.stack([jnp.sum(cr * br), jnp.sum(ci * br)])
 
 
 class LinearConstraints:
