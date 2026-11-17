@@ -2,6 +2,9 @@
 
 One entry per commit, newest first.
 
+## 2026-11-17: F64L interim results (branch ripple-landscape)
+- `results/ripple_landscape/long/F64L/`: snapshot of the running F64L chain (64/64/6 a/200, alpha 0.001 floor from V_SA_budget) on Stellar AI, taken 15:38 during segment 7. M/eps 16.14 -> 13.44 (**M = 0.01344 M_DESC**) in 1603 accepted steps / 23.1 h of solve time, still falling ~0.8 %/h. **Shielding survives so far**: b21 0.0208 -> 0.0106 of vacuum at -90 deg, falling with M; q = 2 band p16/DESC 0.177 -> 0.100. Segments 2 and 4-6 stopped on the inner flat test after ~11 steps; 3 and 7 resumed descent with a fresh metric. Segment 5's bookkeeping was repaired by hand (segment.sh edited mid-run); no state lost. Files: report, CSVs, figure, chain table, per-segment records, logs/JSON tarball, newest checkpoint.
+
 ## 2026-11-17: M30 long-run results (branch ripple-landscape)
 - `results/ripple_landscape/long/M30/`: the M30 chain of `docs/ripple_long_runs_runbook.md` run on Stellar AI (B200, JAX 0.9.2 / CUDA 13; preflight PASS). 30/30/8 a/100 from J_fit (2.27 M_DESC on the solve grid). Phase A stopped at alpha 0.1 (not reachable: 0.1195 M_DESC), so the floor started there. alpha 0.001 floor: M/eps 119.5 -> 103.35, **M = 0.10335 M_DESC**, 1612 accepted steps in 4.5 h of solve time. **Shielding survives**: b21 0.0154 of vacuum at -90 deg (anti-island side) throughout; q = 2 band p16/DESC 4.93 -> 0.0795, below the outside mean (0.102).
 - Chain behaviour: every floor segment's inner solve stops on its flat test after 0.02-1 h and the next restarts with a fresh metric; from segment 18 on most stopped after 11 steps with almost no gain. The stall rule ignores segments under 0.5 h of solve time, so it never fired and the run ended at the (raised) cap of 40 segments. Files: report, step and diag CSVs, figure, chain table, per-segment summaries, logs/JSON tarball, final and phase-A end states.

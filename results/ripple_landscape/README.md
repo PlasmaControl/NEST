@@ -124,3 +124,5 @@ See `docs/handoff_ripple_landscape_2026-11-12.md` for the overview.
 
 - `long/M30/`: the M30 run of `docs/ripple_long_runs_runbook.md` (30/30/8, a/100): α = 0.1 not reachable
   (0.1195 M_DESC), α = 0.001 floor 0.10335 M_DESC; shielding survives (b21 0.0154 of vacuum, −90°). Own `README.md`.
+- `long/F64L/`: interim snapshot (2026-11-17 15:38, run still going) of the F64L 64/64/6 a/200 floor from V_SA_budget:
+  M 0.01614 → 0.01344 M_DESC in 23 h, still descending; shielding survives (b21 0.0208 → 0.0106 of vacuum, −90°).

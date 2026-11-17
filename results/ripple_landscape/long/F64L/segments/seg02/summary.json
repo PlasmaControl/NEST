@@ -1,0 +1,29 @@
+{
+ "segment": "seg02",
+ "phase": "floor",
+ "stage": "sweep ended",
+ "alphas": [
+  0.001
+ ],
+ "steps": 11,
+ "accepted": 11,
+ "rejected": 0,
+ "M/eps first": 13.961987904485106,
+ "M/eps last": 13.961347029375991,
+ "solve s": 438.4981882572174,
+ "total s": 1090.6231110095978,
+ "setup s": 320.1016457080841,
+ "last diag": {
+  "where": "alpha 0.001 end",
+  "t [s]": 1090.6205706596375,
+  "M/M_desc": 0.013961347029375992,
+  "|J-J_fit|/rms": 0.051747508944961176,
+  "b/vac": 0.01291604684762636,
+  "b phase deg": -90.0,
+  "band p16/DESC": 0.1366732731183276,
+  "band max/DESC": 0.1443292655403592,
+  "outside mean/DESC": 0.012455494821050017
+ },
+ "errors": "",
+ "finished at": "2026-11-17 07:24:19"
+}
