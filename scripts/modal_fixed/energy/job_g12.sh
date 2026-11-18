@@ -10,7 +10,7 @@
 #   I<beta>  island reference: b21 pinned at beta x vacuum (island phase of R1f_b1.0), from R1f_b1.0, lambda = 0
 #   g1b      exterior check on S0 / I<beta> and their differences; fine-grid (a/120, 120 radii) energy evaluation
 # Inputs (flat in /work): nest_src.tar.gz rung_run.sh job_g12.sh R1f_S_fresh.npz R1f_b1_fresh.npz [S0_fresh.npz]
-# Env: ALPHA (default 0.05). S0 starts from S0_fresh.npz when it is staged.
+# Env: ALPHA (default 0.05). Step E<lambda>: energy weight lambda from S0a08_fresh.npz. S0 starts from S0_fresh.npz when it is staged.
 # (desc_src, deps_src, gpu_entry.py and the DESC file come from /results/stage, as for the ripple runs).
 # Outputs: /results/fxr/energy/<STEP>/ (mirror, fsynced per step) and out/.
 set -u
@@ -42,6 +42,12 @@ case $STEP in
     ST0=/work/R1f_S_fresh.npz; [ -f /work/S0_fresh.npz ] && ST0=/work/S0_fresh.npz  # the constrained S0 (alpha 0.05 floor)
     p "begin (alpha $ALPHA, start $ST0)"; mkdir -p $E/$TAG
     bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE --start $ST0 \
+        --out /work/out/$TAG --mirror $E/$TAG
+    ;;
+  E*)
+    # energy ladder: lambda = ${STEP#E} from the shielded alpha 0.8 state (S0a08_fresh.npz), at the ALPHA force bound
+    LAM=${STEP#E}; p "begin lambda $LAM (alpha $ALPHA, start /work/S0a08_fresh.npz)"; mkdir -p $E/$TAG
+    bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE --energy-weight $LAM --start /work/S0a08_fresh.npz \
         --out /work/out/$TAG --mirror $E/$TAG
     ;;
   I*)
