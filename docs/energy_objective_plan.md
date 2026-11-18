@@ -1,6 +1,6 @@
 # Energy objective with a flux-surface boundary in NEST: build, validation and run plan
 
-Status: approved 2026-11-17 with alpha = 0.05, no unconstrained-energy contrast arm, first runs on Modal. Build done on branch `energy-objective`; G0 passed (see the G0 summary artifact).
+Status: approved 2026-11-17 with alpha = 0.05, no unconstrained-energy contrast arm, first runs on Modal. Build done on branch `energy-objective`; G0 passed; its results table is section 2 of the status note energy_objective_status_2026-11-18.md (also docs/ in the repo), with raw JSON in results/energy_objective/g0/.
 Code references are to branch `ripple-landscape`, commit 6249d4e (worktree NEST-cp).
 
 ## 1. Goal and problem statement
