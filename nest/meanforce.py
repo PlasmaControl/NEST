@@ -594,6 +594,8 @@ class Solver:
         q = jnp.concatenate([jnp.zeros(getattr(rows, "ng", rows.n3)), rows.sF3 * (w[:, None] * F_dd).ravel(),
                              jnp.zeros(1)])
         Hv = lambda v: rows.JT(rows.J(v))  # noqa: E731
+        if not float(q @ q) > 0.0:  # no force curvature along the step (force rows inactive, e.g. a slack bound)
+            raise FloatingPointError("accel direction undefined: q = 0 (force rows inactive)")
         saved = dict(mff.LAST_H)
         try:
             ya, _, ahit, k, _, _, _ = mff.lanczos_tr_step_H(Hv, rows.JT(q), 0.5 * float(q @ q), met,
@@ -632,7 +634,12 @@ class Solver:
                     continue
                 e = d_prev * (ny / max(metric_len(d_prev), 1e-300))
             elif name == "accel":
-                a_dir, ainfo = self._accel_dir(Fii[0], ny, rows, met, cfg["accel"])
+                try:
+                    a_dir, ainfo = self._accel_dir(Fii[0], ny, rows, met, cfg["accel"])
+                except Exception as e:  # a failed accel direction must not discard the other directions
+                    info["accel"] = {"failed": repr(e)}
+                    self.log(f"      [subspace] accel direction skipped: {e!r}")
+                    continue
                 info["accel"] = ainfo
                 na = metric_len(a_dir)
                 if not np.isfinite(na) or na == 0.0:
