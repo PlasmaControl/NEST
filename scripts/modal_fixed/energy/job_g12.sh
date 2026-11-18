@@ -9,24 +9,27 @@
 #   S0       shielded reference: R1f_S restored onto the constraints, solved at lambda = 0
 #   I<beta>  island reference: b21 pinned at beta x vacuum (island phase of R1f_b1.0), from R1f_b1.0, lambda = 0
 #   g1b      exterior check on S0 / I<beta> and their differences; fine-grid (a/120, 120 radii) energy evaluation
-# Inputs (flat in /work): nest_src.tar.gz rung_run.sh job_g12.sh R1f_S_fresh.npz R1f_b1_fresh.npz
+# Inputs (flat in /work): nest_src.tar.gz rung_run.sh job_g12.sh R1f_S_fresh.npz R1f_b1_fresh.npz [S0_fresh.npz]
+# Env: ALPHA (default 0.05). S0 starts from S0_fresh.npz when it is staged.
 # (desc_src, deps_src, gpu_entry.py and the DESC file come from /results/stage, as for the ripple runs).
 # Outputs: /results/fxr/energy/<STEP>/ (mirror, fsynced per step) and out/.
 set -u
 STEP=$1
+ALPHA=${ALPHA:-0.05}  # force bound (x M_DESC); outputs are tagged <STEP>_a<ALPHA> when ALPHA != 0.05
+TAG=$STEP; [ "$ALPHA" != 0.05 ] && TAG=${STEP}_a$ALPHA
 cd /work; for f in desc_src.tar.gz deps_src.tar.gz ripple_L32N4_x1e-3.h5 gpu_entry.py; do [ -f $f ] || cp /results/stage/$f .; done
 rm -rf src/scripts src/nest; mkdir -p src out
 tar -xzf nest_src.tar.gz -C src
 if [ ! -f src/.deps ]; then tar -xzf desc_src.tar.gz -C src && tar -xzf deps_src.tar.gz -C src && touch src/.deps; fi
 touch src/.unpacked
 EQ=/work/ripple_L32N4_x1e-3.h5; E=/results/fxr/energy; mkdir -p $E
-T0=$(date +%s); p() { echo "[g12] $1 at $(( $(date +%s) - T0 )) s" | tee -a $E/progress_$STEP.txt; }
+T0=$(date +%s); p() { echo "[g12] $1 at $(( $(date +%s) - T0 )) s" | tee -a $E/progress_$TAG.txt; }
 GRID="--eq $EQ --bext desc-fit --LMN 40 40 6 --frac 100 --N-phi 25 --colloc-rho 2.7"
 FLAGS="--subspace prev,accel --cg 1500 --no-rebuild-on-hit --f-noise auto --radius-by-delta --no-share-stop \
        --locate-chunk 131072 --diag-every 5 --save-every 5"
 CONS="--bn-modes 40 6 --pin-flux"
-SOLVE="$GRID $FLAGS $CONS --alphas 0.05 --max-outer 8 --maxiter 60 --energy-weight 0 --time-budget 3300"
-endstate() { ls -t $E/$1/${1}_a0.05.npz $E/$1/${1}_budget.npz $E/$1/${1}_a0.05_latest.npz 2>/dev/null | head -1; }
+SOLVE="$GRID $FLAGS $CONS --alphas $ALPHA --max-outer 8 --maxiter 60 --energy-weight 0 --time-budget 3300"
+endstate() { ls -t $E/$1/${1}_a$ALPHA.npz $E/$1/${1}_budget.npz $E/$1/${1}_a${ALPHA}_latest.npz 2>/dev/null | head -1; }
 case $STEP in
   g1a|g1a80)
     BN="40 6"; [ $STEP = g1a80 ] && BN="80 12"
@@ -36,20 +39,22 @@ case $STEP in
         --pair R1f_island=/work/R1f_S_fresh.npz,/work/R1f_b1_fresh.npz --out $E/$STEP/$STEP
     ;;
   S0)
-    p "begin"; mkdir -p $E/S0
-    bash rung_run.sh en_S0 scripts/meanforce/mf_fixed.py $SOLVE --start /work/R1f_S_fresh.npz \
-        --out /work/out/S0 --mirror $E/S0
+    ST0=/work/R1f_S_fresh.npz; [ -f /work/S0_fresh.npz ] && ST0=/work/S0_fresh.npz  # the constrained S0 (alpha 0.05 floor)
+    p "begin (alpha $ALPHA, start $ST0)"; mkdir -p $E/$TAG
+    bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE --start $ST0 \
+        --out /work/out/$TAG --mirror $E/$TAG
     ;;
   I*)
-    BETA=${STEP#I}; p "begin beta $BETA"; mkdir -p $E/$STEP
-    bash rung_run.sh en_$STEP scripts/meanforce/mf_fixed.py $SOLVE --start /work/R1f_b1_fresh.npz \
-        --pin-b21 $BETA --b21-phase-state /work/R1f_b1_fresh.npz --out /work/out/$STEP --mirror $E/$STEP
+    BETA=${STEP#I}; p "begin beta $BETA (alpha $ALPHA)"; mkdir -p $E/$TAG
+    bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE --start /work/R1f_b1_fresh.npz \
+        --pin-b21 $BETA --b21-phase-state /work/R1f_b1_fresh.npz --out /work/out/$TAG --mirror $E/$TAG
     ;;
   g1b)
     p "begin"; mkdir -p $E/g1b
     ST=""; PR=""; EV=""
-    S=$(endstate S0)
-    for T in S0 I0.25 I0.5 I1; do F=$(endstate $T); [ -n "$F" ] || continue
+    SF=""; [ "$ALPHA" != 0.05 ] && SF=_a$ALPHA
+    S=$(endstate S0$SF)
+    for T0_ in S0 I0.25 I0.5 I1; do T=$T0_$SF; F=$(endstate $T); [ -n "$F" ] || continue
       ST="$ST --state $T=$F"; EV="$EV --eval-state $T=$F"
       [ "$T" != S0 ] && [ -n "$S" ] && PR="$PR --pair S0_to_$T=$S,$F"
     done
@@ -63,4 +68,4 @@ case $STEP in
     ;;
   *) echo "unknown step $STEP"; exit 2;;
 esac
-p "done"; cp $E/progress_$STEP.txt out/ 2>/dev/null; true
+p "done"; cp $E/progress_$TAG.txt out/ 2>/dev/null; true
