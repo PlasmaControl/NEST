@@ -52,7 +52,7 @@ The field change is computed by direct Biot-Savart quadrature of dJ, not by the 
 | old R1f island - shielded (unconstrained) | 1.9e-4 | 2.3e-4 | 1.7e-4 | 6.9e-5 | 4.8e-5 | 2.5e-4 |
 
 What the table says:
-1. **The old states:** the island-vs-shielded difference changes B.n on the LCFS by 1.9e-4 of |B|. Its exterior-energy estimate (2.5e-4 W) is four times the plasma-volume dW of that pair (-6.6e-5 W, about -127 J). So the earlier energy comparison of these states was not a free-energy comparison.
+1. **The old states:** the island-vs-shielded difference changes B.n on the LCFS by 1.9e-4 of |B|. (The last column ignores sign cancellation and overstates the energy error; section 6 replaces it with a per-mode calculation: about 10% of the island energy gap, not the 4x first quoted.)
 2. **The constraint at 40/6** removes the mid and far field 30-60x (0.1a, 0.5a, far), but the boundary and 0.02a values only about 6x.
 3. **Doubling the cutoff to 80/12 does not help:**
    - it empties the annulus B.n above the cutoff (1.3e-5 down to 3.7e-7), but the true B.n stays at 7e-6, equal to the annulus-vs-direct difference (field-grid error);
@@ -83,3 +83,53 @@ Decision taken: keep the annulus rows at cutoff 40/6 (the basis M, N).
    - (a) continue S0 for 2-3 h;
    - (b) a B.n cutoff scan at lambda = 0 (e.g. 4/2, 8/4, 16/6, 40/6) from R1f_S, mapping force against cutoff. The physical argument for a low cutoff: the linear exterior term int B_coil . dB_out couples only to the smooth, large-scale coil field, so high-m B.n contributes little to the free energy, while low-m B.n reaches far and couples strongly. The G1 table agrees: the constraint removes the far field well.
 2. Only after that: the island references I(beta) at the chosen cutoff, then the lambda ladder.
+
+
+## 6. B.n-leak study (2026-11-18; job_leak.sh, commit 2584655)
+
+### Test 3: leak spectrum and energy error (bn_spectrum.py, Modal b016d3a5)
+
+To first order, using W_Omega with a leak misstates the free energy by -(1/mu0) oint phi_B (dB . n) dS, where phi_B is the surface potential of B on the LCFS. phi_B is concentrated at m = 1-3 (|a| 5-8e-3), 5e-4 at m = 5-8, 1e-5 at m = 9-16.
+
+Leak in the table below is the rms of sqrt(g) dB . e^rho over rms(sqrt(g) B^zeta); all other columns are relative to W.
+
+| state | leak (direct) | dW_Omega / W | energy error / W | error left above 4/2 | above 8/4 |
+|---|---|---|---|---|---|
+| R1f_S (unconstrained) | 7.8e-5 | +1.0e-6 | -4.7e-7 | -4.4e-9 | +4e-11 |
+| R1f_b1 island (unconstrained) | 4.6e-4 | -6.5e-5 | +5.8e-6 | -2.7e-7 | -8.5e-10 |
+| S0 (constrained 40/6) | 6.3e-7 | -9.4e-8 | +3.9e-9 | -2.6e-11 | -1e-12 |
+
+- The energy-relevant leak sits in (m, n) = (1,0), (2,0), (3,0): an axisymmetric shift, elongation and triangularity of the boundary flux, amounting to an effective displacement of about 0.1 mm.
+- The leak moves the old island-vs-shielded energy comparison by about 10%.
+- A 4/2 cutoff removes all but 0.5% of that error.
+
+### Tests 1 and 2: force floor against constraint
+
+Setup: floor pushes from J_fit (M = 7.18 M_DESC), alpha 0.001, one outer, same flags. Every arm ended on the solver's stationarity test.
+
+| arm | constraint | M / M_DESC | abs(J - J_fit) / rms | b21 / vac | band p16 / DESC | outside mean / DESC |
+|---|---|---|---|---|---|---|
+| A0 | none | **0.0623** | 0.0165 | 2.0% | 0.40 | 0.056 |
+| Aflux | toroidal flux | **0.0633** | 0.0150 | 2.3% | 0.45 | 0.056 |
+| A4 | flux + B.n 4/2 (22 modes) | **0.3475** | 0.0327 | 4.6% | 0.96 | 0.34 |
+| A8 | flux + B.n 8/4 | **0.4771** | 0.0270 | 2.2% | 1.19 | 0.48 |
+| A16 | flux + B.n 16/6 | **0.5448** | 0.0057 | 2.4% | 2.08 | 0.54 |
+| A40 | flux + B.n 40/6 | **0.5766** | 0.0057 | 2.4% | 1.90 | 0.58 |
+
+All states are shielded (b21 phase -90 deg). A40 equals S0 (0.5766), reached from a different start, so this is a real floor of the constrained problem at 40/40/6, not a slow valley. Notes:
+- A4's container was lost after the run completed. Its outputs are on the Modal volume (/results/fxr/energy/leak/A4/, /results/fxr/lk_A4/).
+- The other arms' outputs are in results/energy_objective/gpu/leak/.
+
+### Reading
+
+- **The flux pin costs nothing** (1.6%).
+- **Forbidding boundary flux leak raises the floor 5.6x with only the 22 lowest modes, and 9.3x with all modes to 40/6.**
+- **Where the extra force goes:** it spreads over the whole volume (outside-band mean 0.34-0.58 of DESC's, against 0.056 unconstrained), and the q = 2 band rises to 1-2x DESC.
+- **Conclusion:** B.n leak through the LCFS is a major channel by which the fixed-boundary NEST runs lowered their force. The earlier NCSX check could not see it, because it compared total B.n levels dominated by J_fit's own error rather than the counterfactual cost.
+- **Hypothesis, not tested:** NEST's basis forces J -> 0 at the LCFS, which removes the edge currents that would otherwise cancel the exterior field of interior current changes at low force cost.
+
+### Decision (user, 2026-11-18)
+
+- Take the leak channel seriously. The higher-resolution reruns with the B.n constraint go to a separate session.
+- Here: keep the constraint and do the energy-objective work at higher force-balance levels.
+- Proposed, awaiting confirmation: cutoff 40/6 (S0 is the shielded reference) and alpha 0.8, about 1.4x the floor.
