@@ -92,8 +92,17 @@ def _lin_impl(fields, v, aux):
     df, _ = _project(fields, sw, da, aux["Lg"], n_p)
     n = J.shape[0]
     dz = (sw[:, None] * df.reshape(n, 3)).ravel()
-    dg = (sw[:, None] * dJ / aux["rmsJ"]).ravel()
+    dg = _g_rows(sw, dJ, dB, aux)
     return dg, dz
+
+
+def _g_rows(sw, dJ, dB, aux):
+    """The (linear) misfit rows: sw dJ / rms J_fit, followed by the energy rows e_c sw dB when
+    the energy term is on (``"ec"`` in aux; the key's presence is static under jit)."""
+    dg = (sw[:, None] * dJ / aux["rmsJ"]).ravel()
+    if "ec" in aux:
+        dg = jnp.concatenate([dg, aux["ec"] * (sw[:, None] * dB).ravel()])
+    return dg
 
 
 _lin = jax.jit(_lin_impl)
@@ -236,10 +245,48 @@ class FixedAnchor:
                       "W_edge": float(jnp.sum(w * (1.0 - m))) if not ea else float(jnp.sum(w)), "edge_all": ea,
                       "edge_ratio": None if edge_ratio is None else float(edge_ratio), "q": float(q)}
 
+    ec = 0.0  # energy-row scale e_c (0: energy term off)
+
+    def enable_energy(self, lam, W, volume, log=print):
+        """Add lambda (W_Omega - W_Omega(u0)) / W_Omega(u0) to the objective (W: the AL ``Weights``).
+
+        W_Omega = (V / 2 mu0) sum_i w_i |B_i|^2 on the collocation points (w = sw^2, sum w = 1). The
+        energy rows e_c sw B (3 n, appended to the misfit g) give (1/2)|rows|^2 = lambda W_Omega / W_ref
+        with e_c = sqrt(2 lambda / sum w |B_ref|^2): linear in u (exact Gauss-Newton rows). The constant
+        lambda this carries is removed in ``Weights.merit``, which evaluates the energy part as
+        sum g_ref.(g_E - g_ref) + |g_E - g_ref|^2 / 2 (cross-term form, no cancellation of two totals).
+        ``volume``: the plasma volume [m^3], for reporting W_ref in J only."""
+        s0 = self.state(self.u0)
+        B0 = s0["B"]
+        w = self.sw**2
+        S0 = float(jnp.sum(w[:, None] * B0**2))
+        self.ec = float(np.sqrt(2.0 * lam / S0)) if lam > 0 else 0.0
+        self.e_lam = float(lam)
+        self.B_ref = B0
+        self.S_ref = S0
+        self.W_ref_J = float(volume) * S0 / (2.0 * 4e-7 * np.pi)
+        W.e_n = 3 * self.n_pts
+        W.e_ref = self.ec * (self.sw[:, None] * B0).ravel() if self.ec else None
+        log(f"[energy] lambda {lam:g}: W_Omega(u0) = {self.W_ref_J:.6e} J (V {volume:.4f} m^3, "
+            f"<|B|^2> {S0:.6e} T^2), e_c {self.ec:.4e}")
+
+    def energy_parts(self, s):
+        """(dW / W_ref, |J - J_fit| / rms) at a state: the energy change from u0 in cross-term form."""
+        gJ = s.get("gJ", s["g"])
+        out = {"|J-J_fit|/rms": float(jnp.sqrt(jnp.sum(gJ**2)))}
+        if getattr(self, "B_ref", None) is not None:
+            w = self.sw**2
+            dB = s["B"] - self.B_ref
+            out["dW/W"] = float(jnp.sum(w[:, None] * (2.0 * self.B_ref * dB + dB**2)) / self.S_ref)
+        return out
+
     def state(self, z):
         u = jnp.asarray(z)[: self.n_u]
         s = _state_impl(self.fields, u, self.Jfit, self.sw, self.Lg, self.rmsJ, self.norm)
         s = dict(s)
+        s["gJ"] = s["g"]
+        if self.ec:
+            s["g"] = jnp.concatenate([s["gJ"], self.ec * (self.sw[:, None] * s["B"]).ravel()])
         if self.pnorm is not None:
             s.update(pnorm_measures(s["absF"], self.sw**2, self.pnorm, self.norm))
         gal = jnp.max(jnp.abs(s["PTf"]) / (self.colnorm * jnp.linalg.norm(s["f"])))
@@ -253,7 +300,10 @@ class FixedAnchor:
         return float(s["galerkin"])
 
     def aux(self, s):
-        return {"sw": self.sw, "J": s["J"], "B": s["B"], "Lg": self.Lg, "rmsJ": self.rmsJ}
+        out = {"sw": self.sw, "J": s["J"], "B": s["B"], "Lg": self.Lg, "rmsJ": self.rmsJ}
+        if self.ec:
+            out["ec"] = self.ec
+        return out
 
 
 class FixedRows:
@@ -284,9 +334,10 @@ class FixedRows:
         self.linT = lambda wg, wz: _linT(f_, (wg, wz), aux, n_u)  # noqa: E731
         n3 = anchor.n_pts * 3
         self.n3 = n3
+        self.ng = int(s["g"].size)  # 3 n, or 6 n with the energy rows appended
         zh_ = s["z"] / jnp.maximum(zn, 1e-300)[:, None]
         zhat = (zh_ if self.kappa is None else self.kappa[:, None] * zh_).ravel()
-        self.grad_cF = self.linT(jnp.zeros(n3), zhat / (W.eps * norm))
+        self.grad_cF = self.linT(jnp.zeros(self.ng), zhat / (W.eps * norm))
         self.aF = np.sqrt(W.d2_model(c[0], W.nu[0])) * self.grad_cF
         self.r = jnp.concatenate([s["g"], self.sF3 * s["z"].ravel(), jnp.zeros(1)])
 
@@ -295,9 +346,9 @@ class FixedRows:
         return jnp.concatenate([dg, self.sF3 * dz, jnp.stack([self.aF @ v])])
 
     def JT(self, w):
-        n3 = self.n3
-        out = self.linT(w[:n3], self.sF3 * w[n3 : 2 * n3])
-        return out + w[2 * n3] * self.aF
+        n3, ng = self.n3, self.ng
+        out = self.linT(w[:ng], self.sF3 * w[ng : ng + n3])
+        return out + w[ng + n3] * self.aF
 
     def grad(self):
         return self.JT(self.r)
@@ -338,9 +389,9 @@ class FixedRowsB(FixedRows):
         return jnp.concatenate([dg, self.sF3 * self._P(dz), jnp.stack([self.aF @ v])])
 
     def JT(self, w):
-        n3 = self.n3
-        out = self.linT(w[:n3], self._P(self.sF3 * w[n3 : 2 * n3]))
-        return out + w[2 * n3] * self.aF
+        n3, ng = self.n3, self.ng
+        out = self.linT(w[:ng], self._P(self.sF3 * w[ng : ng + n3]))
+        return out + w[ng + n3] * self.aF
 
 
 
@@ -461,7 +512,7 @@ class FixedSolver(mf.Solver):
             viol = max(max(c[0], 0.0), abs(c[2]), slack)
             phis = [h["phi"] for h in hist if h["accepted"]]
             flat = (len(phis) > stat_window
-                    and abs(phis[-stat_window - 1] - phis[-1]) <= stat_tol * abs(phis[-1])
+                    and abs(phis[-stat_window - 1] - phis[-1]) <= stat_tol * max(abs(phis[-1]), W.f_floor)
                     and hist[-1]["Delta_next"] > 1e-8)
             stationary = status == "stationary" or (flat and c[0] >= -0.01)
             active_ok = (W.nu[0] <= 0) or (c[0] >= -self.act_tol)
@@ -510,7 +561,7 @@ def _hvp_impl(fields, v, aux, sc):
     dav = (sw[:, None] * (jnp.cross(dJv, B) + jnp.cross(J, dBv))).ravel()
     dfv, _ = _project(fields, sw, dav, aux["Lg"], n_p)
     dzv = sw[:, None] * dfv.reshape(n, 3)
-    dgv = (sw[:, None] * dJv / aux["rmsJ"]).ravel()
+    dgv = _g_rows(sw, dJv, dBv, aux)
     zh, t, act = sc["zhat"], sc["t"], sc["act"]
     # d(z / t): (I - zhat zhat^T) / |z| where |z| > w tau, I / (w tau) where smoothed
     Hz = (dzv - act[:, None] * zh * jnp.sum(zh * dzv, 1, keepdims=True)) / t[:, None]
@@ -523,7 +574,7 @@ def _hvp_impl(fields, v, aux, sc):
         da = (sw[:, None] * (jnp.cross(dJ, B) + jnp.cross(J, dB))).ravel()
         df, _ = _project(fields, sw, da, aux["Lg"], n_p)
         dz = (sw[:, None] * df.reshape(n, 3)).ravel()
-        dg = (sw[:, None] * dJ / aux["rmsJ"]).ravel()
+        dg = _g_rows(sw, dJ, dB, aux)
         a2 = (sw[:, None] * (jnp.cross(dJ, dBv) + jnp.cross(dJv, dB))).ravel()
         return dg, dz, a2
 
@@ -1329,14 +1380,102 @@ def _resonant_b_kernel(fields, u, u_ref, sel, ex, cr, ci):
     return jnp.stack([jnp.sum(cr * br), jnp.sum(ci * br)])
 
 
+def bn_modes(Mc, Nc, sym):
+    """(m, n, kind) of the B.n Fourier constraints: kind 's' = sin(m theta - n NFP zeta), 'c' = cos.
+    With stellarator symmetry sqrt(g) B^rho is odd, so only sines. (0, 0) is omitted: the net flux
+    through the closed surface vanishes identically (div B = 0)."""
+    out = []
+    for m in range(0, Mc + 1):
+        for n in range(-Nc, Nc + 1):
+            if m == 0 and n <= 0:
+                continue
+            out.append((m, n, "s"))
+            if not sym:
+                out.append((m, n, "c"))
+    return out
+
+
+class LCFSField:
+    """B_plasma (linear part) on the LCFS, rho = 1, at the collocation grid's own theta and zeta,
+    i.e. on the same toroidal planes as the collocation points: the plane field ``cyl_planes`` is
+    shared and only the in-plane interpolation is new (a second ``CylindricalInterpolator``).
+    Provides f(du) = sqrt(g) dB . e^rho (the normal flux density per d theta d zeta, DESC's sqrt(g)
+    and e^rho at rho = 1) and its Fourier modes b = P f / scale, scale = rms(sqrt(g) B_DESC^zeta)."""
+
+    def __init__(self, inp, fields, fr, Mc, Nc, log=print):
+        from cylindrical_grid import CylindricalInterpolator
+        tg = fr.tgrid
+        NFP = int(inp.eq.NFP)
+        th, ze = np.asarray(tg.theta), np.asarray(tg.zeta)
+        T_, Z_ = np.meshgrid(th, ze, indexing="ij")
+        rtz = np.column_stack([np.ones(T_.size), T_.ravel(), Z_.ravel()])
+        d = inp.compute_points(["R", "Z", "e^rho", "sqrt(g)", "B^zeta"], rtz)
+        rpz = np.column_stack([np.asarray(d["R"]), rtz[:, 2], np.asarray(d["Z"])])
+        itp0 = getattr(fields.to_points, "interp", fields.to_points)
+        self.itp = CylindricalInterpolator(fields.cyl_grid, rpz, dtype=itp0.yr.dtype,
+                                           order=getattr(fields, "cyl_order", None))
+        if self.itp.Ep.shape != itp0.Ep.shape or not np.allclose(np.asarray(self.itp.Ep), np.asarray(itp0.Ep)):
+            raise ValueError("LCFS points are not on the collocation planes")
+        self.sym = bool(fr.sym)
+        self.rtz, self.n_b = rtz, len(rtz)
+        sg = np.asarray(d["sqrt(g)"])
+        self.sg_e = jnp.asarray(sg[:, None] * np.asarray(d["e^rho"]))  # (n_b, 3), cylindrical (R, phi, Z)
+        self.scale = float(np.sqrt(np.mean((sg * np.asarray(d["B^zeta"])) ** 2)))
+        self.modes = bn_modes(Mc, Nc, self.sym)
+        P = np.zeros((len(self.modes), self.n_b))
+        for i, (m, n, kind) in enumerate(self.modes):
+            arg = m * rtz[:, 1] - n * NFP * rtz[:, 2]
+            P[i] = 2.0 * (np.sin(arg) if kind == "s" else np.cos(arg)) / self.n_b
+        self.P = jnp.asarray(P / self.scale)
+        self.k = len(self.modes)
+        log(f"[B.n] LCFS shell {len(th)} x {len(ze)} points on the collocation planes; {self.k} "
+            f"{'sine' if self.sym else 'sine+cosine'} modes (|m| <= {Mc}, |n| <= {Nc}); "
+            f"scale rms(sqrt(g) B^zeta) {self.scale:.4e}")
+
+    def f(self, fields, du):
+        """sqrt(g) dB . e^rho on the LCFS points for the coefficient change du (linear)."""
+        return _lcfs_f(fields, self.itp, jnp.asarray(du), self.sg_e)
+
+    def modes_of(self, fields, du):
+        return self.P @ self.f(fields, du)
+
+    def rows(self, fields, n_u, log=print, every=50):
+        """C^T (n_u x k): column i = d b_i / du, by one transpose per mode."""
+        t1 = time.time()
+        cols = np.zeros((n_u, self.k))
+        for i in range(self.k):
+            cols[:, i] = np.asarray(_lcfs_fT(fields, self.itp, self.P[i], self.sg_e, n_u))
+            if every and (i + 1) % every == 0:
+                log(f"[B.n] rows {i + 1}/{self.k} ({time.time() - t1:.0f} s)")
+        log(f"[B.n] {self.k} constraint rows in {time.time() - t1:.0f} s")
+        return cols
+
+
+@jax.jit
+def _lcfs_f(fields, itp, du, sg_e):
+    planes = fields.cyl_planes(du, 0.0)
+    B = itp.from_planes(*planes)[: sg_e.shape[0]]
+    return jnp.sum(B * sg_e, axis=1)
+
+
+def _lcfs_fT_impl(fields, itp, w, sg_e, n_u):
+    x = jax.ShapeDtypeStruct((n_u,), jnp.float64)
+    return jax.linear_transpose(lambda v: _lcfs_f(fields, itp, v, sg_e), x)(w)[0]
+
+
+_lcfs_fT = jax.jit(_lcfs_fT_impl, static_argnums=(4,))
+
+
 class LinearConstraints:
     """C u = d for the pinned m = 0 modes of a (``pin_current``) and the toroidal flux
     (``pin_flux``), with the targets taken from u_ref (J_fit). ``Ct`` (n x k) feeds
     ProjectedMetric; ``restore`` maps a state onto C u = d with the smallest metric-norm
     change; ``violation`` reports the residuals (cheap: the flux is affine in u)."""
 
-    def __init__(self, cur, fields, fr, u_ref, pin_current=True, pin_flux=True, log=print, affine=()):
-        """``affine``: extra rows (name, fn, target) with fn(u) an affine scalar of u, held at ``target``."""
+    def __init__(self, cur, fields, fr, u_ref, pin_current=True, pin_flux=True, log=print, affine=(), blocks=()):
+        """``affine``: extra rows (name, fn, target) with fn(u) an affine scalar of u, held at ``target``.
+        ``blocks``: (name, Ct, target) with Ct (n x k) a block of rows whose value is Ct^T (u - u_ref), held at
+        ``target`` (k,) (e.g. the LCFS B.n modes, ``LCFSField.rows``: homogeneous, target 0)."""
         n = cur.n_free
         self.u_ref = jnp.asarray(u_ref)
         self.idx = m0_a_indices(cur) if pin_current else np.zeros(0, int)
@@ -1363,6 +1502,12 @@ class LinearConstraints:
             self.aff.append({"name": name, "fn": fj, "a": a_, "v_ref": v0, "target": float(target)})
             cols.append(np.asarray(a_)[:, None])
             log(f"[constraints] affine row {name} in {time.time() - t1:.0f} s: value at u_ref {v0:.4e}, target {target:.4e}")
+        self.blocks = []
+        for name, Ct_b, target in blocks:
+            Ct_b = np.asarray(Ct_b)
+            self.blocks.append({"name": name, "Ct": jnp.asarray(Ct_b), "target": jnp.asarray(np.asarray(target, float))})
+            cols.append(Ct_b)
+            log(f"[constraints] block {name}: {Ct_b.shape[1]} rows")
         self.Ct = np.concatenate(cols, axis=1) if cols else np.zeros((n, 0))
         log(f"[constraints] {len(self.idx)} pinned m = 0 coefficients of a (enclosed current I(rho, zeta))"
             + (", 1 flux row" if pin_flux else ""))
@@ -1385,7 +1530,12 @@ class LinearConstraints:
             v = self.aff_value(r, u)
             out[r["name"]] = v
             out[r["name"] + " - target"] = v - r["target"]
+        for b_ in self.blocks:
+            out[b_["name"] + " max|C du - d|"] = float(jnp.max(jnp.abs(self.block_value(b_, u) - b_["target"])))
         return out
+
+    def block_value(self, b_, u):
+        return b_["Ct"].T @ (jnp.asarray(u) - self.u_ref)
 
     def aff_value(self, r, u):
         return r["v_ref"] + float(r["a"] @ (jnp.asarray(u) - self.u_ref))
@@ -1402,12 +1552,20 @@ class LinearConstraints:
             rows.append((self.a_psi, self.psi_ref - self.psi_affine(u)))
         for r in self.aff:
             rows.append((r["a"], r["target"] - self.aff_value(r, u)))
-        if rows:  # all affine rows at once: u += D c with D the metric-steepest feasible directions, G c = residuals
+        A_cols, res = [], []
+        if rows:
+            A_cols.append(jnp.stack([jnp.asarray(a_) for a_, _ in rows], axis=1))
+            res.append(np.array([float(r_) for _, r_ in rows]))
+        for b_ in self.blocks:
+            A_cols.append(b_["Ct"])
+            res.append(np.asarray(b_["target"] - self.block_value(b_, u)))
+        if A_cols:  # all affine rows at once: u += D c, D = the metric-steepest feasible directions, G c = residuals
             Cp = self.Ct[:, : len(self.idx)] if len(self.idx) else np.zeros((len(u), 0))
             mp = ProjectedMetric(L, Cp)
-            D = [mp.back(mp.back_T(a_)) for a_, _ in rows]
-            G = np.array([[float(a_ @ d_) for d_ in D] for a_, _ in rows])
-            c = np.linalg.solve(G, np.array([r_ for _, r_ in rows]))
-            for c_, d_ in zip(c, D):
-                u = u + c_ * d_
+            Am = jnp.concatenate(A_cols, axis=1)
+            D = mp.back(mp.back_T(Am))
+            G = np.asarray(Am.T @ D)
+            # least squares: the rows may be (nearly) dependent, e.g. B.n modes the basis cannot excite
+            c = np.linalg.lstsq(G, np.concatenate(res), rcond=1e-12)[0]
+            u = u + D @ jnp.asarray(c)
         return u

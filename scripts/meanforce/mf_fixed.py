@@ -274,6 +274,13 @@ def main():
                          "DESC surface, in every cross-section); a --start state is restored onto it")
     ap.add_argument("--pin-flux", action="store_true",
                     help="exact constraint: the toroidally averaged toroidal flux stays at J_fit's")
+    ap.add_argument("--energy-weight", type=float, default=0.0,
+                    help="lambda: add lambda (W_Omega - W_Omega(J_fit)) / W_Omega(J_fit) to the objective (plasma-volume "
+                         "magnetic energy on the collocation points). The energy is the free energy only with "
+                         "--bn-modes and --pin-flux (B.n = 0 on the LCFS, Phi_tor and I_p fixed). Use with --no-share-stop")
+    ap.add_argument("--bn-modes", type=int, nargs=2, default=None, metavar=("MC", "NC"),
+                    help="exact constraint: the Fourier modes |m| <= MC, |n| <= NC of sqrt(g) dB.e^rho on the LCFS "
+                         "vanish (B.n = 0 there; dB = B_ann[J - J_fit], option A's start field is DESC's)")
     a = ap.parse_args()
     a.hvp = True  # per-subproblem diagnostics (DIAG_H) are recorded for every model
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
@@ -482,8 +489,8 @@ def main():
         G, out = {}, {}
         for name, zz in cases.items():
             sc = A.state(jnp.asarray(zz))
-            G[name] = sc["g"]
-            out[name] = {"|J-J_fit|/rms": float(jnp.sqrt(jnp.sum(sc["g"] ** 2))), "M/M_desc": float(sc["M"]) / M_desc,
+            G[name] = sc["gJ"]
+            out[name] = {"|J-J_fit|/rms": float(jnp.sqrt(jnp.sum(sc["gJ"] ** 2))), "M/M_desc": float(sc["M"]) / M_desc,
                          "M/eps": float(sc["M"]) / eps, "rms|F|": float(sc["rmsF"]), "galerkin": float(sc["galerkin"])}
             log(f"[cross] {name}: {out[name]}")
         d_sol = G["low-res optimum (embedded)"] - G["J_fit (low basis, embedded)"]
@@ -514,6 +521,39 @@ def main():
     def bmk(uu):
         v = np.asarray(bfn(jnp.asarray(uu)))
         return complex(v[0], v[1])
+
+    # energy reference (W_Omega of J_fit), its n-split, and the LCFS B.n functional: needed by --eval-only too
+    per_ = 2 * eq0.NFP if fr.sym else eq0.NFP
+    vol = float(per_ * np.sum(fr.dV))
+    A.enable_energy(0.0, mf.Weights(1.0, 1.0, 1.0), vol, log=log)
+    modes_ = np.asarray(cur0.basis.modes)
+    n_of_u = np.concatenate([np.asarray(cur0.chi_modes)[:, 1], modes_[:, 2], modes_[:, 2]])
+    assert n_of_u.size == A.n_u, (n_of_u.size, A.n_u)
+    m_n0 = jnp.asarray((n_of_u == 0).astype(float))
+    bnf = None
+    if a.bn_modes:
+        t1 = time.time()
+        bnf = mff.LCFSField(inp0, fields, fr, a.bn_modes[0], a.bn_modes[1], log=log)
+        phase("B.n functional", t1)
+
+    def energy_report(zz, ss):
+        """dW / W_ref and its split by the toroidal mode number of du = u - u0 (n = 0 block, n != 0 block, cross
+        term), E = lambda dW / W_ref, and the LCFS B.n modes from a real field evaluation (with --bn-modes)."""
+        ep = A.energy_parts(ss)
+        out_ = {"dW/W": ep["dW/W"], "dW [J]": ep["dW/W"] * A.W_ref_J, "E": a.energy_weight * ep["dW/W"]}
+        du = jnp.asarray(zz)[: A.n_u] - u0
+        w_ = sw**2
+        Bn0 = A.state(u0 + du * m_n0)["B"] - A.B_ref
+        Bn1 = ss["B"] - A.B_ref - Bn0
+        S_ = A.S_ref
+        out_["dW/W n=0"] = float(jnp.sum(w_[:, None] * (2.0 * A.B_ref * Bn0 + Bn0**2)) / S_)
+        out_["dW/W n!=0"] = float(jnp.sum(w_[:, None] * (2.0 * A.B_ref * Bn1 + Bn1**2)) / S_)
+        out_["dW/W cross"] = float(jnp.sum(w_[:, None] * 2.0 * Bn0 * Bn1) / S_)
+        if bnf is not None:
+            bm = np.asarray(bnf.modes_of(fields, du))
+            out_["Bn max|b| (field)"] = float(np.max(np.abs(bm)))
+            out_["Bn rms (field)"] = float(np.sqrt(np.mean(np.asarray(bnf.f(fields, du)) ** 2))) / bnf.scale
+        return out_
 
     if a.eval_only:
         if a.force_norm != "p":
@@ -598,6 +638,12 @@ def main():
                 dd = dens(np.asarray(A.state(zz)["absF"]))
                 run["rho bins"][nm_] = dd.tolist()
                 log(f"[bins] {nm_[:11]:11s} " + " ".join(f"{x:5.2f}" for x in dd))
+        run["energy eval"] = {"W_ref [J]": A.W_ref_J}
+        for nm_, zz in cases:
+            er_ = energy_report(zz, A.state(zz))
+            run["energy eval"][nm_] = er_
+            log(f"[energy] {nm_}: " + ", ".join(f"{k} {v:+.5e}" for k, v in er_.items()))
+        dump()
         for nm_, zz in cases:
             run["eval"][nm_] = []
             bins = np.array([x for x in (0.0, 0.5, 0.6, 0.7, 0.75, 0.78, 0.81, 0.84, 0.87, 0.9, 0.93) if x < a.rho_cut] + [a.rho_cut])
@@ -642,7 +688,14 @@ def main():
         if a.precond != "force":
             del HJ
     LC = None
-    if a.pin_current or a.pin_flux or a.pin_b21 is not None:
+    if bnf is not None:
+        t1 = time.time()
+        b0_ = np.asarray(bnf.modes_of(fields, jnp.zeros(A.n_u)))
+        assert np.max(np.abs(b0_)) == 0.0, b0_
+        Ct_bn = bnf.rows(fields, A.n_u, log=log)
+        run["bn"] = {"modes": list(a.bn_modes), "k": int(bnf.k), "points": int(bnf.n_b), "scale": bnf.scale}
+        phase("B.n constraint rows", t1)
+    if a.pin_current or a.pin_flux or a.pin_b21 is not None or bnf is not None:
         t1 = time.time()
         aff = []
         if a.pin_b21 is not None:
@@ -660,7 +713,7 @@ def main():
             run["b21 pin"] = {"beta": a.pin_b21, "phase deg": float(np.degrees(ph0)), "phase from": ph_src, "target": tgt}
             aff.append(("b21_proj", lambda uu: bfn(uu)[0] * cph + bfn(uu)[1] * sph, tgt))
         LC = mff.LinearConstraints(cur0, fields, fr, u0, pin_current=a.pin_current, pin_flux=a.pin_flux, log=log,
-                                   affine=aff)
+                                   affine=aff, blocks=[("Bn", Ct_bn, np.zeros(bnf.k))] if bnf is not None else ())
         phase("linear constraints", t1)
     mk_metric = (lambda LL: LC.metric(LL)) if LC is not None else pw.Metric
     met = mk_metric(L)
@@ -680,7 +733,7 @@ def main():
             log(f"start embedded from {tuple(a.start_LMN)} (n_u {lo.n_free}) into this basis (n_u {A.n_u}): "
                 f"{nd} coefficients dropped (|u| fraction {frac:.2e}); M/M_desc {float(sz['M']) / M_desc:.4f}, "
                 f"M/eps {float(sz['M']) / (a.alphas[0] * M_desc):.4f}, |J - J_fit|/rms "
-                f"{float(jnp.linalg.norm(sz['g'])):.5f}")
+                f"{float(jnp.linalg.norm(sz['gJ'])):.5f}")
             run["start embed"] = {"from": list(a.start_LMN), "dropped": nd, "|u| fraction": frac,
                                   "M/M_desc": float(sz["M"]) / M_desc}
             del sz
@@ -695,7 +748,7 @@ def main():
         v1 = LC.violation(z)
         cons_log = lambda tag, sx, vx: log(  # noqa: E731
             f"[constraints] {tag}: " + ", ".join(f"{k} {v:.3e}" for k, v in vx.items())
-            + f"; M/M_desc {float(sx['M']) / M_desc:.5f}, |J - J_fit|/rms {float(jnp.linalg.norm(sx['g'])):.5f}")
+            + f"; M/M_desc {float(sx['M']) / M_desc:.5f}, |J - J_fit|/rms {float(jnp.linalg.norm(sx['gJ'])):.5f}")
         cons_log("start before restore", s_b, v0)
         cons_log("start after restore", s_a, v1)
         if "dPsi/Psi" in v1 and LC.psi is not None:
@@ -705,6 +758,20 @@ def main():
                               "n_pinned": int(len(LC.idx)), "before": v0, "after": v1,
                               "Psi_ref": getattr(LC, "psi_ref", None), "Psi_desc": float(inp0.eq.Psi)}
         del s_b, s_a
+    # energy: W_Omega relative to J_fit's is always reported; lambda > 0 adds it to the objective
+    A.enable_energy(a.energy_weight, W, vol, log=log)
+    W.f_floor = 0.0
+    run["energy"] = {"lambda": a.energy_weight, "W_ref [J]": A.W_ref_J, "volume [m^3]": vol, "e_c": A.ec,
+                     "DESC volume [m^3]": float(np.asarray(eq0.compute("V")["V"]))}
+    if a.energy_weight > 0:
+        if not (bnf is not None and a.pin_flux):
+            log("[energy] WARNING: without --bn-modes and --pin-flux the plasma-volume energy is not the free energy")
+        if not a.no_share_stop:
+            log("[energy] WARNING: the energy rows carry a constant lambda in |r|^2; use --no-share-stop")
+    e0_ = energy_report(z, A.state(z))
+    run["energy"]["start"] = e0_
+    log("[energy] start: " + ", ".join(f"{k} {v:.4e}" for k, v in e0_.items()))
+    s0 = A.state(z)
     if a.ref_start and a.force_norm == "p":
         # the bounds are fractions of the START state's own band p-norm and outside mean (a new constraint:
         # the start's multiplier and penalty, from a different bound, are reset)
@@ -803,7 +870,7 @@ def main():
             bv = bmk(zz)
             out_ = {"where": where, "t [s]": time.time() - t0,
                     "M/M_desc": float(ss.get("M_mean", ss["M"])) / M_desc_mean,
-                    "|J-J_fit|/rms": float(jnp.sqrt(jnp.sum(ss["g"] ** 2))),
+                    "|J-J_fit|/rms": float(jnp.sqrt(jnp.sum(ss["gJ"] ** 2))), **energy_report(zz, ss),
                     "b/vac": abs(bv) / a.b21_vac, "b phase deg": float(np.degrees(np.angle(bv))),
                     "band p16/DESC": nd["M_p"] / ref_d["M_p"], "band max/DESC": nd["max_int"] / ref_d["max_int"],
                     "outside mean/DESC": nd["edge"] / ref_d["edge"]}
@@ -811,7 +878,10 @@ def main():
             log(f"[diag] {where}: M/M_desc {out_['M/M_desc']:.5f} |J-J_fit|/rms {out_['|J-J_fit|/rms']:.4e} "
                 f"b{a.b21_mk[0]}{a.b21_mk[1]}/vac {out_['b/vac']:.4f} phase {out_['b phase deg']:+.1f} deg | band p16/DESC "
                 f"{out_['band p16/DESC']:.4f} max/DESC {out_['band max/DESC']:.4f} | outside mean/DESC "
-                f"{out_['outside mean/DESC']:.4f}")
+                f"{out_['outside mean/DESC']:.4f} | dW/W {out_['dW/W']:+.4e} (n=0 {out_['dW/W n=0']:+.3e}, n!=0 "
+                f"{out_['dW/W n!=0']:+.3e}, cross {out_['dW/W cross']:+.2e}) E {out_['E']:+.4e}"
+                + (f" | B.n max|b| {out_['Bn max|b| (field)']:.2e} rms {out_['Bn rms (field)']:.2e}"
+                   if "Bn rms (field)" in out_ else ""))
             return out_
 
         diag(z, A.state(z), "start")
@@ -1070,7 +1140,7 @@ def main():
                 s = A.state(z)
                 c = W.constraints(s)
                 entry.update({"M/M_desc": float(s["M"]) / M_desc, "rms|F|": float(s["rmsF"]),
-                              "|J-J_fit|/rms": float(jnp.sqrt(jnp.sum(s["g"] ** 2))),
+                              "|J-J_fit|/rms": float(jnp.sqrt(jnp.sum(s["gJ"] ** 2))), **energy_report(z, s),
                               "galerkin": float(s["galerkin"]), "feasible": bool(c[0] <= 1e-2),
                               "nu": W.nu.tolist(), "rho": W.rho, "time": time.time() - t1})
                 if A.pnorm is not None:

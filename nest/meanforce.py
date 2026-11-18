@@ -347,9 +347,22 @@ class Weights:
     def d2(self, c, nu):
         return self.rho if c + nu / self.rho > 0 else 0.0
 
+    e_n = None  # energy term (``FixedAnchor.enable_energy``): g[e_n:] are the energy rows,
+    e_ref = None  # e_ref their value at u0; the energy part of phi is then offset-free
+    f_floor = 0.0  # floor of |f| in the relative 'flat' stop tests (phi + E can cross zero)
+
+    def objective_parts(self, g):
+        """(phi_J, E): (1/2)|g_J|^2 and the energy term lambda dW / W_ref, the latter as
+        sum g_ref (g_E - g_ref) + (1/2) |g_E - g_ref|^2 (= (1/2)|g_E|^2 - (1/2)|g_ref|^2 exactly)."""
+        if self.e_ref is None:
+            return 0.5 * float(jnp.sum(g ** 2)), 0.0
+        gJ, dE = g[: self.e_n], g[self.e_n :] - self.e_ref
+        return (0.5 * float(jnp.sum(gJ ** 2)),
+                float(jnp.sum(self.e_ref * dE) + 0.5 * jnp.sum(dE ** 2)))
+
     def merit(self, s):
         c = self.constraints(s)
-        phi = 0.5 * float(jnp.sum(s["g"] ** 2))
+        phi = sum(self.objective_parts(s["g"]))
         return (phi + self.psi(c[0], self.nu[0]) + self.psi(c[1], self.nu[1])
                 + self.nu[2] * c[2] + 0.5 * self.rho * c[2] ** 2), phi, c
 
@@ -547,8 +560,8 @@ class Solver:
         f2 = 0.5 * (jnp.asarray(s_new["F"]) + jnp.asarray(sm["F"])) - jnp.asarray(s["F"])
         del sm
         w = jnp.asarray(self.A.sw) ** 2
-        n3 = rows.n3
-        q = jnp.concatenate([jnp.zeros(n3), rows.sF3 * (w[:, None] * f2).ravel(), jnp.zeros(1)])
+        q = jnp.concatenate([jnp.zeros(getattr(rows, "ng", rows.n3)), rows.sF3 * (w[:, None] * f2).ravel(),
+                             jnp.zeros(1)])
         Hv = lambda v: rows.JT(rows.J(v))  # noqa: E731
         saved = dict(mff.LAST_H)
         try:
@@ -578,7 +591,8 @@ class Solver:
         term F_dd along the step (as ``_geodesic``), without evaluating a trial state."""
         import meanforce_fixed as mff
         w = jnp.asarray(self.A.sw) ** 2
-        q = jnp.concatenate([jnp.zeros(rows.n3), rows.sF3 * (w[:, None] * F_dd).ravel(), jnp.zeros(1)])
+        q = jnp.concatenate([jnp.zeros(getattr(rows, "ng", rows.n3)), rows.sF3 * (w[:, None] * F_dd).ravel(),
+                             jnp.zeros(1)])
         Hv = lambda v: rows.JT(rows.J(v))  # noqa: E731
         saved = dict(mff.LAST_H)
         try:
@@ -890,7 +904,7 @@ class Solver:
                     return z, hist, "stationary"
                 fs = [e["f_new"] for e in hist if e["accepted"]]
                 if (flat_tol is not None and len(fs) > flat_window and self.Delta > 1e-8
-                        and abs(fs[-flat_window - 1] - fs[-1]) <= flat_tol * abs(fs[-1])):
+                        and abs(fs[-flat_window - 1] - fs[-1]) <= flat_tol * max(abs(fs[-1]), W.f_floor)):
                     return z, hist, "stationary"
             elif self.Delta < 1e-14:
                 return z, hist, "radius"
