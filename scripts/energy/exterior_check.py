@@ -62,6 +62,7 @@ def log(*s):
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--eq", required=True)
+ap.add_argument("--bext", default="desc-fit", choices=("desc-fit",), help="option A only (as the solves)")
 ap.add_argument("--LMN", type=int, nargs=3, required=True)
 ap.add_argument("--frac", type=float, default=40)
 ap.add_argument("--N-phi", type=int, default=25)
