@@ -71,6 +71,8 @@ ap.add_argument("--colloc", type=float, default=1.5)
 ap.add_argument("--colloc-rho", type=float, default=None)
 ap.add_argument("--bn-modes", type=int, nargs=2, required=True)
 ap.add_argument("--direct", type=int, nargs=2, default=(32, 4), help="n_rho, q of the direct quadrature")
+ap.add_argument("--bn-direct", type=int, nargs=2, default=None, metavar=("NRHO", "Q"),
+                help="build the B.n constraint rows from direct Biot-Savart (LCFSDirect) instead of the annulus")
 ap.add_argument("--shells", type=float, nargs="+", default=[0.02, 0.1, 0.5])
 ap.add_argument("--n-random", type=int, default=3)
 ap.add_argument("--state", action="append", default=[])
@@ -115,7 +117,16 @@ n_u = A.n_u
 log(f"basis {a.LMN}, n_u {n_u}, points {A.n_pts}, collocation {res}, annulus {box}")
 
 bnf = mff.LCFSField(inp0, fields, fr, a.bn_modes[0], a.bn_modes[1], log=log)
-Ct = bnf.rows(fields, n_u, log=log)
+bnd = None
+if a.bn_direct:
+    bnd = mff.LCFSDirect(bnf, cur0, eq0, a.bn_direct[0], a.bn_direct[1], log=log)
+    Ct = bnd.rows(n_u, log=log)
+    v_ = jnp.asarray(rng.standard_normal(n_u))
+    m_f, m_r = np.asarray(bnd.modes_of(v_)), Ct.T @ np.asarray(v_)
+    res_all["direct rows check"] = float(np.max(np.abs(m_f - m_r)) / np.max(np.abs(m_f)))
+    log(f"[B.n direct] rows vs forward quadrature: max rel diff {res_all['direct rows check']:.2e}")
+else:
+    Ct = bnf.rows(fields, n_u, log=log)
 LC = mff.LinearConstraints(cur0, fields, fr, u0, pin_current=False, pin_flux=True, log=log,
                            blocks=[("Bn", Ct, np.zeros(bnf.k))])
 HJ = mff.gram_J(fields, cur0, pre0, rmsJ, log=log)
@@ -165,6 +176,8 @@ def measure(name, du):
     out = {"|J-J_fit|/rms": float(jnp.linalg.norm(ss["gJ"])), "dW/W (Omega)": A.energy_parts(ss)["dW/W"]}
     bm = np.asarray(bnf.modes_of(fields, du))
     out["annulus B.n modes max|b|"] = float(np.max(np.abs(bm)))
+    if bnd is not None:
+        out["constraint (direct-row) modes max|b|"] = float(np.max(np.abs(np.asarray(Ct.T @ np.asarray(du)))))
     f_ann = np.asarray(bnf.f(fields, du))
     dB = {k: np.asarray(df(du, 0.0, xi0, v)) for k, v in tj.items()}
     Bn_dir = np.sum(dB["LCFS"] * n_c, 1)

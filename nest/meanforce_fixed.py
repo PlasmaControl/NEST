@@ -1411,6 +1411,7 @@ class LCFSField:
         rtz = np.column_stack([np.ones(T_.size), T_.ravel(), Z_.ravel()])
         d = inp.compute_points(["R", "Z", "e^rho", "sqrt(g)", "B^zeta"], rtz)
         rpz = np.column_stack([np.asarray(d["R"]), rtz[:, 2], np.asarray(d["Z"])])
+        self._R, self._Z = np.asarray(d["R"]), np.asarray(d["Z"])
         itp0 = getattr(fields.to_points, "interp", fields.to_points)
         self.itp = CylindricalInterpolator(fields.cyl_grid, rpz, dtype=itp0.yr.dtype,
                                            order=getattr(fields, "cyl_order", None))
@@ -1449,6 +1450,76 @@ class LCFSField:
                 log(f"[B.n] rows {i + 1}/{self.k} ({time.time() - t1:.0f} s)")
         log(f"[B.n] {self.k} constraint rows in {time.time() - t1:.0f} s")
         return cols
+
+
+class LCFSDirect:
+    """The B.n modes of ``LCFSField`` with B from DIRECT Biot-Savart quadrature of dJ
+    (``free_boundary.DirectField``) instead of the annulus solver interpolated to the LCFS: the
+    annulus field there carries the field-grid error, which the constraint would otherwise
+    enforce instead of the true B.n (G1: at 40/40/6 a/100 that error is ~1e-5 |B| for
+    high-mode perturbations, the floor of the annulus-based constraint).
+
+    Row i of C is d b_i / du with b_i = sum_t P_it sqrt(g)_t e^rho_t . B(x_t). With
+    B(x_t) = mu0/4pi sum_s Q_s x r_ts / |r_ts|^3, r_ts = x_t - x_s, Q_s = (J dV)_s:
+        b_i = sum_s Q_s . G_is,   G_is = mu0/4pi sum_t r_ts x a_it / |r_ts|^3,   a_it = P_it sqrt(g)_t e^rho_t,
+    so a row costs one pairwise sum (chunked over sources, forward only) and one adjoint of the
+    linear map u -> Q (no pairwise residuals stored)."""
+
+    def __init__(self, lcfs, current, eq, n_rho, q, chunk=1024, log=print):
+        from free_boundary import DirectField, Displacement
+        th = np.unique(lcfs.rtz[:, 1])
+        ze = np.unique(lcfs.rtz[:, 2])
+        disp = Displacement(eq, 2, 2)
+        self.xi0 = jnp.zeros(disp.n)
+        self.df = DirectField(current, disp, (len(th), len(ze)), n_rho, q, lcfs.sym, dtype=jnp.float64, chunk=64)
+        d = lcfs.rtz
+        R = np.asarray(lcfs._R)
+        phi = d[:, 2]
+        self.x_t = jnp.asarray(np.column_stack([R * np.cos(phi), R * np.sin(phi), np.asarray(lcfs._Z)]))
+        e = np.asarray(lcfs.sg_e)  # cylindrical (R, phi, Z)
+        self.e_t = jnp.asarray(np.column_stack([e[:, 0] * np.cos(phi) - e[:, 1] * np.sin(phi),
+                                                e[:, 0] * np.sin(phi) + e[:, 1] * np.cos(phi), e[:, 2]]))
+        self.P = lcfs.P
+        self.k = lcfs.k
+        self.chunk = chunk
+        log(f"[B.n direct] {self.df.n_sources} sources (n_rho {n_rho}, q {q}), {len(d)} LCFS targets")
+
+    def f(self, du):
+        """sqrt(g) e^rho . B_direct[dJ(du)] on the LCFS points (forward; for checks)."""
+        B = self.df(jnp.asarray(du), 0.0, self.xi0, self.x_t)
+        return jnp.sum(B * self.e_t, axis=1)
+
+    def modes_of(self, du):
+        return self.P @ self.f(du)
+
+    def rows(self, n_u, log=print, every=50):
+        t1 = time.time()
+        P_s, _ = self.df.sources(jnp.zeros(n_u), 0.0, self.xi0)
+        n_s = P_s.shape[0]
+        pad = (-n_s) % self.chunk
+        Ps = jnp.concatenate([P_s, jnp.full((pad, 3), 1e6)])  # padded sources far away (masked below)
+        mask = jnp.concatenate([jnp.ones(n_s), jnp.zeros(pad)])
+        _, vjp_Q = jax.vjp(lambda v: self.df.sources(v, 0.0, self.xi0)[1], jnp.zeros(n_u))
+        vjp_Q = jax.jit(vjp_Q)
+        cols = np.zeros((n_u, self.k))
+        for i in range(self.k):
+            a_t = self.P[i][:, None] * self.e_t
+            G = _direct_G(Ps.reshape(-1, self.chunk, 3), self.x_t, a_t).reshape(-1, 3)[:n_s] * mask[:n_s, None]
+            cols[:, i] = np.asarray(vjp_Q(G)[0])
+            if every and (i + 1) % every == 0:
+                log(f"[B.n direct] rows {i + 1}/{self.k} ({time.time() - t1:.0f} s)")
+        log(f"[B.n direct] {self.k} constraint rows in {time.time() - t1:.0f} s")
+        return cols
+
+
+@jax.jit
+def _direct_G(Ps_chunks, x_t, a_t):
+    """G_s = mu0/4pi sum_t (x_t - x_s) x a_t / |x_t - x_s|^3 for source chunks (n_c, c, 3)."""
+    def one(Pc):
+        r = x_t[None, :, :] - Pc[:, None, :]  # (c, n_t, 3)
+        r3 = jnp.sum(r * r, axis=-1) ** 1.5
+        return jnp.sum(jnp.cross(r, a_t[None, :, :]) / r3[..., None], axis=1)
+    return 1e-7 * jax.lax.map(one, Ps_chunks)
 
 
 @jax.jit
