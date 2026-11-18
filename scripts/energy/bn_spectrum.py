@@ -70,6 +70,8 @@ ap.add_argument("--direct", type=int, nargs=2, default=(32, 4))
 ap.add_argument("--cutoffs", default="0/0,2/1,4/2,8/4,16/6,40/6", help="M/N cutoffs for the residual energy error")
 ap.add_argument("--state", action="append", default=[])
 ap.add_argument("--out", required=True)
+ap.add_argument("--dump", action="store_true", help="also save <out>_<state>_dump.npz: the LCFS f (both routes), the field-line\n"
+                " coefficients sqrt(g) B^theta, sqrt(g) B^zeta, |grad rho| (B_DESC), and per-shell |F|, |J - J_fit|, |J| profiles")
 a = ap.parse_args()
 os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
 res_all = {"args": vars(a)}
@@ -94,6 +96,9 @@ fr.B_ext = np.zeros((len(fr.x), 3))
 fields = Fields(fr, cur0, pre0, dtype=jnp.float64, cyl_stencil=True, mode_chunk=16, cyl_fused=True, cyl_rblock=32,
                 cyl_order=8)  # exactly as mf_fixed.py
 u0 = jnp.asarray(cur0.u)
+rho_pts = np.asarray(fr.rtz[:, 0])
+shells = np.unique(rho_pts)
+shell_id = np.searchsorted(shells, rho_pts)
 B_D = np.asarray(fields.desc["B"])
 fields.B_ext = jnp.asarray(B_D - np.asarray(fields.B_plasma(u0)))
 fr.B_ext = np.asarray(fields.B_ext)
@@ -124,7 +129,9 @@ S = 2.0 * np.sin(arg) / len(rtz)  # f_mn = S @ f  (half-period grid: the even pr
 Cc = 2.0 * np.cos(arg) / len(rtz)
 log(f"spectrum: |m| <= {Ms}, |n| <= {Ns}: {len(modes)} sine modes on {len(th_u)} x {len(ze_u)} LCFS points")
 
-d = inp0.compute_points(["B", "e_theta", "e_zeta"], rtz)
+d = inp0.compute_points(["B", "e_theta", "e_zeta", "sqrt(g)", "B^theta", "B^zeta", "|grad(rho)|", "|B|"], rtz)
+lcfs_geo = {"sgBt": np.asarray(d["sqrt(g)"]) * np.asarray(d["B^theta"]), "sgBz": np.asarray(d["sqrt(g)"]) * np.asarray(d["B^zeta"]),
+            "grad_rho": np.asarray(d["|grad(rho)|"]), "absB": np.asarray(d["|B|"]), "sqrt_g": np.asarray(d["sqrt(g)"])}
 Bt = np.sum(np.asarray(d["B"]) * np.asarray(d["e_theta"]), 1)  # covariant B_theta (B_DESC)
 Bz = np.sum(np.asarray(d["B"]) * np.asarray(d["e_zeta"]), 1)
 ct, cz = Cc @ Bt, Cc @ Bz  # cos coefficients
@@ -165,7 +172,7 @@ log(f"direct quadrature: {df.n_sources} sources; W_ref {W_ref:.6e} J")
 res_all["states"] = {}
 for spec in a.state:
     nm, pth = spec.split("=", 1)
-    u = jnp.asarray(np.load(pth)["u"])
+    u = u0 if pth == "0" else jnp.asarray(np.load(pth)["u"])  # "NAME=0": J_fit itself
     du = u - u0
     t1 = time.time()
     f_dir = np.asarray(jnp.sum(df(du, 0.0, xi0, x_t) * e_c, axis=1))
@@ -184,7 +191,21 @@ for spec in a.state:
              "E / W left above cutoff": {f"{Mc}/{Nc}": float(np.sum(E[(mm > Mc) | (np.abs(nn) > Nc)])) for Mc, Nc in cuts},
              "top 8 modes (m, n, E/W)": [[int(mm[i]), int(nn[i]), float(E[i])] for i in np.argsort(-np.abs(E))[:8]]}
         out[tag] = o
-    out["dW/W (Omega)"] = A.energy_parts(A.state(u))["dW/W"]
+    st = A.state(u)
+    out["dW/W (Omega)"] = A.energy_parts(st)["dW/W"]
+    if a.dump:
+        w = np.asarray(sw) ** 2
+        def shell_mean(v):
+            return np.bincount(shell_id, w * v, len(shells)) / np.bincount(shell_id, w, len(shells))
+        absF = np.asarray(st["absF"])
+        dJ = np.linalg.norm(np.asarray(st["J"]) - np.asarray(Jfit), axis=1)
+        aJ = np.linalg.norm(np.asarray(st["J"]), axis=1)
+        np.savez(a.out + f"_{nm}_dump.npz", rtz=rtz, f_dir=f_dir, f_ann=f_ann, scale=lc.scale, mm=mm, nn=nn, NFP=NFP,
+                 fm_dir=S @ f_dir, fm_ann=S @ f_ann, a_phi=a_phi, W_ref=W_ref, **lcfs_geo,
+                 shells=shells, F_shell=shell_mean(absF), F_shell_rms=np.sqrt(shell_mean(absF**2)),
+                 dJ_shell_rms=np.sqrt(shell_mean(dJ**2)), J_shell_rms=np.sqrt(shell_mean(aJ**2)),
+                 shell_w=np.bincount(shell_id, w, len(shells)), M=float(st["M"]), norm=float(ref["norm"]),
+                 F_desc_vol=float(ref["F_desc_vol"]), rmsJ=rmsJ)
     out["time [s]"] = time.time() - t1
     res_all["states"][nm] = out
     log(f"[{nm}] dW/W {out['dW/W (Omega)']:+.3e}; direct: rms f {out['direct']['rms f / scale']:.3e}, E/W total "

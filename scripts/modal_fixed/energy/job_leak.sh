@@ -5,6 +5,7 @@
 #
 # usage: bash job_leak.sh STEP
 #   spec    test 3: (m, n) spectrum of the LCFS flux leak of R1f_S, R1f_b1 and S0, and the energy error per mode
+#   char    LCFS f dumps + per-shell force/current profiles of all states (bn_spectrum --dump)
 #   A0      test 1: force-floor push from J_fit, no constraint
 #   Aflux   test 1: the same with --pin-flux only
 #   A40     test 1: --pin-flux + B.n modes |m| <= 40, |n| <= 6   (S0's constraint, but from J_fit)
@@ -35,6 +36,19 @@ case $STEP in
     bash rung_run.sh lk_spec scripts/energy/bn_spectrum.py $GRID --direct 32 4 $ST --out $E/spec/spec
     cp $E/spec/spec_spec.json out/ 2>/dev/null
     ;;
+  char)
+    # B.n-leak characterization: LCFS f dumps (both routes) + per-shell |F|, |J - J_fit| profiles of every state
+    p "begin"; mkdir -p $E/char
+    last() { ls -t "$@" 2>/dev/null | head -1; }
+    ST="--state Jfit=0 --state R1f_S=/work/R1f_S_fresh.npz --state R1f_b1=/work/R1f_b1_fresh.npz"
+    for X in A0 Aflux A4 A8 A16 A40; do F=$(last $E/$X/${X}_a0.001.npz $E/$X/${X}_budget.npz $E/$X/${X}_a0.001_latest.npz); [ -n "$F" ] && ST="$ST --state $X=$F"; done
+    F=$(last /results/fxr/energy/S0/S0_budget.npz); [ -n "$F" ] && ST="$ST --state S0=$F"
+    for X in S0 I0.25 I0.5 I1; do T=${X}_a0.8; D=/results/fxr/energy/$T
+      F=$(last $D/${T}_a0.8.npz $D/${T}_budget.npz $D/${T}_a0.8_latest.npz); [ -n "$F" ] && ST="$ST --state $T=$F"; done
+    echo "states: $ST" | tee -a $E/progress_char.txt
+    bash rung_run.sh lk_char scripts/energy/bn_spectrum.py $GRID --direct 32 4 $ST --dump --out $E/char/char
+    cp $E/char/char_spec.json out/ 2>/dev/null; tar -C $E/char -czf out/char_dumps.tar.gz . 2>/dev/null
+    ;;
   A0)    CONS="";;
   Aflux) CONS="--pin-flux";;
   A40)   CONS="--pin-flux --bn-modes 40 6";;
@@ -43,7 +57,7 @@ case $STEP in
   A4)    CONS="--pin-flux --bn-modes 4 2";;
   *) echo "unknown step $STEP"; exit 2;;
 esac
-if [ $STEP != spec ]; then
+if [ $STEP != spec ] && [ $STEP != char ]; then
   p "begin ($CONS)"
   bash rung_run.sh lk_$STEP scripts/meanforce/mf_fixed.py $FLOOR $CONS --out /work/out/$STEP --mirror $E/$STEP
 fi
