@@ -50,6 +50,18 @@ case $STEP in
     bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE --energy-weight $LAM --start /work/S0a08_fresh.npz \
         --out /work/out/$TAG --mirror $E/$TAG
     ;;
+  ladtab)
+    # analysis of the energy ladder: DESC-flux-grid tables (field-line tracing, profiles) + LCFS-leak / shell dumps of the
+    # shielded alpha-0.8 start and the E<lambda>_a1.5 end states
+    p "begin"; D=$E/ladtab; mkdir -p $D
+    last() { ls -t "$@" 2>/dev/null | head -1; }
+    ST="--state S08=/work/S0a08_fresh.npz"
+    for L in 1 10 100; do T=E${L}_a1.5; F=$(last $E/$T/${T}_a1.5.npz $E/$T/${T}_budget.npz $E/$T/${T}_a1.5_latest.npz); [ -n "$F" ] && ST="$ST --state E$L=$F"; done
+    echo "states: $ST" | tee -a $E/progress_ladtab.txt
+    bash rung_run.sh ladtab_bn scripts/energy/bn_spectrum.py $GRID --direct 32 4 $ST --dump --out $D/lad
+    bash rung_run.sh ladtab_tab scripts/meanforce/state_tables.py --eq $EQ --LMN 40 40 6 --frac 100 --N-phi 25 $ST --out /work/out/tables
+    cp $D/lad_* out/ 2>/dev/null; mkdir -p $D/tables; cp /work/out/tables/* $D/tables/ 2>/dev/null
+    ;;
   I*)
     BETA=${STEP#I}; p "begin beta $BETA (alpha $ALPHA)"; mkdir -p $E/$TAG
     bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE --start /work/R1f_b1_fresh.npz \
