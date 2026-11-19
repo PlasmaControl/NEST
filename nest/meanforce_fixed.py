@@ -1537,6 +1537,63 @@ def _lcfs_fT_impl(fields, itp, w, sg_e, n_u):
 _lcfs_fT = jax.jit(_lcfs_fT_impl, static_argnums=(4,))
 
 
+def n0_indices(cur):
+    """Indices in u of the toroidally symmetric (n = 0) coefficients: chi_m0 (m != 0), and a and b modes with n = 0."""
+    modes = np.asarray(cur.basis.modes)
+    n0 = np.where(modes[:, 2] == 0)[0]
+    chi0 = np.where(np.asarray(cur.chi_modes)[:, 1] == 0)[0]
+    return np.concatenate([chi0, cur.S.n_chi + n0, cur.S.n_chi + cur.S.K + n0])
+
+
+def frozen_n0_block(fields, fr, cur, band, tau=1e-2, log=print, chunk=32):
+    """Constraint rows that freeze the n = 0 part of J outside the radial band ``band`` = (rho1, rho2).
+
+    The n = 0 coefficients' current directions are sorted by where their current norm lives: with
+    G_all = sum_pts w J_k . J_l and G_out the same sum over the collocation points outside the band
+    (w = sw^2, the volume weights), the generalized eigenvectors G_out v = mu G_all v (v^T G_all v = 1) have
+    mu = the fraction of v's current norm outside the band. Every direction with mu > tau is pinned (its
+    coordinate c = v^T G_all du stays 0); the free n = 0 directions (mu <= tau) carry at most tau of their
+    norm outside the band. The helical (n != 0) coefficients are untouched.
+    Returns (Ct, info): Ct (n_u x k) rows for ``LinearConstraints(blocks=...)`` (target 0, du = u - u_ref)."""
+    import scipy.linalg
+    t0 = time.time()
+    idx = n0_indices(cur)
+    n_u, m = cur.n_free, len(idx)
+    rho = np.asarray(fr.rtz[:, 0])
+    assert rho.shape[0] == np.asarray(fields.sw).shape[0], (rho.shape, np.asarray(fields.sw).shape)
+    w = np.asarray(fields.sw, dtype=np.float64) ** 2
+    out = (rho < band[0]) | (rho > band[1])
+    lin = jax.jit(jax.vmap(lambda f, e: _J(f, e, 0.0), in_axes=(None, 0)))
+    A = np.empty((m, rho.shape[0], 3), np.float32)
+    for i in range(0, m, chunk):
+        E = np.zeros((min(chunk, m - i), n_u))
+        E[np.arange(E.shape[0]), idx[i: i + chunk]] = 1.0
+        A[i: i + E.shape[0]] = np.asarray(lin(fields, jnp.asarray(E)))
+    G_all, G_out = np.zeros((m, m)), np.zeros((m, m))
+    sq = np.sqrt(w)
+    for j in range(0, rho.shape[0], 20000):  # point chunks: float64 Gram without a full float64 copy of A
+        Aw = (A[:, j: j + 20000].astype(np.float64) * sq[None, j: j + 20000, None]).reshape(m, -1)
+        G_all += Aw @ Aw.T
+        o = np.repeat(out[j: j + 20000], 3)
+        G_out += Aw[:, o] @ Aw[:, o].T
+    del A, Aw
+    reg = 1e-12 * np.trace(G_all) / m
+    mu, V = scipy.linalg.eigh(G_out, G_all + reg * np.eye(m))
+    pin = mu > tau
+    R = (G_all @ V[:, pin])  # rows: c_i = v_i^T G_all du_n0
+    R = R / np.linalg.norm(R, axis=0, keepdims=True)
+    Ct = np.zeros((n_u, int(pin.sum())))
+    Ct[idx] = R
+    info = {"band": [float(band[0]), float(band[1])], "tau": float(tau), "n0 coefficients": int(m),
+            "pinned": int(pin.sum()), "free": int((~pin).sum()), "band volume fraction": float(w[~out].sum() / w.sum()),
+            "free mu (outside fraction), largest": float(mu[~pin].max()) if (~pin).any() else None,
+            "cond G_all": float(np.linalg.cond(G_all)), "time [s]": time.time() - t0}
+    log(f"[freeze n0] band {band[0]:.4f}-{band[1]:.4f} (volume fraction {info['band volume fraction']:.3f}), tau {tau:g}: "
+        f"{m} n=0 coefficients -> {info['pinned']} pinned, {info['free']} free (largest free outside-fraction "
+        f"{info['free mu (outside fraction), largest']}); cond G_all {info['cond G_all']:.2e}; {info['time [s]']:.0f} s")
+    return Ct, info
+
+
 class LinearConstraints:
     """C u = d for the pinned m = 0 modes of a (``pin_current``) and the toroidal flux
     (``pin_flux``), with the targets taken from u_ref (J_fit). ``Ct`` (n x k) feeds

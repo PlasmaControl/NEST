@@ -10,7 +10,8 @@
 #   I<beta>  island reference: b21 pinned at beta x vacuum (island phase of R1f_b1.0), from R1f_b1.0, lambda = 0
 #   g1b      exterior check on S0 / I<beta> and their differences; fine-grid (a/120, 120 radii) energy evaluation
 # Inputs (flat in /work): nest_src.tar.gz rung_run.sh job_g12.sh R1f_S_fresh.npz R1f_b1_fresh.npz [S0_fresh.npz]
-# Env: ALPHA (default 0.05). Step E<lambda>: energy weight lambda from S0a08_fresh.npz. S0 starts from S0_fresh.npz when it is staged.
+# Env: ALPHA (default 0.05), TAU (freeze tau, default 0.05), FI_BETA (FR start, default 0.25).
+# Steps FZ<lambda> / FI<beta> / FR<lambda>: n=0 J frozen outside the q=2 band [0.5675, 0.7075] (--freeze-n0-band). Step E<lambda>: energy weight lambda from S0a08_fresh.npz. S0 starts from S0_fresh.npz when it is staged.
 # (desc_src, deps_src, gpu_entry.py and the DESC file come from /results/stage, as for the ripple runs).
 # Outputs: /results/fxr/energy/<STEP>/ (mirror, fsynced per step) and out/.
 set -u
@@ -28,6 +29,7 @@ GRID="--eq $EQ --bext desc-fit --LMN 40 40 6 --frac 100 --N-phi 25 --colloc-rho 
 FLAGS="--subspace prev,accel --cg 1500 --no-rebuild-on-hit --f-noise auto --radius-by-delta --no-share-stop \
        --locate-chunk 131072 --diag-every 5 --save-every 5"
 CONS="--bn-modes 40 6 --pin-flux"
+TAU=${TAU:-0.05}; FREEZE="--freeze-n0-band 0.5675 0.7075 --freeze-tau $TAU"
 SOLVE="$GRID $FLAGS $CONS --alphas $ALPHA --max-outer 8 --maxiter 60 --energy-weight 0 --time-budget 3300"
 endstate() { ls -t $E/$1/${1}_a$ALPHA.npz $E/$1/${1}_budget.npz $E/$1/${1}_a${ALPHA}_latest.npz 2>/dev/null | head -1; }
 case $STEP in
@@ -48,6 +50,28 @@ case $STEP in
     # energy ladder: lambda = ${STEP#E} from the shielded alpha 0.8 state (S0a08_fresh.npz), at the ALPHA force bound
     LAM=${STEP#E}; p "begin lambda $LAM (alpha $ALPHA, start /work/S0a08_fresh.npz)"; mkdir -p $E/$TAG
     bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE --energy-weight $LAM --start /work/S0a08_fresh.npz \
+        --out /work/out/$TAG --mirror $E/$TAG
+    ;;
+  FZ*)
+    # energy with the n = 0 part of J frozen outside the q = 2 band, from the shielded alpha-0.8 state
+    LAM=${STEP#FZ}; p "begin FZ lambda $LAM (alpha $ALPHA, tau $TAU)"; mkdir -p $E/$TAG
+    bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE $FREEZE --energy-weight $LAM --start /work/S0a08_fresh.npz \
+        --out /work/out/$TAG --mirror $E/$TAG
+    ;;
+  FI*)
+    # vacuum-phase island pinned at b21 = BETA x vacuum under the same constraints, lambda 0 (start for FR)
+    BETA=${STEP#FI}; p "begin FI beta $BETA (alpha $ALPHA, tau $TAU)"; mkdir -p $E/$TAG
+    bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE $FREEZE --start /work/R1f_b1_fresh.npz \
+        --pin-b21 $BETA --b21-phase-state /work/R1f_b1_fresh.npz --out /work/out/$TAG --mirror $E/$TAG
+    ;;
+  FR*)
+    # release the FI island (FI_BETA, default 0.25) under energy lambda (no pin)
+    LAM=${STEP#FR}; FB=${FI_BETA:-0.25}; SRC=$E/FI${FB}_a$ALPHA
+    ST1=$(ls -t $SRC/FI${FB}_a${ALPHA}_a$ALPHA.npz $SRC/FI${FB}_a${ALPHA}_budget.npz $SRC/FI${FB}_a${ALPHA}_a${ALPHA}_latest.npz 2>/dev/null | head -1)
+    [ -n "$ST1" ] || { echo "no FI state in $SRC"; exit 3; }
+    /opt/conda/bin/python -c "import numpy as np; d=np.load('$ST1'); np.savez('/work/FI_fresh.npz', u=d['u'], c_p=d['c_p'])"
+    p "begin FR lambda $LAM from $ST1 (alpha $ALPHA, tau $TAU)"; mkdir -p $E/$TAG
+    bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE $FREEZE --energy-weight $LAM --start /work/FI_fresh.npz \
         --out /work/out/$TAG --mirror $E/$TAG
     ;;
   ladtab)

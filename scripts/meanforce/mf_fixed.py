@@ -272,6 +272,12 @@ def main():
     ap.add_argument("--pin-current", action="store_true",
                     help="exact constraint: the m = 0 modes of a stay at J_fit's (the current enclosed by every "
                          "DESC surface, in every cross-section); a --start state is restored onto it")
+    ap.add_argument("--freeze-n0-band", type=float, nargs=2, default=None, metavar=("RHO1", "RHO2"),
+                    help="exact constraint: freeze the n = 0 (toroidally symmetric) part of J outside rho in [RHO1, RHO2] "
+                         "(its current-norm directions with more than --freeze-tau of their norm outside the band stay at "
+                         "J_fit's); n != 0 and the band's n = 0 content stay free")
+    ap.add_argument("--freeze-tau", type=float, default=1e-2, help="outside-band norm fraction above which an n = 0 "
+                    "direction is frozen (--freeze-n0-band)")
     ap.add_argument("--pin-flux", action="store_true",
                     help="exact constraint: the toroidally averaged toroidal flux stays at J_fit's")
     ap.add_argument("--energy-weight", type=float, default=0.0,
@@ -695,7 +701,16 @@ def main():
         Ct_bn = bnf.rows(fields, A.n_u, log=log)
         run["bn"] = {"modes": list(a.bn_modes), "k": int(bnf.k), "points": int(bnf.n_b), "scale": bnf.scale}
         phase("B.n constraint rows", t1)
-    if a.pin_current or a.pin_flux or a.pin_b21 is not None or bnf is not None:
+    blocks_ = []
+    if bnf is not None:
+        blocks_.append(("Bn", Ct_bn, np.zeros(bnf.k)))
+    if a.freeze_n0_band is not None:
+        t1 = time.time()
+        Ct_fz, fz_info = mff.frozen_n0_block(fields, fr, cur0, a.freeze_n0_band, a.freeze_tau, log=log)
+        blocks_.append(("freeze_n0", Ct_fz, np.zeros(Ct_fz.shape[1])))
+        run["freeze n0"] = fz_info
+        phase("freeze-n0 rows", t1)
+    if a.pin_current or a.pin_flux or a.pin_b21 is not None or blocks_:
         t1 = time.time()
         aff = []
         if a.pin_b21 is not None:
@@ -713,7 +728,7 @@ def main():
             run["b21 pin"] = {"beta": a.pin_b21, "phase deg": float(np.degrees(ph0)), "phase from": ph_src, "target": tgt}
             aff.append(("b21_proj", lambda uu: bfn(uu)[0] * cph + bfn(uu)[1] * sph, tgt))
         LC = mff.LinearConstraints(cur0, fields, fr, u0, pin_current=a.pin_current, pin_flux=a.pin_flux, log=log,
-                                   affine=aff, blocks=[("Bn", Ct_bn, np.zeros(bnf.k))] if bnf is not None else ())
+                                   affine=aff, blocks=blocks_)
         phase("linear constraints", t1)
     mk_metric = (lambda LL: LC.metric(LL)) if LC is not None else pw.Metric
     met = mk_metric(L)
