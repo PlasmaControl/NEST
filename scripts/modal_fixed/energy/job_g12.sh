@@ -82,6 +82,14 @@ case $STEP in
     LAM=${STEP#FIFR}; FB=${FI_BETA:-0.25}
     bash job_g12.sh FI$FB && bash job_g12.sh FR$LAM
     ;;
+  FZALL*)
+    # control: n = 0 part of J frozen EVERYWHERE (empty band -> every n = 0 direction pinned); only helical freedom
+    LAM=${STEP#FZALL}; p "begin FZALL lambda $LAM (alpha $ALPHA)"; mkdir -p $E/$TAG
+    FZA="--freeze-n0-band 0 0 --freeze-tau $TAU --freeze-ref /work/S0a08_fresh.npz"
+    bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE $FZA --energy-weight $LAM --start /work/S0a08_fresh.npz \
+        --out /work/out/$TAG --mirror $E/$TAG
+    post $TAG
+    ;;
   FZ*)
     # energy with the n = 0 part of J frozen outside the q = 2 band, from the shielded alpha-0.8 state
     LAM=${STEP#FZ}; p "begin FZ lambda $LAM (alpha $ALPHA, tau $TAU)"; mkdir -p $E/$TAG
