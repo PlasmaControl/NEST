@@ -275,7 +275,7 @@ def main():
     ap.add_argument("--freeze-n0-band", type=float, nargs=2, default=None, metavar=("RHO1", "RHO2"),
                     help="exact constraint: freeze the n = 0 (toroidally symmetric) part of J outside rho in [RHO1, RHO2] "
                          "(its current-norm directions with more than --freeze-tau of their norm outside the band stay at "
-                         "J_fit's); n != 0 and the band's n = 0 content stay free")
+                         "the --freeze-ref state's values); n != 0 and the band's n = 0 content stay free")
     ap.add_argument("--freeze-ref", default=None, help="state (npz) whose n = 0 J outside the band is frozen (default: "
                     "--start, else J_fit)")
     ap.add_argument("--freeze-tau", type=float, default=1e-2, help="outside-band norm fraction above which an n = 0 "
