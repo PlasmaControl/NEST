@@ -31,6 +31,19 @@ FLAGS="--subspace prev,accel --cg 1500 --no-rebuild-on-hit --f-noise auto --radi
 CONS="--bn-modes 40 6 --pin-flux"
 TAU=${TAU:-0.05}; FREEZE="--freeze-n0-band 0.5675 0.7075 --freeze-tau $TAU --freeze-ref /work/S0a08_fresh.npz"  # outside profile = the shielded state's
 SOLVE="$GRID $FLAGS $CONS --alphas $ALPHA --max-outer 8 --maxiter 60 --energy-weight 0 --time-budget 3300"
+
+# post(TAG): end state of TAG -> field-line tables + LCFS-leak/shell dumps into out/post_<TAG>/ (POST=0 skips)
+post() {
+  [ "${POST:-1}" = 1 ] || return 0
+  local T=$1 F; F=$(ls -t $E/$T/${T}_a$ALPHA.npz $E/$T/${T}_budget.npz $E/$T/${T}_a${ALPHA}_latest.npz 2>/dev/null | head -1)
+  [ -n "$F" ] || { echo "post: no end state for $T"; return 0; }
+  p "post $T from $F"; mkdir -p /work/out/post_$T
+  bash rung_run.sh post_${T}_bn scripts/energy/bn_spectrum.py $GRID --direct 32 4 --state S08=/work/S0a08_fresh.npz --state $T=$F \
+      --dump --out /work/out/post_$T/lad
+  bash rung_run.sh post_${T}_tab scripts/meanforce/state_tables.py --eq $EQ --LMN 40 40 6 --frac 100 --N-phi 25 \
+      --state $T=$F --out /work/out/post_$T/tables
+  p "post $T done"
+}
 endstate() { ls -t $E/$1/${1}_a$ALPHA.npz $E/$1/${1}_budget.npz $E/$1/${1}_a${ALPHA}_latest.npz 2>/dev/null | head -1; }
 case $STEP in
   g1a|g1a80)
@@ -52,17 +65,23 @@ case $STEP in
     bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE --energy-weight $LAM --start /work/S0a08_fresh.npz \
         --out /work/out/$TAG --mirror $E/$TAG
     ;;
+  FIFR*)
+    LAM=${STEP#FIFR}; FB=${FI_BETA:-0.25}
+    bash job_g12.sh FI$FB && bash job_g12.sh FR$LAM
+    ;;
   FZ*)
     # energy with the n = 0 part of J frozen outside the q = 2 band, from the shielded alpha-0.8 state
     LAM=${STEP#FZ}; p "begin FZ lambda $LAM (alpha $ALPHA, tau $TAU)"; mkdir -p $E/$TAG
     bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE $FREEZE --energy-weight $LAM --start /work/S0a08_fresh.npz \
         --out /work/out/$TAG --mirror $E/$TAG
+    post $TAG
     ;;
   FI*)
     # vacuum-phase island pinned at b21 = BETA x vacuum under the same constraints, lambda 0 (start for FR)
     BETA=${STEP#FI}; p "begin FI beta $BETA (alpha $ALPHA, tau $TAU)"; mkdir -p $E/$TAG
     bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE $FREEZE --start /work/R1f_b1_fresh.npz \
         --pin-b21 $BETA --b21-phase-state /work/R1f_b1_fresh.npz --out /work/out/$TAG --mirror $E/$TAG
+    post $TAG
     ;;
   FR*)
     # release the FI island (FI_BETA, default 0.25) under energy lambda (no pin)
@@ -73,6 +92,7 @@ case $STEP in
     p "begin FR lambda $LAM from $ST1 (alpha $ALPHA, tau $TAU)"; mkdir -p $E/$TAG
     bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE $FREEZE --energy-weight $LAM --start /work/FI_fresh.npz \
         --out /work/out/$TAG --mirror $E/$TAG
+    post $TAG
     ;;
   ladtab)
     # analysis of the energy ladder: DESC-flux-grid tables (field-line tracing, profiles) + LCFS-leak / shell dumps of the
