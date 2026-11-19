@@ -29,7 +29,7 @@ GRID="--eq $EQ --bext desc-fit --LMN 40 40 6 --frac 100 --N-phi 25 --colloc-rho 
 FLAGS="--subspace prev,accel --cg 1500 --no-rebuild-on-hit --f-noise auto --radius-by-delta --no-share-stop \
        --locate-chunk 131072 --diag-every 5 --save-every 5"
 CONS="--bn-modes 40 6 --pin-flux"
-TAU=${TAU:-0.05}; FREEZE="--freeze-n0-band 0.5675 0.7075 --freeze-tau $TAU"
+TAU=${TAU:-0.05}; FREEZE="--freeze-n0-band 0.5675 0.7075 --freeze-tau $TAU --freeze-ref /work/S0a08_fresh.npz"  # outside profile = the shielded state's
 SOLVE="$GRID $FLAGS $CONS --alphas $ALPHA --max-outer 8 --maxiter 60 --energy-weight 0 --time-budget 3300"
 endstate() { ls -t $E/$1/${1}_a$ALPHA.npz $E/$1/${1}_budget.npz $E/$1/${1}_a${ALPHA}_latest.npz 2>/dev/null | head -1; }
 case $STEP in

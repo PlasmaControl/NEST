@@ -276,6 +276,8 @@ def main():
                     help="exact constraint: freeze the n = 0 (toroidally symmetric) part of J outside rho in [RHO1, RHO2] "
                          "(its current-norm directions with more than --freeze-tau of their norm outside the band stay at "
                          "J_fit's); n != 0 and the band's n = 0 content stay free")
+    ap.add_argument("--freeze-ref", default=None, help="state (npz) whose n = 0 J outside the band is frozen (default: "
+                    "--start, else J_fit)")
     ap.add_argument("--freeze-tau", type=float, default=1e-2, help="outside-band norm fraction above which an n = 0 "
                     "direction is frozen (--freeze-n0-band)")
     ap.add_argument("--pin-flux", action="store_true",
@@ -707,7 +709,16 @@ def main():
     if a.freeze_n0_band is not None:
         t1 = time.time()
         Ct_fz, fz_info = mff.frozen_n0_block(fields, fr, cur0, a.freeze_n0_band, a.freeze_tau, log=log)
-        blocks_.append(("freeze_n0", Ct_fz, np.zeros(Ct_fz.shape[1])))
+        fz_ref = a.freeze_ref or a.start
+        if fz_ref:
+            u_fz = np.load(fz_ref)["u"]
+            assert u_fz.size == A.n_u, "--freeze-ref must be in the run basis"
+            tgt_fz = Ct_fz.T @ (u_fz - np.asarray(u0))
+        else:
+            tgt_fz = np.zeros(Ct_fz.shape[1])
+        fz_info["reference"] = fz_ref or "J_fit"
+        log(f"[freeze n0] reference {fz_info['reference']}: |target| max {np.max(np.abs(tgt_fz)):.3e}")
+        blocks_.append(("freeze_n0", Ct_fz, tgt_fz))
         run["freeze n0"] = fz_info
         phase("freeze-n0 rows", t1)
     if a.pin_current or a.pin_flux or a.pin_b21 is not None or blocks_:

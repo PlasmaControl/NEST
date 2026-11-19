@@ -1680,20 +1680,39 @@ class LinearConstraints:
             rows.append((self.a_psi, self.psi_ref - self.psi_affine(u)))
         for r in self.aff:
             rows.append((r["a"], r["target"] - self.aff_value(r, u)))
-        A_cols, res = [], []
+        def residuals(u):
+            res = []
+            if self.psi is not None or self.aff:
+                r0 = ([self.psi_ref - self.psi_affine(u)] if self.psi is not None else []) \
+                    + [r["target"] - self.aff_value(r, u) for r in self.aff]
+                res.append(np.array(r0, float))
+            for b_ in self.blocks:
+                res.append(np.asarray(b_["target"] - self.block_value(b_, u)))
+            return np.concatenate(res) if res else np.zeros(0)
+        A_cols = []
         if rows:
             A_cols.append(jnp.stack([jnp.asarray(a_) for a_, _ in rows], axis=1))
-            res.append(np.array([float(r_) for _, r_ in rows]))
         for b_ in self.blocks:
             A_cols.append(b_["Ct"])
-            res.append(np.asarray(b_["target"] - self.block_value(b_, u)))
         if A_cols:  # all affine rows at once: u += D c, D = the metric-steepest feasible directions, G c = residuals
             Cp = self.Ct[:, : len(self.idx)] if len(self.idx) else np.zeros((len(u), 0))
             mp = ProjectedMetric(L, Cp)
             Am = jnp.concatenate(A_cols, axis=1)
             D = mp.back(mp.back_T(Am))
             G = np.asarray(Am.T @ D)
-            # least squares: the rows may be (nearly) dependent, e.g. B.n modes the basis cannot excite
-            c = np.linalg.lstsq(G, np.concatenate(res), rcond=1e-12)[0]
-            u = u + D @ jnp.asarray(c)
+            # least squares: the rows may be (nearly) dependent, e.g. B.n modes the basis cannot excite, or the B.n
+            # n = 0 rows against --freeze-n0-band rows; iterative refinement (up to 3 more passes) when a pass leaves
+            # more than 1e-12 of the initial residual (consistent dependent rows: lstsq truncation)
+            r = residuals(u)
+            r_init = max(float(np.max(np.abs(r))), 1e-300)
+            # rows normalized to unit metric norm first: blocks of very different scale (unit-norm coefficient rows
+            # of --freeze-n0-band vs B.n rows) would otherwise put the small rows below the lstsq cutoff
+            sc = np.sqrt(np.maximum(np.diag(G), 1e-300))
+            Gs = G / np.outer(sc, sc)
+            for _ in range(4):
+                c = np.linalg.lstsq(Gs, r / sc, rcond=1e-10)[0] / sc
+                u = u + D @ jnp.asarray(c)
+                r = residuals(u)
+                if not float(np.max(np.abs(r))) > 1e-12 * r_init:
+                    break
         return u
