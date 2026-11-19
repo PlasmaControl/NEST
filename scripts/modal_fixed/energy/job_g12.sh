@@ -45,11 +45,12 @@ post() {
   [ "${POST:-1}" = 1 ] || return 0
   local T=$1 F; F=$(lastst $E/$T $T)
   [ -n "$F" ] || { echo "post: no end state for $T"; return 0; }
-  p "post $T from $F"; mkdir -p /work/out/post_$T
+  local PD=$E/post/$T; p "post $T from $F (outputs on the Volume at $PD, copied to out/)"; mkdir -p $PD /work/out/post_$T
   bash rung_run.sh post_${T}_bn scripts/energy/bn_spectrum.py $GRID --direct 32 4 --state S08=/work/S0a08_fresh.npz --state $T=$F \
-      --dump --out /work/out/post_$T/lad
+      --dump --out $PD/lad
   bash rung_run.sh post_${T}_tab scripts/meanforce/state_tables.py --eq $EQ --LMN 40 40 6 --frac 100 --N-phi 25 \
-      --state $T=$F --out /work/out/post_$T/tables
+      --state $T=$F --out $PD/tables
+  cp -r $PD/* /work/out/post_$T/ 2>/dev/null; sync
   p "post $T done"
 }
 endstate() { ls -t $E/$1/${1}_a$ALPHA.npz $E/$1/${1}_budget.npz $E/$1/${1}_a${ALPHA}_latest.npz 2>/dev/null | head -1; }
