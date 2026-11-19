@@ -32,10 +32,18 @@ CONS="--bn-modes 40 6 --pin-flux"
 TAU=${TAU:-0.05}; FREEZE="--freeze-n0-band 0.5675 0.7075 --freeze-tau $TAU --freeze-ref /work/S0a08_fresh.npz"  # outside profile = the shielded state's
 SOLVE="$GRID $FLAGS $CONS --alphas $ALPHA --max-outer 8 --maxiter 60 --energy-weight 0 --time-budget 3300"
 
+# lastst DIR TAG: the newest end state of TAG in DIR (mf_fixed names it TAG_a<alpha as float>.npz, e.g. _a3.0), else
+# TAG_budget.npz, else the newest TAG_a*_latest.npz
+lastst() {
+  local f; f=$(ls -t $1/$2_a*.npz 2>/dev/null | grep -v -e _latest -e _bext | head -1)
+  [ -n "$f" ] || f=$(ls -t $1/$2_budget.npz 2>/dev/null | head -1)
+  [ -n "$f" ] || f=$(ls -t $1/$2_a*_latest.npz 2>/dev/null | head -1)
+  echo "$f"
+}
 # post(TAG): end state of TAG -> field-line tables + LCFS-leak/shell dumps into out/post_<TAG>/ (POST=0 skips)
 post() {
   [ "${POST:-1}" = 1 ] || return 0
-  local T=$1 F; F=$(ls -t $E/$T/${T}_a$ALPHA.npz $E/$T/${T}_budget.npz $E/$T/${T}_a${ALPHA}_latest.npz 2>/dev/null | head -1)
+  local T=$1 F; F=$(lastst $E/$T $T)
   [ -n "$F" ] || { echo "post: no end state for $T"; return 0; }
   p "post $T from $F"; mkdir -p /work/out/post_$T
   bash rung_run.sh post_${T}_bn scripts/energy/bn_spectrum.py $GRID --direct 32 4 --state S08=/work/S0a08_fresh.npz --state $T=$F \
@@ -65,6 +73,11 @@ case $STEP in
     bash rung_run.sh en_$TAG scripts/meanforce/mf_fixed.py $SOLVE --energy-weight $LAM --start /work/S0a08_fresh.npz \
         --out /work/out/$TAG --mirror $E/$TAG
     ;;
+  night2)
+    # follow-up after the first wave: post-analysis of POSTS (space-separated tags) then FR${FR_LAM:-1000}
+    for T in ${POSTS:-}; do post $T; done
+    [ -n "${FR_LAM:-}" ] && bash job_g12.sh FR$FR_LAM
+    ;;
   FIFR*)
     LAM=${STEP#FIFR}; FB=${FI_BETA:-0.25}
     bash job_g12.sh FI$FB && bash job_g12.sh FR$LAM
@@ -86,7 +99,7 @@ case $STEP in
   FR*)
     # release the FI island (FI_BETA, default 0.25) under energy lambda (no pin)
     LAM=${STEP#FR}; FB=${FI_BETA:-0.25}; SRC=$E/FI${FB}_a$ALPHA
-    ST1=$(ls -t $SRC/FI${FB}_a${ALPHA}_a$ALPHA.npz $SRC/FI${FB}_a${ALPHA}_budget.npz $SRC/FI${FB}_a${ALPHA}_a${ALPHA}_latest.npz 2>/dev/null | head -1)
+    ST1=$(lastst $SRC FI${FB}_a$ALPHA)
     [ -n "$ST1" ] || { echo "no FI state in $SRC"; exit 3; }
     /opt/conda/bin/python -c "import numpy as np; d=np.load('$ST1'); np.savez('/work/FI_fresh.npz', u=d['u'], c_p=d['c_p'])"
     p "begin FR lambda $LAM from $ST1 (alpha $ALPHA, tau $TAU)"; mkdir -p $E/$TAG
