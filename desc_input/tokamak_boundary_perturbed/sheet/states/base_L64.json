@@ -1,0 +1,22 @@
+{
+ "args": {
+  "stage": "base",
+  "L": 64,
+  "N": 0,
+  "base": "tokamak_island_C_L32M32.h5",
+  "init": null,
+  "amp": 0.001,
+  "ftol": 1e-06,
+  "maxiter": 400,
+  "tr": "qr",
+  "out": "out"
+ },
+ "force before": 1.742519703761827e-07,
+ "solve wall [s]": 45.08690643310547,
+ "solve nfev": 38,
+ "solve njev": 11,
+ "solve nit": 10,
+ "solve message": "Optimization terminated successfully.\n`ftol` condition satisfied. (ftol=1.00e-06)\n`xtol` condition satisfied. (xtol=1.00e-14)",
+ "force": 1.9317195707414182e-11,
+ "force x2": 1.927234911753534e-11
+}

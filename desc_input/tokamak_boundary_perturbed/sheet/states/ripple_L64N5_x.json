@@ -1,0 +1,744 @@
+{
+ "args": {
+  "stage": "ripple",
+  "L": 64,
+  "N": 5,
+  "base": "../tokamak_island_C_L32M32.h5",
+  "init": "out/start_L64N6_from_ripple_L64N2_x_it700.h5",
+  "amp": 0.001,
+  "ftol": 1e-06,
+  "maxiter": 2000,
+  "tr": "qr",
+  "chunk": 200,
+  "start": "direct",
+  "seg": 10,
+  "budget": 23.5,
+  "jblock": 2000,
+  "snap": 25,
+  "tag": "_x",
+  "out": "out"
+ },
+ "base": "out/base_L64.h5",
+ "ripple fit error": 3.7481129311345285e-13,
+ "init": "out/start_L64N6_from_ripple_L64N2_x_it700.h5",
+ "force before": 1.5921559164352215e-07,
+ "a [m]": 1.1983655535770377,
+ "xi [m]": 0.0011983655535770378,
+ "segments": [
+  {
+   "solve wall [s]": 864.407791852951,
+   "solve nfev": 20,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 864.4137411117554
+  },
+  {
+   "solve wall [s]": 661.6880521774292,
+   "solve nfev": 25,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 661.6935636997223
+  },
+  {
+   "solve wall [s]": 659.2285785675049,
+   "solve nfev": 25,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 659.2339291572571
+  },
+  {
+   "solve wall [s]": 655.6358182430267,
+   "solve nfev": 25,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 655.6415057182312
+  },
+  {
+   "solve wall [s]": 592.9375329017639,
+   "solve nfev": 20,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 592.9428477287292
+  },
+  {
+   "solve wall [s]": 604.7669694423676,
+   "solve nfev": 20,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 604.7723405361176
+  },
+  {
+   "solve wall [s]": 568.981999874115,
+   "solve nfev": 20,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 568.9875614643097
+  },
+  {
+   "solve wall [s]": 614.2810933589935,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 614.2867393493652
+  },
+  {
+   "solve wall [s]": 603.9424858093262,
+   "solve nfev": 21,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 603.94806432724
+  },
+  {
+   "solve wall [s]": 599.5071542263031,
+   "solve nfev": 20,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 599.5127518177032
+  },
+  {
+   "solve wall [s]": 582.9349076747894,
+   "solve nfev": 20,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 582.9421727657318
+  },
+  {
+   "solve wall [s]": 570.0006015300751,
+   "solve nfev": 20,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 570.006094455719
+  },
+  {
+   "solve wall [s]": 555.3591985702515,
+   "solve nfev": 20,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 555.3658559322357
+  },
+  {
+   "solve wall [s]": 554.3742437362671,
+   "solve nfev": 20,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 554.3794465065002
+  },
+  {
+   "solve wall [s]": 553.3341715335846,
+   "solve nfev": 20,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 553.339893579483
+  },
+  {
+   "solve wall [s]": 563.1800322532654,
+   "solve nfev": 21,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 563.1853866577148
+  },
+  {
+   "solve wall [s]": 594.866771697998,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 594.8721435070038
+  },
+  {
+   "solve wall [s]": 606.5189843177795,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 606.524644613266
+  },
+  {
+   "solve wall [s]": 614.4699351787567,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 614.4755344390869
+  },
+  {
+   "solve wall [s]": 617.9164779186249,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 617.921788930893
+  },
+  {
+   "solve wall [s]": 641.9448642730713,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 641.9502940177917
+  },
+  {
+   "solve wall [s]": 615.0818078517914,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 615.0879020690918
+  },
+  {
+   "solve wall [s]": 618.5037343502045,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 618.5092844963074
+  },
+  {
+   "solve wall [s]": 615.8585186004639,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 615.8638529777527
+  },
+  {
+   "solve wall [s]": 610.8222298622131,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 610.827663898468
+  },
+  {
+   "solve wall [s]": 595.4290060997009,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 595.4345316886902
+  },
+  {
+   "solve wall [s]": 597.9230051040649,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 597.9288041591644
+  },
+  {
+   "solve wall [s]": 603.0854239463806,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 603.091082572937
+  },
+  {
+   "solve wall [s]": 597.9422380924225,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 597.9478802680969
+  },
+  {
+   "solve wall [s]": 598.6313440799713,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 598.6372263431549
+  },
+  {
+   "solve wall [s]": 616.2809658050537,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 616.2864179611206
+  },
+  {
+   "solve wall [s]": 613.1260027885437,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 613.1317222118378
+  },
+  {
+   "solve wall [s]": 613.1709020137787,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 613.1763997077942
+  },
+  {
+   "solve wall [s]": 610.7789289951324,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 610.7844984531403
+  },
+  {
+   "solve wall [s]": 605.0588364601135,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 605.0643420219421
+  },
+  {
+   "solve wall [s]": 617.5452246665955,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 617.5507786273956
+  },
+  {
+   "solve wall [s]": 616.442949295044,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 616.4485507011414
+  },
+  {
+   "solve wall [s]": 608.3339977264404,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 608.3394484519958
+  },
+  {
+   "solve wall [s]": 606.9958682060242,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 607.0013511180878
+  },
+  {
+   "solve wall [s]": 609.1077167987823,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 609.1132636070251
+  },
+  {
+   "solve wall [s]": 621.5934195518494,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 621.599173784256
+  },
+  {
+   "solve wall [s]": 606.7841877937317,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 606.7896065711975
+  },
+  {
+   "solve wall [s]": 606.7807638645172,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 606.7863004207611
+  },
+  {
+   "solve wall [s]": 605.4865100383759,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 605.4920551776886
+  },
+  {
+   "solve wall [s]": 607.1888601779938,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 607.1943974494934
+  },
+  {
+   "solve wall [s]": 607.171138048172,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 607.176652431488
+  },
+  {
+   "solve wall [s]": 605.5386662483215,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 605.5445516109467
+  },
+  {
+   "solve wall [s]": 608.7252004146576,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 608.730842590332
+  },
+  {
+   "solve wall [s]": 607.888420343399,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 607.8942310810089
+  },
+  {
+   "solve wall [s]": 606.1815001964569,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 606.1871266365051
+  },
+  {
+   "solve wall [s]": 589.5040776729584,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 589.5096702575684
+  },
+  {
+   "solve wall [s]": 611.6338818073273,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 611.6395001411438
+  },
+  {
+   "solve wall [s]": 606.8947138786316,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 606.9004695415497
+  },
+  {
+   "solve wall [s]": 609.7003960609436,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 609.7060861587524
+  },
+  {
+   "solve wall [s]": 610.5804550647736,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 610.5861270427704
+  },
+  {
+   "solve wall [s]": 608.2175712585449,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 608.22314453125
+  },
+  {
+   "solve wall [s]": 610.2311868667603,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 610.2367777824402
+  },
+  {
+   "solve wall [s]": 573.75750207901,
+   "solve nfev": 20,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 573.7638227939606
+  },
+  {
+   "solve wall [s]": 604.3215868473053,
+   "solve nfev": 23,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 604.3272061347961
+  },
+  {
+   "solve wall [s]": 609.3397917747498,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 609.3453154563904
+  },
+  {
+   "solve wall [s]": 612.0497641563416,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 612.0549590587616
+  },
+  {
+   "solve wall [s]": 610.6753304004669,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 610.6810727119446
+  },
+  {
+   "solve wall [s]": 611.1655557155609,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 611.1712799072266
+  },
+  {
+   "solve wall [s]": 610.7792158126831,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 610.7848336696625
+  },
+  {
+   "solve wall [s]": 588.7769060134888,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 588.7824761867523
+  },
+  {
+   "solve wall [s]": 589.028627872467,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 589.0342855453491
+  },
+  {
+   "solve wall [s]": 589.9013607501984,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 589.9070281982422
+  },
+  {
+   "solve wall [s]": 589.5819437503815,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 589.58766913414
+  },
+  {
+   "solve wall [s]": 591.0685691833496,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 591.0740702152252
+  },
+  {
+   "solve wall [s]": 589.9056761264801,
+   "solve nfev": 24,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 589.9115138053894
+  },
+  {
+   "solve wall [s]": 541.1208775043488,
+   "solve nfev": 19,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 541.1265063285828
+  },
+  {
+   "solve wall [s]": 546.9605128765106,
+   "solve nfev": 19,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 546.9658484458923
+  },
+  {
+   "solve wall [s]": 539.3937523365021,
+   "solve nfev": 19,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 539.3993921279907
+  },
+  {
+   "solve wall [s]": 541.4806320667267,
+   "solve nfev": 19,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 541.4864165782928
+  },
+  {
+   "solve wall [s]": 541.2066133022308,
+   "solve nfev": 19,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 541.2122421264648
+  },
+  {
+   "solve wall [s]": 539.3419108390808,
+   "solve nfev": 19,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 539.3480269908905
+  },
+  {
+   "solve wall [s]": 540.5531785488129,
+   "solve nfev": 19,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 540.5587446689606
+  },
+  {
+   "solve wall [s]": 540.9781956672668,
+   "solve nfev": 19,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 540.9838683605194
+  },
+  {
+   "solve wall [s]": 540.6264092922211,
+   "solve nfev": 19,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 540.6319952011108
+  },
+  {
+   "solve wall [s]": 588.6445441246033,
+   "solve nfev": 22,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 588.650176525116
+  },
+  {
+   "solve wall [s]": 587.5759692192078,
+   "solve nfev": 22,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 587.5815348625183
+  },
+  {
+   "solve wall [s]": 582.7827956676483,
+   "solve nfev": 22,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 582.7882788181305
+  },
+  {
+   "solve wall [s]": 586.7510929107666,
+   "solve nfev": 22,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 586.7567908763885
+  },
+  {
+   "solve wall [s]": 586.9481477737427,
+   "solve nfev": 22,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 586.9538395404816
+  },
+  {
+   "solve wall [s]": 584.7292025089264,
+   "solve nfev": 22,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 584.7346913814545
+  },
+  {
+   "solve wall [s]": 584.270562171936,
+   "solve nfev": 22,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 584.2759869098663
+  },
+  {
+   "solve wall [s]": 558.3587503433228,
+   "solve nfev": 20,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 558.3642730712891
+  },
+  {
+   "solve wall [s]": 542.607926607132,
+   "solve nfev": 19,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 542.6135275363922
+  },
+  {
+   "solve wall [s]": 540.6980073451996,
+   "solve nfev": 19,
+   "solve njev": 11,
+   "solve nit": 10,
+   "solve message": "Maximum number of iterations has been exceeded.",
+   "wall [s]": 540.7037024497986
+  }
+ ],
+ "solve nit": 890,
+ "force": 1.4708412576106543e-07,
+ "force x2": null
+}

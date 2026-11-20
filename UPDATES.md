@@ -2,6 +2,11 @@
 
 One entry per commit, newest first.
 
+## 2026-11-20: DESC shielding current at q = 2 vs resolution (ripple candidate C); L = 64, N = 5 state
+- `desc_input/tokamak_boundary_perturbed/sheet/`: scripts to re-solve the (2,1)-rippled candidate-C tokamak at higher L = M (`sheet_solve.py`, started from converged lower-resolution states, checkpointed; low-memory Jacobian path for one B200) and to measure sigma_21, the (2,1) PEST harmonic of J.B/B^2, across q = 2 (`sheet_diag.py`, `sheet_diag2.py`), plus figures and the Stellar-AI job helpers. README with the results so far.
+- States: the L = M = 64 axisymmetric base, L = 64 N = 2 at 850 iterations, and L = 64 N = 5 started from it (890 iterations, force 1.47e-7); sigma_21 of the N = 5 run at 30-100 iterations in `diag/`.
+- So far (N = 2, converged in iterations): peak |sigma_21| 313 / 736 / 1213 and FWHM 0.124 / 0.085 / 0.070 at L = 32 / 48 / 64, i.e. sigma_21 ~ L^2 f(L (rho - rho_s)), with the integral across q = 2 still growing ~ L; the force error stays at ~6e-7 on q = 2 at every L and N. N = 5 changes sigma_21 by a few percent.
+
 ## 2026-10-21: DSHAPE islands: the force-only runs' states, sections and logs from Stellar
 - `results/isl/<name>_eps<eps>.npz/.json` and `<name>_sections.npz` of `a120n1`, `a120n2` (eps 0-1000 A), `a120w2`, `a120w4`; the scans' logs of Stellar (`results/isl/logs/stellar/`, XLA warnings removed). The base `results/gs/hN_a120D_iter.{json,npz}` is now Stellar's original (the copy of the previous commit was regenerated on Stellar AI).
 
